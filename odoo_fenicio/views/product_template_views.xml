@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <record model="ir.ui.view" id="product_template_form">
+            <field name="name">product_template_form</field>
+            <field name="model">product.template</field>
+            <field name="inherit_id" ref="product.product_template_only_form_view"/>
+            <field name="arch" type="xml">
+                <xpath expr="//field[@name='product_variant_count']/../self::button" position="attributes">
+                    <attribute name="invisible">False</attribute>
+                </xpath>
+
+                <xpath expr="//notebook" position="inside">
+                    <page name="fenicio" string="Fenicio">
+                        <group>
+                            <group>
+                                <field name="product_e_fenicio"/>
+                                <field name="code_e_fenicio" invisible="not product_e_fenicio" required="product_e_fenicio"/>
+                                <field name="default_currency_id" invisible="not product_e_fenicio" required="product_e_fenicio"/>
+                                <field name="brand" invisible="not product_e_fenicio" required="product_e_fenicio"/>
+                                <field name="fenicio_check" invisible="not product_e_fenicio"/>
+                                <field name="priority_fenicio" invisible="not product_e_fenicio"/>
+                                <field name="guia_talles" invisible="not product_e_fenicio"/>
+                            </group>
+
+                            <group>
+                                <field name="product_settings_ids" context="{'show_attribute': False}">
+                                    <tree editable="bottom">
+                                        <field name="product_template_id" column_invisible="True"/>
+                                        <field name="attribute_id" required="True" domain="[('base_product_attribute', '=', True)]" context="{'default_base_product_attribute': True}"/>
+                                        <field name="value_id" domain="[('attribute_id', '=', attribute_id)]" context="{'show_attribute': False}" options="{'no_open': True, 'no_create_edit': True, 'no_create': True}"/>
+                                    </tree>
+                                </field>
+                            </group>
+                        </group>
+                    </page>
+                </xpath>
+            </field>
+        </record>
+    </data>
+</odoo>

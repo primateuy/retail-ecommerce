@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <record id="product_attribute_form" model="ir.ui.view">
+            <field name="name">product_attribute_form</field>
+            <field name="model">product.attribute</field>
+            <field name="inherit_id" ref="product.product_attribute_view_form"/>
+            <field name="arch" type="xml">
+                <xpath expr="//field[@name='name']" position="after">
+                    <field name="fenicio_type"/>
+                    <field name="base_product_attribute"/>
+                    <field name="base_product_attribute_required" invisible="not base_product_attribute"/>
+                </xpath>
+
+                <xpath expr="//field[@name='value_ids']//tree//field[@name='name']" position="after">
+                    <field name="fenicio_attribute_value_code"/>
+                </xpath>
+            </field>
+        </record>
+    </data>
+</odoo>

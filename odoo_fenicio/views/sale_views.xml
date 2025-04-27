@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <record model="ir.ui.view" id="view_order_form">
+            <field name="name">view_order_form</field>
+            <field name="model">sale.order</field>
+            <field name="inherit_id" ref="sale.view_order_form"/>
+            <field name="arch" type="xml">
+                <xpath expr="//page[@name='customer_signature']" position="after">
+                    <page string="Información de e-Fenicio" name="fenicio_info">
+                        <group>
+                            <group>
+                                <field name="id_order_fenicio"/>
+                                <field name="motivo_cancelacion"/>
+                                <field name="origen"/>
+                                <field name="estado"/>
+                            </group>
+                            <group>
+                                <field name="fecha_abandono"/>
+                                <field name="fecha_recuperada"/>
+                                <field name="fecha_cancelada"/>
+                            </group>
+                        </group>
+                        <group string="Obeservaciones">
+                            <field name="observaciones" nolabel="1" placeholder="Obeservaciones."/>
+                        </group>
+                    </page>
+                </xpath>
+            </field>
+        </record>
+    </data>
+</odoo>
