@@ -1,0 +1,52 @@
+<odoo>
+    <data noupdate="1">
+        <!-- Credentials mercado pago -->
+        <!-- User id -->
+        <record id="user_id_mercado_pago_conf" model="ir.config_parameter">
+            <field name="key">pos_mercadopago.user_id_mercado_pago</field>
+            <field name="value"></field>
+        </record>
+
+        <!-- App number -->
+        <record id="app_number_mercado_pago_conf" model="ir.config_parameter">
+            <field name="key">pos_mercadopago.app_number_mercado_pago</field>
+            <field name="value"></field>
+        </record>
+
+        <!-- Public Key -->
+        <record id="public_key_mercado_pago_conf" model="ir.config_parameter">
+            <field name="key">pos_mercadopago.public_key_mercado_pago</field>
+            <field name="value"></field>
+        </record>
+
+        <!-- Access Token -->
+        <record id="access_token_mercado_pago_conf" model="ir.config_parameter">
+            <field name="key">pos_mercadopago.access_token_mercado_pago</field>
+            <field name="value"></field>
+        </record>
+
+        <!-- Client ID -->
+        <record id="client_id_mercado_pago_conf" model="ir.config_parameter">
+            <field name="key">pos_mercadopago.client_id_mercado_pago</field>
+            <field name="value"></field>
+        </record>
+
+        <!-- Client secret -->
+        <record id="client_secret_mercado_pago_conf" model="ir.config_parameter">
+            <field name="key">pos_mercadopago.client_secret_mercado_pago</field>
+            <field name="value"></field>
+        </record>
+
+        <!-- Service Category Code -->
+        <record id="service_category_code_conf" model="ir.config_parameter">
+            <field name="key">pos_mercadopago.service_category_code_mercado_pago</field>
+            <field name="value">47300</field>
+        </record>
+
+        <!-- Gastronomy Category Code -->
+        <record id="gastronomy_category_code_conf" model="ir.config_parameter">
+            <field name="key">pos_mercadopago.gastronomy_category_code_mercado_pago</field>
+            <field name="value">56101</field>
+        </record>
+    </data>
+</odoo>

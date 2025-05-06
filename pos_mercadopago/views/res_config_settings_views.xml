@@ -1,0 +1,20 @@
+<odoo>
+    <record id="view_res_config_settings_inherit_mpqr" model="ir.ui.view">
+        <field name="name">res.config.settings.inherit.mpqr</field>
+        <field name="model">res.config.settings</field>
+        <field name="inherit_id" ref="base.res_config_settings_view_form"/>
+        <field name="arch" type="xml">
+
+            <!-- Añadimos nuestro campo dentro de un grupo -->
+            <xpath expr="//app[@name='general_settings']/div[@id='invite_users']" position="before">
+                <div class="app_settings_block" data-string="MercadoPago Settings" string="MercadoPago Settings">
+                    <block title="MercadoPago QR Settings" name="mp_qr_setting_container">
+                        <setting id="active_user_setting">
+                            <field name="mp_qr_type" required="1" widget="radio"/>
+                        </setting>
+                    </block>
+                </div>
+            </xpath>
+        </field>
+    </record>
+</odoo>

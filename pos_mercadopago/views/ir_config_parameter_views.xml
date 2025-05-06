@@ -1,0 +1,11 @@
+<odoo>
+    <data>
+        <!-- Creamos un accion de ventana para ir a las configuraciones pero filtrar solo las de mercadopago -->
+        <record id="mercadopago_configuration_view_action" model="ir.actions.act_window">
+            <field name="name">Mercado Pago Configuration</field>
+            <field name="res_model">ir.config_parameter</field>
+            <field name="view_mode">tree,form</field>
+            <field name="domain">['|',["key","ilike","mercadopago"],["key","=","web.base.url"]]</field>
+        </record>
+    </data>
+</odoo>

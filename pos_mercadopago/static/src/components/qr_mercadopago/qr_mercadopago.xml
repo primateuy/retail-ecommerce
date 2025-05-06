@@ -1,0 +1,11 @@
+<!-- <?xml version="1.0" encoding="UTF-8"?>
+<templates id="template" xml:space="preserve">
+<!-- point_of_sale.PaymentScreenButtons -->
+    <t t-name="pos_mercadopago.qrmercadopago" t-inherit="point_of_sale.PaymentScreenButtons" t-inherit-mode="extension">
+        <xpath expr="//div[@class='payment-buttons d-flex flex-column gap-2']" position="inside">
+            <span>
+                Hlaaaaaa
+            </span>
+        </xpath>
+    </t>
+</templates> -->

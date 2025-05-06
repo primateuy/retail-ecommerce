@@ -1,0 +1,48 @@
+<odoo>
+    <data>
+        <!-- Vista form -->
+        <record id="pos_mercado_pago_view_form" model="ir.ui.view">
+            <field name="name">pos.mercado.pago.form</field>
+            <field name="model">point.of.sales.mercado.pago</field>
+            <field name="arch" type="xml">
+                <form string="Point of Sale - Mercado Pago">
+                    <header>
+                        <field name="pos_id" invisible="1"/>
+                        <button name="create_pos_mercado_pago" class="oe_highlight" type="object" string="Crear POS en Mercado Pago" invisible="pos_id"/>
+                    </header>
+                    <sheet>
+                        <group>
+                            <field name="name"/>
+                            <field name="fixed_amount"/>
+                            <field name="category"/>
+                            <field name="external_store_id" placeholder="sucursal_001"/>
+                            <field name="external_id" placeholder="caja_001"/>
+                            <field name="payment_method_id" options="{ 'no_create': True }"/>
+                            <field name="pos_qr_url" readonly="1"/>
+                        </group>
+                    </sheet>
+                </form>
+            </field>
+        </record>
+
+        <!-- Vista tree -->
+        <record id="pos_mercado_pago_view_tree" model="ir.ui.view">
+            <field name="name">pos.mercado.pago.tree</field>
+            <field name="model">point.of.sales.mercado.pago</field>
+            <field name="arch" type="xml">
+                <tree string="Point of sales - Mercado Pago">
+                    <field name="name"/>
+                    <field name="external_store_id"/>
+                    <field name="external_id"/>
+                </tree>
+            </field>
+        </record>
+
+        <!-- Vista action -->
+        <record id="pos_mercado_pago_view_action" model="ir.actions.act_window">
+            <field name="name">Point of sales - Mercado Pago</field>
+            <field name="res_model">point.of.sales.mercado.pago</field>
+            <field name="view_mode">tree,form</field>
+        </record>
+    </data>
+</odoo>
