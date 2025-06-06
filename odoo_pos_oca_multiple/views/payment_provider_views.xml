@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="payment_provider_form" model="ir.ui.view">
+        <field name="name">OCA Provider Form</field>
+        <field name="model">payment.provider</field>
+        <field name="inherit_id" ref="payment.payment_provider_form"/>
+        <field name="arch" type="xml">
+            <group name="provider_credentials" position='inside'>
+                <group invisible="code != 'oca'">
+                    <field name="is_multiple" required="code == 'oca'"/>
+                    <field name="url_webservice" required="code == 'oca'"/>
+                    <field name="codigo_sistema" required="code == 'oca'"/>
+                    <field name="client_app_id" required="code == 'oca'"/>
+                    <field name="codigo_sucursal" required="code == 'oca'"/>
+                </group>
+            </group>
+            <xpath expr="//notebook" position="inside">
+                <page string="Configuracion Multiple POS" name="multiple_pos_config" groups="base.group_no_one" invisible="is_multiple != True">
+                    <group>
+                        <group>
+                            <field name="multiple_pos_ids" mode="tree">
+                                <tree string="Multiple Pos" default_order="name" editable="bottom">
+                                    <field name="name"/>
+                                    <field name="codigo_terminal"/>
+                                </tree>
+                                <form>
+                                    <field name="name"/>
+                                    <field name="codigo_terminal"/>
+                                </form>
+                            </field>
+                        </group>
+                    </group>
+                </page>
+            </xpath>
+        </field>
+    </record>
+
+</odoo>

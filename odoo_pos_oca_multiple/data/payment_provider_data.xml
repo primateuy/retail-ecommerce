@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="payment_method_oca_propio" model="payment.method">
+        <field name="name">OCA</field>
+        <field name="code">oca</field>
+        <field name="sequence">1000</field>
+        <field name="active">False</field>
+        <field name="image" type="base64" file="payment/static/img/card.png"/>
+        <field name="support_tokenization">False</field>
+        <field name="support_express_checkout">False</field>
+        <field name="support_refund"></field>
+        <field name="supported_country_ids"
+               eval="[Command.set([
+                         ref('base.id'),
+                     ])]"
+        />
+        <field name="supported_currency_ids"
+               eval="[Command.set([
+                         ref('base.UYU'),
+                     ])]"
+        />
+    </record>
+
+    <record id="payment_provider_oca" model="payment.provider">
+        <field name="name">OCA</field>
+        <field name="code">oca</field>
+        <field name="allow_tokenization">True</field>
+        <field name="payment_method_ids"
+               eval="[(6, 0, [
+                   ref('odoo_pos_oca_multiple.payment_method_oca_propio'),
+               ])]"/>
+    </record>
+
+    <record id="payment_method_oca" model="account.payment.method">
+        <field name="name">OCA</field>
+        <field name="code">oca</field>
+        <field name="payment_type">inbound</field>
+    </record>
+</odoo>
