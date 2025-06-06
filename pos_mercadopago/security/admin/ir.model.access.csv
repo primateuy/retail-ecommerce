@@ -1,0 +1,5 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_pos_mercado_pago_model,pos.mercado.pago.model,model_point_of_sales_mercado_pago,base.group_system,1,1,1,1
+access_store_branches,store.branches,model_store_branches,base.group_system,1,1,1,1
+access_business_hours,business.hours,model_business_hours,base.group_system,1,1,1,1
+access_store_tills,store.tills,model_store_tills,base.group_system,1,1,1,1

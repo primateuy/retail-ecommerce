@@ -1,0 +1,575 @@
+# Translation of Odoo Server.
+# This file contains the translation of the following modules:
+# 	* pos_mercadopago
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: Odoo Server 17.0+e-20250123\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2025-05-02 14:48+0000\n"
+"PO-Revision-Date: 2025-05-02 14:48+0000\n"
+"Last-Translator: \n"
+"Language-Team: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: \n"
+"Plural-Forms: \n"
+
+#. module: pos_mercadopago
+#: model:res.groups,comment:pos_mercadopago.branch_manager_mercado_pago
+msgid ""
+"\n"
+"                This group will have the permissions of a branch manager\n"
+"            "
+msgstr ""
+
+#. module: pos_mercadopago
+#: model:ir.module.category,description:pos_mercadopago.module_category_mercado_pago_qr
+msgid ""
+"\n"
+"                User permissions for configuring the payment market integration\n"
+"            "
+msgstr ""
+
+#. module: pos_mercadopago
+#: model_terms:ir.ui.view,arch_db:pos_mercadopago.store_branches_views_form
+msgid "08:00"
+msgstr ""
+
+#. module: pos_mercadopago
+#: model_terms:ir.ui.view,arch_db:pos_mercadopago.pos_payment_method_view_form_inherit_pos_mercado_pago
+msgid "1494126963"
+msgstr ""
+
+#. module: pos_mercadopago
+#: model_terms:ir.ui.view,arch_db:pos_mercadopago.store_branches_views_form
+msgid "17:00"
+msgstr ""
+
+#. module: pos_mercadopago
+#: model:ir.model.fields,field_description:pos_mercadopago.field_point_of_sales_mercado_pago__active
+msgid "Active"
+msgstr ""
+
+#. module: pos_mercadopago
+#. odoo-python
+#: code:addons/pos_mercadopago/models/store_tills.py:0
+#: code:addons/pos_mercadopago/models/store_tills.py:0
+#, python-format
+msgid "An error occurred while creating the payment order"
+msgstr "Ha ocurrido un error mientras se creaba la orden de pago"
+
+#. module: pos_mercadopago
+#. odoo-python
+#: code:addons/pos_mercadopago/models/store_tills.py:0
+#: code:addons/pos_mercadopago/models/store_tills.py:0
+#, python-format
+msgid "An error occurred while creating the pos"
+msgstr "Ha ocurrido un error mientras se creaba el punto de venta/caja"
+
+#. module: pos_mercadopago
+#. odoo-javascript
+#: code:addons/pos_mercadopago/static/src/components/popup_qr/popup_qr.xml:0
+#, python-format
+msgid "Aqui va el QR"
+msgstr ""
+
+#. module: pos_mercadopago
+#: model_terms:ir.ui.view,arch_db:pos_mercadopago.store_branches_views_form
+msgid "Basic Info"
+msgstr "Información Básica"
+
+#. module: pos_mercadopago
+#: model:res.groups,name:pos_mercadopago.branch_manager_mercado_pago
+msgid "Branch Manager"
+msgstr "Gerente de Sucursal"
+
+#. module: pos_mercadopago
+#: model:ir.model,name:pos_mercadopago.model_store_branches
+msgid "Branches of stores"
+msgstr "Sucursales de tiendas"
+
+#. module: pos_mercadopago
+#: model:ir.model.fields,field_description:pos_mercadopago.field_store_branches__business_hours_ids
+#: model_terms:ir.ui.view,arch_db:pos_mercadopago.store_branches_views_form
+msgid "Business Hours"
+msgstr "Horarios de trabajo"
+
+#. module: pos_mercadopago
+#: model:ir.model,name:pos_mercadopago.model_business_hours
+msgid "Business hours of a store"
+msgstr "Horarios de trabajo de una tienda"
+
+#. module: pos_mercadopago
+#: model:ir.model.fields,field_description:pos_mercadopago.field_point_of_sales_mercado_pago__category
+#: model:ir.model.fields,field_description:pos_mercadopago.field_store_tills__category
+msgid "Category"
+msgstr "Categoria"
+
+#. module: pos_mercadopago
+#: model:ir.model.fields,field_description:pos_mercadopago.field_store_branches__city_name
+msgid "City Name"
+msgstr "Nombre de la ciudad"
+
+#. module: pos_mercadopago
+#: model:ir.model.fields,field_description:pos_mercadopago.field_business_hours__close_hour
+msgid "Close Hour"
+msgstr "Hora de cierre"
+
+#. module: pos_mercadopago
+#: model:ir.model,name:pos_mercadopago.model_res_config_settings
+msgid "Config Settings"
+msgstr "Ajustes de configuración"
+
+#. module: pos_mercadopago
+#. odoo-javascript
+#: code:addons/pos_mercadopago/static/src/components/popup_qr/popup_qr.xml:0
+#, python-format
+msgid "Confirm"
+msgstr "Confirmar"
+
+#. module: pos_mercadopago
+#: model_terms:ir.ui.view,arch_db:pos_mercadopago.pos_mercado_pago_view_form
+msgid "Crear POS en Mercado Pago"
+msgstr ""
+
+#. module: pos_mercadopago
+#: model_terms:ir.ui.view,arch_db:pos_mercadopago.store_branches_views_form
+msgid "Create Store Branch in Mercado Pago"
+msgstr "Crear una sucursal en Mercado Pago"
+
+#. module: pos_mercadopago
+#: model_terms:ir.ui.view,arch_db:pos_mercadopago.store_tills_view_form
+msgid "Create a payment order"
+msgstr "Crear una orden de pago"
+
+#. module: pos_mercadopago
+#: model_terms:ir.ui.view,arch_db:pos_mercadopago.store_tills_view_form
+msgid "Create a payment order qr"
+msgstr "Crear una orden de pago QR"
+
+#. module: pos_mercadopago
+#: model:ir.model.fields,field_description:pos_mercadopago.field_business_hours__create_uid
+#: model:ir.model.fields,field_description:pos_mercadopago.field_point_of_sales_mercado_pago__create_uid
+#: model:ir.model.fields,field_description:pos_mercadopago.field_store_branches__create_uid
+#: model:ir.model.fields,field_description:pos_mercadopago.field_store_tills__create_uid
+msgid "Created by"
+msgstr ""
+
+#. module: pos_mercadopago
+#: model:ir.model.fields,field_description:pos_mercadopago.field_business_hours__create_date
+#: model:ir.model.fields,field_description:pos_mercadopago.field_point_of_sales_mercado_pago__create_date
+#: model:ir.model.fields,field_description:pos_mercadopago.field_store_branches__create_date
+#: model:ir.model.fields,field_description:pos_mercadopago.field_store_tills__create_date
+msgid "Created on"
+msgstr ""
+
+#. module: pos_mercadopago
+#: model:ir.ui.menu,name:pos_mercadopago.mercadopago_configuration_menu
+msgid "Credentials"
+msgstr "Credenciales"
+
+#. module: pos_mercadopago
+#: model:ir.model.fields,field_description:pos_mercadopago.field_business_hours__day
+msgid "Day"
+msgstr "Dia"
+
+#. module: pos_mercadopago
+#. odoo-javascript
+#: code:addons/pos_mercadopago/static/src/components/popup_qr/popup_qr.xml:0
+#, python-format
+msgid "Discard"
+msgstr "Descartar"
+
+#. module: pos_mercadopago
+#: model:ir.model.fields,field_description:pos_mercadopago.field_business_hours__display_name
+#: model:ir.model.fields,field_description:pos_mercadopago.field_point_of_sales_mercado_pago__display_name
+#: model:ir.model.fields,field_description:pos_mercadopago.field_store_branches__display_name
+#: model:ir.model.fields,field_description:pos_mercadopago.field_store_tills__display_name
+msgid "Display Name"
+msgstr ""
+
+#. module: pos_mercadopago
+#: model:ir.model.fields.selection,name:pos_mercadopago.selection__res_config_settings__mp_qr_type__dynamic
+msgid "Dynamic QR/Dynamic Model"
+msgstr "QR Dínamico/Modelo Dínamico"
+
+#. module: pos_mercadopago
+#: model:ir.model.fields,field_description:pos_mercadopago.field_point_of_sales_mercado_pago__external_id
+#: model:ir.model.fields,field_description:pos_mercadopago.field_store_branches__external_id
+#: model:ir.model.fields,field_description:pos_mercadopago.field_store_tills__external_id
+msgid "External"
+msgstr "Identificador Externo"
+
+#. module: pos_mercadopago
+#: model:ir.model.fields,field_description:pos_mercadopago.field_point_of_sales_mercado_pago__external_store_id
+msgid "External Store"
+msgstr "Identificador externo de la sucursal"
+
+#. module: pos_mercadopago
+#: model:ir.model.fields,field_description:pos_mercadopago.field_point_of_sales_mercado_pago__fixed_amount
+#: model:ir.model.fields,field_description:pos_mercadopago.field_store_tills__fixed_amount
+msgid "Fixed Amount"
+msgstr "Precio fijo"
+
+#. module: pos_mercadopago
+#: model:ir.model.fields.selection,name:pos_mercadopago.selection__res_config_settings__mp_qr_type__static
+msgid "Fixed QR/Model attended"
+msgstr "QR Fijo/Modelo Atendido"
+
+#. module: pos_mercadopago
+#: model:ir.model.fields.selection,name:pos_mercadopago.selection__business_hours__day__friday
+msgid "Friday"
+msgstr "Viernes"
+
+#. module: pos_mercadopago
+#: model:ir.model.fields.selection,name:pos_mercadopago.selection__store_tills__category__gastronomy
+msgid "Gastronomy"
+msgstr "Gastronomia"
+
+#. module: pos_mercadopago
+#. odoo-python
+#: code:addons/pos_mercadopago/models/store_branches.py:0
+#: code:addons/pos_mercadopago/models/store_branches.py:0
+#, python-format
+msgid "Ha ocurrido un error al crear la sucursal"
+msgstr ""
+
+#. module: pos_mercadopago
+#: model:ir.model.fields,field_description:pos_mercadopago.field_business_hours__id
+#: model:ir.model.fields,field_description:pos_mercadopago.field_point_of_sales_mercado_pago__id
+#: model:ir.model.fields,field_description:pos_mercadopago.field_store_branches__id
+#: model:ir.model.fields,field_description:pos_mercadopago.field_store_tills__id
+msgid "ID"
+msgstr ""
+
+#. module: pos_mercadopago
+#: model:ir.model.fields,field_description:pos_mercadopago.field_business_hours__write_uid
+#: model:ir.model.fields,field_description:pos_mercadopago.field_point_of_sales_mercado_pago__write_uid
+#: model:ir.model.fields,field_description:pos_mercadopago.field_store_branches__write_uid
+#: model:ir.model.fields,field_description:pos_mercadopago.field_store_tills__write_uid
+msgid "Last Updated by"
+msgstr ""
+
+#. module: pos_mercadopago
+#: model:ir.model.fields,field_description:pos_mercadopago.field_business_hours__write_date
+#: model:ir.model.fields,field_description:pos_mercadopago.field_point_of_sales_mercado_pago__write_date
+#: model:ir.model.fields,field_description:pos_mercadopago.field_store_branches__write_date
+#: model:ir.model.fields,field_description:pos_mercadopago.field_store_tills__write_date
+msgid "Last Updated on"
+msgstr ""
+
+#. module: pos_mercadopago
+#: model:ir.model.fields,field_description:pos_mercadopago.field_store_branches__latitude
+msgid "Latitude"
+msgstr "Latitud"
+
+#. module: pos_mercadopago
+#: model_terms:ir.ui.view,arch_db:pos_mercadopago.store_branches_views_form
+msgid "Location"
+msgstr "Localización"
+
+#. module: pos_mercadopago
+#: model:ir.model.fields,field_description:pos_mercadopago.field_store_branches__longitude
+msgid "Longitude"
+msgstr "Longitud"
+
+#. module: pos_mercadopago
+#: model:ir.module.category,name:pos_mercadopago.module_category_mercado_pago_qr
+#: model:ir.ui.menu,name:pos_mercadopago.pos_mercado_pago_menu
+msgid "Mercado Pago"
+msgstr ""
+
+#. module: pos_mercadopago
+#: model:ir.actions.act_window,name:pos_mercadopago.mercadopago_configuration_view_action
+msgid "Mercado Pago Configuration"
+msgstr "Configuración Mercado Pago"
+
+#. module: pos_mercadopago
+#: model_terms:ir.ui.view,arch_db:pos_mercadopago.store_branches_views_form
+#: model_terms:ir.ui.view,arch_db:pos_mercadopago.store_tills_view_form
+msgid "MercadoPago Info"
+msgstr "Información de MercadoPago"
+
+#. module: pos_mercadopago
+#: model_terms:ir.ui.view,arch_db:pos_mercadopago.view_res_config_settings_inherit_mpqr
+msgid "MercadoPago QR Settings"
+msgstr "Configuración de MercadoPago QR"
+
+#. module: pos_mercadopago
+#: model_terms:ir.ui.view,arch_db:pos_mercadopago.view_res_config_settings_inherit_mpqr
+msgid "MercadoPago Settings"
+msgstr "Configuraciones MercadoPago"
+
+#. module: pos_mercadopago
+#: model:ir.model.fields,field_description:pos_mercadopago.field_pos_config__mp_tills
+msgid "MercadoPago Tills"
+msgstr "Cajas MercadoPago"
+
+#. module: pos_mercadopago
+#: model:ir.model,name:pos_mercadopago.model_point_of_sales_mercado_pago
+msgid "Modelo para guardar la informacion de los pos de mercado pago"
+msgstr ""
+
+#. module: pos_mercadopago
+#: model:ir.model.fields.selection,name:pos_mercadopago.selection__business_hours__day__monday
+msgid "Monday"
+msgstr "Lunes"
+
+#. module: pos_mercadopago
+#: model:ir.model.fields,field_description:pos_mercadopago.field_store_branches__mp_store_branch_id
+msgid "Mp Store Branch"
+msgstr "Sucursal MercadoPago"
+
+#. module: pos_mercadopago
+#: model_terms:ir.ui.view,arch_db:pos_mercadopago.store_branches_views_form
+msgid "My store"
+msgstr "Mi tienda"
+
+#. module: pos_mercadopago
+#: model:ir.model.fields,field_description:pos_mercadopago.field_point_of_sales_mercado_pago__name
+#: model:ir.model.fields,field_description:pos_mercadopago.field_store_branches__name
+#: model:ir.model.fields,field_description:pos_mercadopago.field_store_tills__name
+msgid "Name"
+msgstr "Nombre"
+
+#. module: pos_mercadopago
+#: model:ir.model.fields,field_description:pos_mercadopago.field_business_hours__open_hour
+msgid "Open Hour"
+msgstr "Hora de apertura"
+
+#. module: pos_mercadopago
+#: model:ir.model.fields,field_description:pos_mercadopago.field_point_of_sales_mercado_pago__pos_id
+msgid "POS id"
+msgstr "Identificador del PdV"
+
+#. module: pos_mercadopago
+#: model:ir.model.fields,field_description:pos_mercadopago.field_point_of_sales_mercado_pago__payment_method_id
+msgid "Payment Method"
+msgstr "Método de Pago"
+
+#. module: pos_mercadopago
+#. odoo-python
+#: code:addons/pos_mercadopago/models/pos_payment_method.py:0
+#, python-format
+msgid "Please verify your production user token as it was rejected"
+msgstr "Verifique su token de usuario de producción ya que fue rechazado"
+
+#. module: pos_mercadopago
+#: model_terms:ir.ui.view,arch_db:pos_mercadopago.pos_mercado_pago_view_form
+msgid "Point of Sale - Mercado Pago"
+msgstr "Punto de Venta - MercadoPago"
+
+#. module: pos_mercadopago
+#: model:ir.model,name:pos_mercadopago.model_pos_config
+msgid "Point of Sale Configuration"
+msgstr "Configuración del punto de venta"
+
+#. module: pos_mercadopago
+#: model:ir.model,name:pos_mercadopago.model_pos_payment_method
+msgid "Point of Sale Payment Methods"
+msgstr "Métodos de pago del Punto de venta "
+
+#. module: pos_mercadopago
+#: model:ir.actions.act_window,name:pos_mercadopago.pos_mercado_pago_view_action
+#: model_terms:ir.ui.view,arch_db:pos_mercadopago.pos_mercado_pago_view_tree
+msgid "Point of sales - Mercado Pago"
+msgstr "Puntos de Ventas - MercadoPago"
+
+#. module: pos_mercadopago
+#: model:ir.model.fields,field_description:pos_mercadopago.field_store_tills__pos_id_mp
+msgid "Pos Id Mp"
+msgstr "Identificador del PdV en MercadoPago"
+
+#. module: pos_mercadopago
+#: model:ir.model.fields,field_description:pos_mercadopago.field_pos_payment_method__qr_integration
+msgid "QR Integration"
+msgstr "Integración QR"
+
+#. module: pos_mercadopago
+#: model:ir.model.fields,field_description:pos_mercadopago.field_res_config_settings__mp_qr_type
+msgid "QR Type"
+msgstr "Tipo de QR"
+
+#. module: pos_mercadopago
+#: model:ir.model.fields,field_description:pos_mercadopago.field_point_of_sales_mercado_pago__pos_qr_url
+msgid "QR url"
+msgstr "Url del QR"
+
+#. module: pos_mercadopago
+#: model:ir.model.fields,field_description:pos_mercadopago.field_store_tills__qr_code
+msgid "Qr Code"
+msgstr "Código QR"
+
+#. module: pos_mercadopago
+#: model:ir.model.fields,field_description:pos_mercadopago.field_store_tills__qr_template_document
+msgid "Qr Template Document"
+msgstr "Plantilla de Documento QR"
+
+#. module: pos_mercadopago
+#: model:ir.model.fields,field_description:pos_mercadopago.field_store_tills__qr_template_image
+msgid "Qr Template Image"
+msgstr "QR en Imagen"
+
+#. module: pos_mercadopago
+#: model:ir.model.fields,field_description:pos_mercadopago.field_store_tills__qr_url
+msgid "Qr Url"
+msgstr "URL del QR"
+
+#. module: pos_mercadopago
+#: model:ir.model.fields,field_description:pos_mercadopago.field_store_branches__reference
+msgid "Reference"
+msgstr "Referencia"
+
+#. module: pos_mercadopago
+#: model:ir.model.fields.selection,name:pos_mercadopago.selection__business_hours__day__saturday
+msgid "Saturday"
+msgstr "Sábado"
+
+#. module: pos_mercadopago
+#: model:ir.model.fields.selection,name:pos_mercadopago.selection__store_tills__category__service
+msgid "Service Station"
+msgstr "Estación de Servicio"
+
+#. module: pos_mercadopago
+#: model:ir.model.fields,field_description:pos_mercadopago.field_store_branches__state_name
+msgid "State Name"
+msgstr "Nombre del Estado/Provincia"
+
+#. module: pos_mercadopago
+#: model:ir.model.fields,field_description:pos_mercadopago.field_store_tills__status_mp
+msgid "Status Mp"
+msgstr "Estatus en MercadoPago"
+
+#. module: pos_mercadopago
+#: model_terms:ir.ui.view,arch_db:pos_mercadopago.store_branches_views_form
+msgid "Still 1"
+msgstr "Caja 1"
+
+#. module: pos_mercadopago
+#: model_terms:ir.ui.view,arch_db:pos_mercadopago.store_branches_views_form
+msgid "Still Info"
+msgstr "Información de la Caja"
+
+#. module: pos_mercadopago
+#: model:ir.model.fields,field_description:pos_mercadopago.field_business_hours__store_branch_id
+#: model:ir.model.fields,field_description:pos_mercadopago.field_store_tills__store_branch_id
+msgid "Store Branch"
+msgstr "Sucursal"
+
+#. module: pos_mercadopago
+#: model:ir.actions.act_window,name:pos_mercadopago.store_branches_views_action
+#: model:ir.ui.menu,name:pos_mercadopago.store_branches_menu
+msgid "Store Branches"
+msgstr "Sucursales"
+
+#. module: pos_mercadopago
+#: model:ir.actions.act_window,name:pos_mercadopago.store_tills_views_action
+#: model:ir.model.fields,field_description:pos_mercadopago.field_store_branches__store_tills_ids
+#: model:ir.ui.menu,name:pos_mercadopago.store_tills_menu
+msgid "Store Tills"
+msgstr "Cajas"
+
+#. module: pos_mercadopago
+#: model:ir.model,name:pos_mercadopago.model_store_tills
+msgid "Store tills of a store branch"
+msgstr "Cajas de una sucursal"
+
+#. module: pos_mercadopago
+#: model:ir.model.fields,field_description:pos_mercadopago.field_store_branches__street_name
+msgid "Street Name"
+msgstr "Nombre de la calle"
+
+#. module: pos_mercadopago
+#: model:ir.model.fields,field_description:pos_mercadopago.field_store_branches__street_number
+msgid "Street Number"
+msgstr "Número de calle"
+
+#. module: pos_mercadopago
+#: model:ir.model.fields.selection,name:pos_mercadopago.selection__business_hours__day__sunday
+msgid "Sunday"
+msgstr "Domingo"
+
+#. module: pos_mercadopago
+#. odoo-python
+#: code:addons/pos_mercadopago/models/pos_payment_method.py:0
+#, python-format
+msgid "The terminal serial number is not registered on Mercado Pago"
+msgstr "El número de serial de la terminal no esta registrado en Mercaod Pago"
+
+#. module: pos_mercadopago
+#. odoo-python
+#: code:addons/pos_mercadopago/models/store_tills.py:0
+#: code:addons/pos_mercadopago/models/store_tills.py:0
+#, python-format
+msgid "There was an error creating the payment order"
+msgstr "Hubo un error al crear la orden de pago"
+
+#. module: pos_mercadopago
+#. odoo-python
+#: code:addons/pos_mercadopago/models/store_branches.py:0
+#, python-format
+msgid "This branch is already registered in Mercado Pago"
+msgstr "Esta sucursal ya esta creada en Mercado Pago"
+
+#. module: pos_mercadopago
+#: model:ir.model.fields.selection,name:pos_mercadopago.selection__business_hours__day__thursday
+msgid "Thursday"
+msgstr "Jueves"
+
+#. module: pos_mercadopago
+#: model_terms:ir.ui.view,arch_db:pos_mercadopago.store_branches_views_form
+msgid "Tills"
+msgstr "Cajas"
+
+#. module: pos_mercadopago
+#: model:ir.model.fields.selection,name:pos_mercadopago.selection__business_hours__day__tuesday
+msgid "Tuesday"
+msgstr "Martes"
+
+#. module: pos_mercadopago
+#: model:ir.model.fields,field_description:pos_mercadopago.field_store_tills__user_id_mp
+msgid "User Id Mp"
+msgstr "Identificador del usuario en Mercado Pago"
+
+#. module: pos_mercadopago
+#: model:ir.model.fields,field_description:pos_mercadopago.field_store_tills__uuid_mp
+msgid "Uuid Mp"
+msgstr "Identificador único en Mercado Pago"
+
+#. module: pos_mercadopago
+#: model:ir.model.fields.selection,name:pos_mercadopago.selection__business_hours__day__wednesday
+msgid "Wednesday"
+msgstr "Miércoles"
+
+#. module: pos_mercadopago
+#. odoo-python
+#: code:addons/pos_mercadopago/models/store_branches.py:0
+#, python-format
+msgid "You must add at least one business hour"
+msgstr "Debes agregar al menos un horario de trabajo"
+
+#. module: pos_mercadopago
+#: model:ir.actions.act_window,name:pos_mercadopago.business_hours_view_action
+msgid "business.hours.view.action"
+msgstr ""
+
+#. module: pos_mercadopago
+#: model_terms:ir.ui.view,arch_db:pos_mercadopago.pos_mercado_pago_view_form
+msgid "caja_001"
+msgstr ""
+
+#. module: pos_mercadopago
+#: model_terms:ir.ui.view,arch_db:pos_mercadopago.pos_mercado_pago_view_form
+msgid "sucursal_001"
+msgstr ""
+
+#. module: pos_mercadopago
+#: model_terms:ir.ui.view,arch_db:pos_mercadopago.store_tills_view_form
+msgid "till 1"
+msgstr "caja 1"
+
+#. module: pos_mercadopago
+#: model_terms:ir.ui.view,arch_db:pos_mercadopago.store_tills_view_form
+msgid "till Info"
+msgstr "Información de la caja"

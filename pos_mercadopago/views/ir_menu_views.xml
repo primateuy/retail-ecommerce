@@ -1,0 +1,32 @@
+<odoo>
+    <data>
+        <menuitem
+            id="pos_mercado_pago_menu"
+            name="Mercado Pago"
+            sequence="10"
+            parent="point_of_sale.menu_point_config_product"
+            groups="pos_mercadopago.branch_manager_mercado_pago,base.group_system"
+            />
+
+        <menuitem
+            id="store_branches_menu"
+            name="Store Branches"
+            action="store_branches_views_action"
+            parent="pos_mercado_pago_menu"
+            sequence="10"/>
+
+        <menuitem
+            id="store_tills_menu"
+            name="Store Tills"
+            action="store_tills_views_action"
+            parent="pos_mercado_pago_menu"
+            sequence="20"/>
+
+        <menuitem
+            id="mercadopago_configuration_menu"
+            name="Credentials"
+            action="mercadopago_configuration_view_action"
+            parent="pos_mercado_pago_menu"
+            sequence="30"/>
+    </data>
+</odoo>

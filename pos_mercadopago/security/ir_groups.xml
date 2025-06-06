@@ -1,0 +1,20 @@
+<odoo>
+    <data>
+        <!-- Categories  -->
+        <record model="ir.module.category" id="module_category_mercado_pago_qr">
+            <field name="name">Mercado Pago</field>
+            <field name="description">
+                User permissions for configuring the payment market integration
+            </field>
+        </record>
+
+        <!-- Groups -->
+        <record id="branch_manager_mercado_pago" model="res.groups">
+            <field name="name">Branch Manager</field>
+            <field name="comment">
+                This group will have the permissions of a branch manager
+            </field>
+            <field name="category_id" ref="module_category_mercado_pago_qr" />
+        </record>
+    </data>
+</odoo>

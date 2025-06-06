@@ -1,0 +1,44 @@
+<odoo>
+    <data>
+        <!-- Vista form -->
+        <record id="business_hours_view_form" model="ir.ui.view">
+            <field name="name">business.hours.view.form</field>
+            <field name="model">business.hours</field>
+            <field name="arch" type="xml">
+                <form string="">
+                    <header>
+                    </header>
+                    <sheet>
+                        <group>
+                            <field name="day"/>
+                            <field name="open_hour"/>
+                            <field name="close_hour"/>
+                            <field name="store_branch_id"/>
+                        </group>
+                    </sheet>
+                </form>
+            </field>
+        </record>
+
+        <!-- Vista tree -->
+        <record id="business_hours_views_tree" model="ir.ui.view">
+            <field name="name">business.hours.views.tree</field>
+            <field name="model">business.hours</field>
+            <field name="arch" type="xml">
+                <tree string="">
+                    <field name="day"/>
+                    <field name="open_hour"/>
+                    <field name="close_hour"/>
+                    <field name="store_branch_id"/>
+                </tree>
+            </field>
+        </record>
+
+        <!-- Vista action -->
+        <record id="business_hours_view_action" model="ir.actions.act_window">
+            <field name="name">business.hours.view.action</field>
+            <field name="res_model">business.hours</field>
+            <field name="view_mode">tree,form</field>
+        </record>
+    </data>
+</odoo>
