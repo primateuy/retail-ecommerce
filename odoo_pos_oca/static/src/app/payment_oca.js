@@ -121,6 +121,15 @@ export class PaymentOCA extends PaymentInterface {
         data.TaxRefund = "99";
         data.TaxableAmount = `${total_order_amount_without_tax}`;
         data.InvoiceAmount = `${total_order_amount}`;
+        // Enviar un InvoiceNumber simple - el backend se encargará de encontrar la orden correcta
+        data.InvoiceNumber = "1";
+        // Agregar campos que pueden ser obligatorios
+        data.Installments = "1";
+        data.TicketNumber = "";
+
+        // Log para debuggear los datos que se envían
+        console.log('OCA Payment Data being sent:', JSON.stringify(data, null, 2));
+        console.log('InvoiceNumber sent:', data.InvoiceNumber);
 
         if (has_refunded_line) {
             var odoo_backend_response = await this.env.services.orm.silent.call(

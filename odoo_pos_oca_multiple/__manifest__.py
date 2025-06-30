@@ -9,7 +9,6 @@
     'depends': ['odoo_pos_oca', 'payment'],
     'data': [
         'security/ir.model.access.csv',
-        'data/payment_provider_data.xml',
         'views/payment_provider_views.xml',
         'views/pos_payment_method_views.xml',
     ],

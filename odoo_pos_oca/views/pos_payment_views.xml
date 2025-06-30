@@ -8,6 +8,9 @@
             <field name="arch" type="xml">
                 <xpath expr="//field[@name='transaction_id']" position="after">
                     <field name="ticket" string="Número de ticket"/>
+                    <field name="invoice_number" string="Número de Factura"/>
+                    <field name="installments" string="Número de Cuotas"/>
+                    <field name="is_promotion" string="Es Promoción"/>
                 </xpath>
             </field>
         </record>
