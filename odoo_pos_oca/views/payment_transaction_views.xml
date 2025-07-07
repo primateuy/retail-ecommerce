@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <!-- Vista de formulario para payment.transaction -->
+        <record id="view_payment_transaction_oca_form" model="ir.ui.view">
+            <field name="name">payment.transaction.oca.form</field>
+            <field name="model">payment.transaction</field>
+            <field name="inherit_id" ref="payment.payment_transaction_form"/>
+            <field name="arch" type="xml">
+                <xpath expr="//group[@name='transaction_details']" position="after">
+                    <group string="Información OCA" name="oca_info" invisible="provider_code != 'oca'">
+                        <group string="Información del POS">
+                            <field name="pos_id"/>
+                            <field name="ticket_number"/>
+                            <field name="batch_number"/>
+                            <field name="authorization_code"/>
+                            <field name="merchant_number"/>
+                            <field name="invoice_number"/>
+                        </group>
+                        <group string="Información de la Tarjeta">
+                            <field name="card_bin"/>
+                            <field name="card_last_four"/>
+                            <field name="issuer_code"/>
+                            <field name="issuer_name"/>
+                            <field name="acquirer"/>
+                            <field name="installments"/>
+                        </group>
+                    </group>
+                    <group string="Relaciones OCA" name="oca_relations" invisible="provider_code != 'oca'">
+                        <group string="Relaciones">
+                            <field name="transaction_origin"/>
+                            <field name="pos_order_id"/>
+                            <field name="pos_payment_id"/>
+                            <field name="is_promotion"/>
+                        </group>
+                        <group string="Información OCA">
+                            <field name="oca_transaction_id"/>
+                            <field name="oca_response_code"/>
+                            <field name="oca_response_message"/>
+                        </group>
+                    </group>
+                    <notebook string="Información Detallada OCA" name="oca_detailed_info" invisible="provider_code != 'oca'">
+                        <page string="Respuesta Completa del POS" name="oca_complete_response">
+                            <field name="oca_complete_response" readonly="1" widget="ace" options="{'mode': 'json'}"/>
+                        </page>
+                    </notebook>
+                </xpath>
+            </field>
+        </record>
+
+        <!-- Vista de árbol para payment.transaction -->
+        <record id="view_payment_transaction_oca_tree" model="ir.ui.view">
+            <field name="name">payment.transaction.oca.tree</field>
+            <field name="model">payment.transaction</field>
+            <field name="inherit_id" ref="payment.payment_transaction_list"/>
+            <field name="arch" type="xml">
+                <xpath expr="//field[@name='amount']" position="after">
+                    <field name="pos_id" optional="show"/>
+                    <field name="ticket_number" optional="show"/>
+                    <field name="card_last_four" optional="show"/>
+                    <field name="acquirer" optional="show"/>
+                    <field name="oca_transaction_id" optional="show"/>
+                </xpath>
+            </field>
+        </record>
+
+        <!-- Vista de búsqueda para payment.transaction -->
+        <record id="view_payment_transaction_oca_search" model="ir.ui.view">
+            <field name="name">payment.transaction.oca.search</field>
+            <field name="model">payment.transaction</field>
+            <field name="inherit_id" ref="payment.payment_transaction_search"/>
+            <field name="arch" type="xml">
+                <xpath expr="//field[@name='reference']" position="after">
+                    <field name="pos_id"/>
+                    <field name="ticket_number"/>
+                    <field name="oca_transaction_id"/>
+                    <field name="acquirer"/>
+                </xpath>
+                <xpath expr="//filter[@name='provider_id']" position="after">
+                    <filter string="OCA" name="oca_provider" domain="[('provider_code', '=', 'oca')]"/>
+                </xpath>
+            </field>
+        </record>
+
+        <!-- Acción para mostrar transacciones OCA -->
+        <record id="action_payment_transaction_oca" model="ir.actions.act_window">
+            <field name="name">Transacciones OCA</field>
+            <field name="res_model">payment.transaction</field>
+            <field name="view_mode">tree,form</field>
+            <field name="domain">[('provider_code', '=', 'oca')]</field>
+            <field name="context">{'search_default_oca_provider': 1}</field>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">
+                    No hay transacciones OCA registradas
+                </p>
+                <p>
+                    Las transacciones OCA se crean automáticamente cuando se procesan pagos
+                    a través del punto de venta con el método de pago OCA.
+                </p>
+            </field>
+        </record>
+
+        <!-- Menú para transacciones OCA -->
+        <menuitem id="menu_payment_transaction_oca"
+                  name="Transacciones OCA"
+                  parent="account_payment.payment_transaction_menu"
+                  action="action_payment_transaction_oca"
+                  sequence="10"/>
+    </data>
+</odoo> 
