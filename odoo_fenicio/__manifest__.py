@@ -15,7 +15,7 @@
         'views/account_payment_views.xml',
         'views/sale_views.xml',
         'data/data.xml',
-        'data/payments_diaries.xml',
+        # 'data/payments_diaries.xml',
     ],
     'license': 'LGPL-3',
 }
