@@ -310,11 +310,11 @@ class PosPaymentMethod(models.Model):
 
                     response_code = result['ResponseCode']
                     rt = result['RemainingExpirationTime'] if 'RemainingExpirationTime' in result else False
-                    # if response_code not in ['10', '12']:
-                    #     break
+                    if response_code not in ['10', '12']:
+                        break
 
-                    if response_code == '12' and rt and rt == 0.0:
-                        self.processFinancialReverse(data, base_url_endpoint)
+                    # if response_code == '12' and rt and rt == 0.0:
+                    #     self.processFinancialReverse(data, base_url_endpoint)
 
                 except Exception as e:
                     _logger.error('Error en procesamiento en segundo plano: %s', str(e))
