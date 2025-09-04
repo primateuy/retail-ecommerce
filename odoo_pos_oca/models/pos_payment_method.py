@@ -313,7 +313,7 @@ class PosPaymentMethod(models.Model):
                     if response_code not in ['10', '12']:
                         break
 
-                    if response_code in ['12'] and rt and rt == 0.0:
+                    if response_code in ['10', '12'] and rt and rt == 0.0:
                         self.processFinancialReverse(data, base_url_endpoint)
 
                 except Exception as e:
