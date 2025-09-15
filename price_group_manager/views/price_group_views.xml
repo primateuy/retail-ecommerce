@@ -1,0 +1,220 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <!-- Vista de formulario para Agrupador de Precio -->
+        <record id="view_price_group_form" model="ir.ui.view">
+            <field name="name">x_price_group.form</field>
+            <field name="model">x_price_group</field>
+            <field name="arch" type="xml">
+                <form string="Agrupador de Precio">
+                    <sheet>
+                        <div class="oe_title">
+                            <h1>
+                                <field name="name" placeholder="Nombre del Agrupador"/>
+                            </h1>
+                        </div>
+                        
+                        <group>
+                            <group>
+                                <field name="code" placeholder="Código interno"/>
+                                <field name="active"/>
+                            </group>
+                            <group>
+                                <field name="product_count" widget="statinfo" string="Total Productos"/>
+                                <field name="active_product_count" widget="statinfo" string="Productos Activos"/>
+                            </group>
+                        </group>
+                        
+                        <notebook>
+                            <page string="Productos Asociados" name="products">
+                                <field name="price_group_line_ids" readonly="1">
+                                    <tree string="Líneas de Producto">
+                                        <field name="product_tmpl_id"/>
+                                        <field name="product_id"/>
+                                        <field name="date_start"/>
+                                        <field name="date_end"/>
+                                        <field name="origin"/>
+                                        <field name="is_current"/>
+                                        <field name="active"/>
+                                    </tree>
+                                </field>
+                            </page>
+                        </notebook>
+                    </sheet>
+                    
+                    <div class="oe_chatter">
+                        <field name="message_follower_ids"/>
+                        <field name="message_ids"/>
+                    </div>
+                </form>
+            </field>
+        </record>
+
+        <!-- Vista de lista para Agrupador de Precio -->
+        <record id="view_price_group_tree" model="ir.ui.view">
+            <field name="name">x_price_group.tree</field>
+            <field name="model">x_price_group</field>
+            <field name="arch" type="xml">
+                <tree string="Agrupadores de Precio">
+                    <field name="name"/>
+                    <field name="code"/>
+                    <field name="product_count"/>
+                    <field name="active_product_count"/>
+                    <field name="active"/>
+                </tree>
+            </field>
+        </record>
+
+        <!-- Vista de búsqueda para Agrupador de Precio -->
+        <record id="view_price_group_search" model="ir.ui.view">
+            <field name="name">x_price_group.search</field>
+            <field name="model">x_price_group</field>
+            <field name="arch" type="xml">
+                <search string="Buscar Agrupadores de Precio">
+                    <field name="name"/>
+                    <field name="code"/>
+                    <filter string="Activos" name="active" domain="[('active', '=', True)]"/>
+                    <filter string="Inactivos" name="inactive" domain="[('active', '=', False)]"/>
+                    <!--<filter string="Con Productos" name="with_products" domain="[('product_count', '>', 0)]"/>-->
+                    <!--<filter string="Sin Productos" name="without_products" domain="[('product_count', '=', 0)]"/>-->
+                    <group expand="0" string="Agrupar por">
+                        <filter string="Estado" name="group_active" context="{'group_by': 'active'}"/>
+                        <filter string="Código" name="group_code" context="{'group_by': 'code'}"/>
+                    </group>
+                </search>
+            </field>
+        </record>
+
+        <!-- Vista de formulario para Línea de Agrupador de Precio -->
+        <record id="view_price_group_line_form" model="ir.ui.view">
+            <field name="name">x_price_group_line.form</field>
+            <field name="model">x_price_group_line</field>
+            <field name="arch" type="xml">
+                <form string="Línea de Agrupador de Precio">
+                    <sheet>
+                        <group>
+                            <group string="Producto">
+                                <field name="product_tmpl_id" domain="[('active', '=', True)]"/>
+                                <field name="product_id" domain="[('active', '=', True)]" 
+                                       context="{'default_product_tmpl_id': product_tmpl_id}"/>
+                            </group>
+                            <group string="Agrupador">
+                                <field name="price_group_id" domain="[('active', '=', True)]"/>
+                                <field name="origin"/>
+                            </group>
+                        </group>
+                        
+                        <group>
+                            <group string="Vigencia">
+                                <field name="date_start"/>
+                                <field name="date_end"/>
+                            </group>
+                            <group string="Estado">
+                                <field name="active"/>
+                                <field name="is_current"/>
+                                <field name="is_inherited"/>
+                            </group>
+                        </group>
+                        
+                        <group string="Trazabilidad" invisible="origin != 'inherited'">
+                            <field name="parent_line_id" readonly="1"/>
+                            <field name="child_line_ids" readonly="1"/>
+                        </group>
+                        
+                        <notebook>
+                            <page string="Información" name="info">
+                                <group>
+                                    <field name="name" readonly="1"/>
+                                    <field name="display_name" readonly="1"/>
+                                </group>
+                            </page>
+                        </notebook>
+                    </sheet>
+                </form>
+            </field>
+        </record>
+
+        <!-- Vista de lista para Línea de Agrupador de Precio -->
+        <record id="view_price_group_line_tree" model="ir.ui.view">
+            <field name="name">x_price_group_line.tree</field>
+            <field name="model">x_price_group_line</field>
+            <field name="arch" type="xml">
+                <tree string="Líneas de Agrupador de Precio">
+                    <field name="product_tmpl_id"/>
+                    <field name="product_id"/>
+                    <field name="price_group_id"/>
+                    <field name="date_start"/>
+                    <field name="date_end"/>
+                    <field name="origin"/>
+                    <field name="is_current"/>
+                    <field name="is_inherited"/>
+                    <field name="active"/>
+                </tree>
+            </field>
+        </record>
+
+        <!-- Vista de búsqueda para Línea de Agrupador de Precio -->
+        <record id="view_price_group_line_search" model="ir.ui.view">
+            <field name="name">x_price_group_line.search</field>
+            <field name="model">x_price_group_line</field>
+            <field name="arch" type="xml">
+                <search string="Buscar Líneas de Agrupador de Precio">
+                    <field name="product_tmpl_id"/>
+                    <field name="product_id"/>
+                    <field name="price_group_id"/>
+                    <field name="origin"/>
+                    <filter string="Vigentes Hoy" name="current" domain="[('is_current', '=', True)]"/>
+                    <filter string="Heredados" name="inherited" domain="[('is_inherited', '=', True)]"/>
+                    <filter string="Templates" name="templates" domain="[('origin', '=', 'template')]"/>
+                    <filter string="Variantes" name="variants" domain="[('origin', '=', 'variant')]"/>
+                    <filter string="Activos" name="active" domain="[('active', '=', True)]"/>
+                    <filter string="Inactivos" name="inactive" domain="[('active', '=', False)]"/>
+                    <group expand="0" string="Agrupar por">
+                        <filter string="Producto Template" name="group_product_tmpl" context="{'group_by': 'product_tmpl_id'}"/>
+                        <filter string="Agrupador" name="group_price_group" context="{'group_by': 'price_group_id'}"/>
+                        <filter string="Origen" name="group_origin" context="{'group_by': 'origin'}"/>
+                        <filter string="Estado" name="group_active" context="{'group_by': 'active'}"/>
+                    </group>
+                </search>
+            </field>
+        </record>
+
+        <!-- Acción para Agrupador de Precio -->
+        <record id="action_price_group" model="ir.actions.act_window">
+            <field name="name">Agrupadores de Precio</field>
+            <field name="res_model">x_price_group</field>
+            <field name="view_mode">tree,form</field>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">
+                    Cree el primer agrupador de precio
+                </p>
+                <p>
+                    Los agrupadores de precio permiten clasificar productos con fines promocionales
+                    o de pricing sin depender de la categoría estándar de Odoo.
+                </p>
+            </field>
+        </record>
+
+        <!-- Acción para Línea de Agrupador de Precio -->
+        <record id="action_price_group_line" model="ir.actions.act_window">
+            <field name="name">Líneas de Agrupador de Precio</field>
+            <field name="res_model">x_price_group_line</field>
+            <field name="view_mode">tree,form</field>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">
+                    Cree la primera línea de agrupador de precio
+                </p>
+                <p>
+                    Las líneas de agrupador de precio establecen la relación entre productos
+                    y agrupadores con fechas de vigencia específicas.
+                </p>
+            </field>
+        </record>
+
+        <!-- Menú principal -->
+        <menuitem id="menu_price_group_manager" name="Agrupadores de Precio" parent="sale.product_menu_catalog" sequence="50">
+            <menuitem id="menu_price_group" name="Agrupadores" action="action_price_group" sequence="10"/>
+            <menuitem id="menu_price_group_line" name="Líneas de Agrupador" action="action_price_group_line" sequence="20"/>
+        </menuitem>
+    </data>
+</odoo> 

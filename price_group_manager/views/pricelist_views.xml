@@ -1,0 +1,212 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <!-- Herencia de la vista de formulario de regla de lista de precios -->
+        <record id="product_pricelist_item_form_view_inherit_price_group" model="ir.ui.view">
+            <field name="name">product.pricelist.item.form.inherit.price.group</field>
+            <field name="model">product.pricelist.item</field>
+            <field name="inherit_id" ref="product.product_pricelist_item_form_view"/>
+            <field name="arch" type="xml">
+                <xpath expr="//field[@name='applied_on']" position="before">
+                    <field name="aplicar_agrupador"/>
+                </xpath>
+
+                <xpath expr="//field[@name='applied_on']" position="attributes">
+                    <attribute name="invisible">aplicar_agrupador == True</attribute>
+                </xpath>
+
+                <xpath expr="//field[@name='applied_on']" position="after">
+                    <field name="price_group_id" required="aplicar_agrupador" invisible="not aplicar_agrupador"/>
+                </xpath>
+                
+                <!--<xpath expr="//group[@name='computation']" position="inside">
+                    <button name="action_view_applicable_products" 
+                            type="object" 
+                            string="Ver Productos Aplicables" 
+                            class="btn-secondary"
+                            invisible="applied_on != 'price_group'"/>
+                </xpath>-->
+            </field>
+        </record>
+
+        <!-- Herencia de la vista de lista de reglas de lista de precios -->
+        <!--<record id="product_pricelist_item_tree_view_inherit_price_group" model="ir.ui.view">
+            <field name="name">product.pricelist.item.tree.inherit.price.group</field>
+            <field name="model">product.pricelist.item</field>
+            <field name="inherit_id" ref="product.product_pricelist_item_tree_view"/>
+            <field name="arch" type="xml">
+                <xpath expr="//field[@name='applied_on']" position="after">
+                    <field name="price_group_id" optional="show"/>
+                </xpath>
+            </field>
+        </record>-->
+
+        <!-- Herencia de la vista de búsqueda de reglas de lista de precios -->
+        <!--<record id="product_pricelist_item_search_view_inherit_price_group" model="ir.ui.view">
+            <field name="name">product.pricelist.item.search.inherit.price.group</field>
+            <field name="model">product.pricelist.item</field>
+            <field name="inherit_id" ref="product.product_pricelist_item_search_view"/>
+            <field name="arch" type="xml">
+                <xpath expr="//field[@name='apply_on']" position="after">
+                    <field name="price_group_id"/>
+                </xpath>
+                <xpath expr="//filter[@name='product']" position="after">
+                    <filter string="Por Agrupador de Precio" name="by_price_group" domain="[('apply_on', '=', 'price_group')]"/>
+                </xpath>
+                <xpath expr="//group[@name='group_by']" position="inside">
+                    <filter string="Agrupador de Precio" name="group_price_group" context="{'group_by': 'price_group_id'}"/>
+                </xpath>
+            </field>
+        </record>-->
+
+        <!-- Herencia de la vista de formulario de lista de precios -->
+        <!--<record id="product_pricelist_form_view_inherit_price_group" model="ir.ui.view">
+            <field name="name">product.pricelist.form.inherit.price.group</field>
+            <field name="model">product.pricelist</field>
+            <field name="inherit_id" ref="product.product_pricelist_form_view"/>
+            <field name="arch" type="xml">
+                <xpath expr="//notebook/page[@name='items']//field[@name='item_ids']//tree" position="attributes">
+                    <attribute name="default_order">sequence, id</attribute>
+                </xpath>
+            </field>
+        </record>-->
+
+        <!-- Vista de formulario para regla de agrupador de precio (popup) -->
+        <!--<record id="view_price_group_pricelist_item_form" model="ir.ui.view">
+            <field name="name">price.group.pricelist.item.form</field>
+            <field name="model">product.pricelist.item</field>
+            <field name="arch" type="xml">
+                <form string="Regla de Lista de Precios por Agrupador">
+                    <sheet>
+                        <group>
+                            <group string="Aplicación">
+                                <field name="applied_on" readonly="1"/>
+                                <field name="price_group_id" domain="[('active', '=', True)]" required="1"/>
+                                <field name="price_group_info" readonly="1"/>
+                            </group>
+                            <group string="Producto">
+                                <field name="product_tmpl_id" invisible="applied_on == 'price_group'"/>
+                                <field name="product_id" invisible="applied_on == 'price_group'"/>
+                                <field name="categ_id" invisible="applied_on == 'price_group'"/>
+                            </group>
+                        </group>
+                        
+                        <group>
+                            <group string="Cantidad">
+                                <field name="min_quantity"/>
+                                <field name="date_start"/>
+                                <field name="date_end"/>
+                            </group>
+                            <group string="Precio">
+                                <field name="compute_price"/>
+                                <field name="fixed_price"/>
+                                <field name="percent_price"/>
+                                <field name="base"/>
+                            </group>
+                        </group>
+                        
+                        <group>
+                            <group string="Configuración">
+                                <field name="pricelist_id"/>
+                                &lt;!&ndash;<field name="sequence"/>
+                                <field name="active"/>&ndash;&gt;
+                            </group>
+                            <group string="Información">
+                                <field name="name"/>
+                                &lt;!&ndash;<field name="description"/>&ndash;&gt;
+                            </group>
+                        </group>
+                    </sheet>
+                    
+                    <footer>
+                        <button string="Guardar" type="object" name="write" class="btn-primary"/>
+                        <button string="Cancelar" class="btn-secondary" special="cancel"/>
+                    </footer>
+                </form>
+            </field>
+        </record>-->
+
+        <!-- Acción para crear regla de agrupador de precio -->
+        <!--<record id="action_create_price_group_pricelist_item" model="ir.actions.act_window">
+            <field name="name">Crear Regla por Agrupador de Precio</field>
+            <field name="res_model">product.pricelist.item</field>
+            <field name="view_mode">form</field>
+            <field name="target">new</field>
+            <field name="context">{'default_apply_on': 'price_group'}</field>
+            <field name="view_id" ref="view_price_group_pricelist_item_form"/>
+        </record>-->
+
+        <!-- Botón en la vista de lista de precios para agregar regla por agrupador -->
+        <!--<record id="product_pricelist_form_view_inherit_price_group_button" model="ir.ui.view">
+            <field name="name">product.pricelist.form.inherit.price.group.button</field>
+            <field name="model">product.pricelist</field>
+            <field name="inherit_id" ref="product.product_pricelist_form_view"/>
+            <field name="arch" type="xml">
+                <xpath expr="//notebook/page[@name='items']//group[@name='buttons']" position="inside">
+                    <button name="%(action_create_price_group_pricelist_item)d" 
+                            type="action" 
+                            string="Agregar Regla por Agrupador" 
+                            class="btn-secondary"/>
+                </xpath>
+            </field>
+        </record>-->
+
+        <!-- Herencia de la vista de búsqueda de lista de precios -->
+        <!--<record id="product_pricelist_search_view_inherit_price_group" model="ir.ui.view">
+            <field name="name">product.pricelist.search.inherit.price.group</field>
+            <field name="model">product.pricelist</field>
+            <field name="inherit_id" ref="product.product_pricelist_search_view"/>
+            <field name="arch" type="xml">
+                <xpath expr="//filter[@name='active']" position="after">
+                    <filter string="Con Reglas por Agrupador" name="with_price_group_rules" 
+                            domain="[('item_ids.apply_on', '=', 'price_group')]"/>
+                </xpath>
+            </field>
+        </record>-->
+
+        <!-- Vista de lista para mostrar reglas por agrupador -->
+        <!--<record id="view_price_group_pricelist_items_tree" model="ir.ui.view">
+            <field name="name">price.group.pricelist.items.tree</field>
+            <field name="model">product.pricelist.item</field>
+            <field name="arch" type="xml">
+                <tree string="Reglas por Agrupador de Precio">
+                    <field name="pricelist_id"/>
+                    <field name="price_group_id"/>
+                    <field name="min_quantity"/>
+                    <field name="compute_price"/>
+                    <field name="fixed_price"/>
+                    <field name="percent_price"/>
+                    <field name="date_start"/>
+                    <field name="date_end"/>
+                    &lt;!&ndash;<field name="sequence"/>
+                    <field name="active"/>&ndash;&gt;
+                </tree>
+            </field>
+        </record>-->
+
+        <!-- Acción para ver reglas por agrupador -->
+        <!--<record id="action_view_price_group_pricelist_items" model="ir.actions.act_window">
+            <field name="name">Reglas por Agrupador de Precio</field>
+            <field name="res_model">product.pricelist.item</field>
+            <field name="view_mode">tree,form</field>
+            <field name="domain">[('applied_on', '=', 'price_group')]</field>
+            <field name="context">{'default_apply_on': 'price_group'}</field>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">
+                    Cree la primera regla por agrupador de precio
+                </p>
+                <p>
+                    Las reglas por agrupador de precio permiten aplicar descuentos
+                    o ajustes de precio a productos según su clasificación en agrupadores.
+                </p>
+            </field>
+        </record>-->
+
+        <!-- Menú para reglas por agrupador -->
+        <!--<menuitem id="menu_price_group_pricelist_items"
+                  name="Reglas por Agrupador"
+                  parent="menu_price_group_manager"
+                  action="action_view_price_group_pricelist_items"
+                  sequence="30"/>-->
+    </data>
+</odoo> 

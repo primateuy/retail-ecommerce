@@ -1,0 +1,211 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <!-- Herencia de la vista de formulario de producto template -->
+        <record id="product_template_form_view_inherit_price_group" model="ir.ui.view">
+            <field name="name">product.template.common.form.inherit.price.group</field>
+            <field name="model">product.template</field>
+            <field name="inherit_id" ref="product.product_template_only_form_view"/>
+            <field name="arch" type="xml">
+                <xpath expr="//notebook" position="inside">
+                    <page string="Agrupadores de Precio" name="price_groups">
+                        <group>
+                            <group>
+                                <field name="x_current_price_group_id" readonly="1"/>
+                                <field name="x_price_group_count" widget="statinfo" string="Total Agrupadores"/>
+                            </group>
+                            <group>
+                                <button name="action_add_price_group" 
+                                        type="object" 
+                                        string="Agregar Agrupador" 
+                                        class="btn-primary"/>
+                                <button name="action_view_price_groups" 
+                                        type="object" 
+                                        string="Ver Agrupadores" 
+                                        class="btn-secondary"/>
+                            </group>
+                        </group>
+                        
+                        <field name="x_price_group_line_ids" readonly="1">
+                            <tree string="Agrupadores de Precio">
+                                <field name="price_group_id"/>
+                                <field name="date_start"/>
+                                <field name="date_end"/>
+                                <field name="origin"/>
+                                <field name="is_current"/>
+                                <field name="active"/>
+                            </tree>
+                        </field>
+                        
+                        <group>
+                            <button name="action_force_price_group_sync" 
+                                    type="object" 
+                                    string="Forzar Sincronización en Variantes" 
+                                    class="btn-warning"
+                                    confirm="¿Está seguro de que desea forzar la sincronización? Esto eliminará todas las líneas de agrupador de las variantes y las reemplazará con las del template."/>
+                        </group>
+                    </page>
+                </xpath>
+            </field>
+        </record>
+
+        <!-- Herencia de la vista de lista de producto template -->
+        <record id="product_template_tree_view_inherit_price_group" model="ir.ui.view">
+            <field name="name">product.template.common.tree.inherit.price.group</field>
+            <field name="model">product.template</field>
+            <field name="inherit_id" ref="product.product_template_tree_view"/>
+            <field name="arch" type="xml">
+                <xpath expr="//field[@name='list_price']" position="after">
+                    <field name="x_current_price_group_id" optional="show"/>
+                    <field name="x_price_group_count" optional="show"/>
+                </xpath>
+            </field>
+        </record>
+
+        <!-- Herencia de la vista de búsqueda de producto template -->
+        <!--<record id="product_template_search_view_inherit_price_group" model="ir.ui.view">
+            <field name="name">product.template.common.search.inherit.price.group</field>
+            <field name="model">product.template</field>
+            <field name="inherit_id" ref="product.product_template_search_view"/>
+            <field name="arch" type="xml">
+                <xpath expr="//field[@name='categ_id']" position="after">
+                    <field name="x_current_price_group_id"/>
+                </xpath>
+                <xpath expr="//filter[@name='consumable']" position="after">
+                    <filter string="Con Agrupador de Precio" name="with_price_group" domain="[('x_price_group_count', '>', 0)]"/>
+                    <filter string="Sin Agrupador de Precio" name="without_price_group" domain="[('x_price_group_count', '=', 0)]"/>
+                </xpath>
+                <xpath expr="//group[@name='group_by']" position="inside">
+                    <filter string="Agrupador de Precio" name="group_price_group" context="{'group_by': 'x_current_price_group_id'}"/>
+                </xpath>
+            </field>
+        </record>-->
+
+        <!-- Herencia de la vista de formulario de producto (variante) -->
+        <record id="product_normal_form_view_inherit_price_group" model="ir.ui.view">
+            <field name="name">product.product.common.form.inherit.price.group</field>
+            <field name="model">product.product</field>
+            <field name="inherit_id" ref="product.product_normal_form_view"/>
+            <field name="arch" type="xml">
+                <xpath expr="//notebook" position="inside">
+                    <page string="Agrupadores de Precio" name="price_groups">
+                        <group>
+                            <group>
+                                <field name="x_current_price_group_id" readonly="1"/>
+                                <field name="x_inherited_price_group_id" readonly="1"/>
+                                <field name="x_price_group_count" widget="statinfo" string="Agrupadores Propios"/>
+                            </group>
+                            <group>
+                                <button name="action_add_price_group" 
+                                        type="object" 
+                                        string="Agregar Agrupador" 
+                                        class="btn-primary"
+                                        invisible="x_price_group_line_ids != []"/>
+                                <button name="action_inherit_from_template" 
+                                        type="object" 
+                                        string="Heredar del Template" 
+                                        class="btn-secondary"
+                                        invisible="x_price_group_line_ids != []"/>
+                                <button name="action_view_price_groups" 
+                                        type="object" 
+                                        string="Ver Agrupadores" 
+                                        class="btn-secondary"/>
+                            </group>
+                        </group>
+                        
+                        <field name="x_price_group_line_ids" readonly="1">
+                            <tree string="Agrupadores de Precio">
+                                <field name="price_group_id"/>
+                                <field name="date_start"/>
+                                <field name="date_end"/>
+                                <field name="origin"/>
+                                <field name="is_current"/>
+                                <field name="is_inherited"/>
+                                <field name="active"/>
+                            </tree>
+                        </field>
+                    </page>
+                </xpath>
+            </field>
+        </record>
+
+        <!-- Herencia de la vista de lista de producto (variante) -->
+        <record id="product_product_tree_view_inherit_price_group" model="ir.ui.view">
+            <field name="name">product.product.common.tree.inherit.price.group</field>
+            <field name="model">product.product</field>
+            <field name="inherit_id" ref="product.product_product_tree_view"/>
+            <field name="arch" type="xml">
+                <xpath expr="//field[@name='lst_price']" position="after">
+                    <field name="x_current_price_group_id" optional="show"/>
+                    <field name="x_inherited_price_group_id" optional="show"/>
+                    <field name="x_price_group_count" optional="show"/>
+                </xpath>
+            </field>
+        </record>
+
+        <!-- Herencia de la vista de búsqueda de producto (variante) -->
+        <!--<record id="product_product_search_view_inherit_price_group" model="ir.ui.view">
+            <field name="name">product.product.common.search.inherit.price.group</field>
+            <field name="model">product.product</field>
+            <field name="inherit_id" ref="stock.stock_product_search_form_view"/>
+            <field name="arch" type="xml">
+                <xpath expr="//field[@name='categ_id']" position="after">
+                    <field name="x_current_price_group_id"/>
+                    <field name="x_inherited_price_group_id"/>
+                </xpath>
+                <xpath expr="//filter[@name='consumable']" position="after">
+                    <filter string="Con Agrupador Propio" name="with_own_price_group" domain="[('x_price_group_count', '>', 0)]"/>
+                    <filter string="Heredando del Template" name="inheriting_from_template" domain="[('x_inherited_price_group_id', '!=', False)]"/>
+                    <filter string="Sin Agrupador" name="without_price_group" domain="[('x_current_price_group_id', '=', False)]"/>
+                </xpath>
+                <xpath expr="//group[@name='group_by']" position="inside">
+                    <filter string="Agrupador de Precio" name="group_price_group" context="{'group_by': 'x_current_price_group_id'}"/>
+                    <filter string="Agrupador Heredado" name="group_inherited_price_group" context="{'group_by': 'x_inherited_price_group_id'}"/>
+                </xpath>
+            </field>
+        </record>-->
+
+        <!-- Vista de formulario para agregar agrupador de precio (popup) -->
+        <!--<record id="view_add_price_group_form" model="ir.ui.view">
+            <field name="name">add.price.group.form</field>
+            <field name="model">x_price_group_line</field>
+            <field name="arch" type="xml">
+                <form string="Agregar Agrupador de Precio">
+                    <sheet>
+                        <group>
+                            <group string="Producto">
+                                <field name="product_tmpl_id" readonly="1"/>
+                                <field name="product_id" readonly="1"/>
+                            </group>
+                            <group string="Agrupador">
+                                <field name="price_group_id" domain="[('active', '=', True)]" required="1"/>
+                                <field name="origin" readonly="1"/>
+                            </group>
+                        </group>
+                        
+                        <group>
+                            <group string="Vigencia">
+                                <field name="date_start"/>
+                                <field name="date_end"/>
+                            </group>
+                            <group string="Estado">
+                                <field name="active"/>
+                            </group>
+                        </group>
+                    </sheet>
+                    
+                    <footer>
+                        <button name="action_inherit_to_variants" 
+                                type="object" 
+                                string="Heredar a Variantes" 
+                                class="btn-primary"
+                                invisible="origin != 'template'"/>
+
+                        <button string="Guardar" type="object" name="write" class="btn-primary"/>
+                        <button string="Cancelar" class="btn-secondary" special="cancel"/>
+                    </footer>
+                </form>
+            </field>
+        </record>-->
+    </data>
+</odoo> 
