@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <!-- Acción para generar códigos de plantilla -->
+        <record id="server_action_generate_codes_template_1" model="ir.actions.server">
+            <field name="name">Generar códigos (plantilla y variantes)</field>
+            <field name="model_id" ref="product.model_product_template"/>
+            <field name="binding_model_id" ref="product.model_product_template"/>
+            <field name="state">code</field>
+            <field name="code">
+# Generar códigos para plantillas seleccionadas
+records.codificar_todo()
+
+# Mostrar notificación de éxito
+action = {
+    'type': 'ir.actions.client',
+    'tag': 'display_notification',
+    'params': {
+        'title': 'Códigos generados',
+        'message': f'Se han generado códigos para {len(records)} plantillas',
+        'type': 'success',
+        'sticky': False,
+    }
+}
+            </field>
+        </record>
+        
+        <!-- Acción para generar códigos de variantes -->
+        <record id="server_action_generate_code_variant_1" model="ir.actions.server">
+            <field name="name">Generar código</field>
+            <field name="model_id" ref="product.model_product_product"/>
+            <field name="binding_model_id" ref="product.model_product_product"/>
+            <field name="state">code</field>
+            <field name="code">
+records.codificar()
+
+# Mostrar notificación de éxito
+action = {
+    'type': 'ir.actions.client',
+    'tag': 'display_notification',
+    'params': {
+        'title': 'Códigos generados',
+        'message': f'Se han generado códigos para {len(records)} variantes',
+        'type': 'success',
+        'sticky': False,
+    }
+}
+            </field>
+        </record>
+    </data>
+</odoo> 

@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <record id="product_product_form_auto_code" model="ir.ui.view">
+            <field name="name">product_template_form_auto_code</field>
+            <field name="model">product.product</field>
+            <field name="inherit_id" ref="product.product_normal_form_view"/>
+            <field name="arch" type="xml">
+                <xpath expr="//header" position="inside">
+                    <button name="codificar" type="object" string="Codificar variante" class="btn-secondary" invisible="not auto_code_enabled_product or product_variant_count == 1"/>
+                </xpath>
+
+                <xpath expr="//notebook" position="inside">
+                    <page string="Código automático" name="auto_code">
+                        <group>
+                            <group>
+                                <field name="auto_code_enabled_product"/>
+                                <field name="code_domain_id" required="auto_code_enabled_product" readonly="True"/>
+                            </group>
+                            <group/>
+                        </group>
+                    </page>
+                </xpath>
+            </field>
+        </record>
+
+        <record id="product_product_easy_form_auto_code" model="ir.ui.view">
+            <field name="name">product_product_easy_form_auto_code</field>
+            <field name="model">product.product</field>
+            <field name="inherit_id" ref="product.product_variant_easy_edit_view"/>
+            <field name="arch" type="xml">
+                <xpath expr="//header" position="inside">
+                    <button name="codificar" type="object" string="Codificar variante" class="btn-secondary" invisible="not auto_code_enabled_product or product_variant_count == 1"/>
+                </xpath>
+                
+                <xpath expr="//group[@name='tags']" position="after">
+                    <group name="auto_code" string="Código automático">
+                        <field name="auto_code_enabled_product"/>
+                        <field name="code_domain_id" required="auto_code_enabled_product" readonly="True"/>
+                    </group>
+                </xpath>
+            </field>
+        </record>
+    </data>
+</odoo> 
