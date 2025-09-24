@@ -8,16 +8,17 @@
             <field name="arch" type="xml">
                 <xpath expr="//header" position="inside">
                     <button name="codificar_plantilla" type="object" string="Codificar plantilla" class="btn-secondary" invisible="not auto_code_enabled"/>
-                    <button name="codificar_variantes" type="object" string="Codificar variantes" class="btn-secondary" invisible="not auto_code_enabled or product_variant_count == 1"/>
+                    <button name="codificar_variantes" type="object" string="Codificar variantes" class="btn-secondary" invisible="not auto_code_enabled"/>
                     <button name="codificar_todo" type="object" string="Codificar todo" class="btn-secondary"/>
                 </xpath>
                 <xpath expr="//notebook" position="inside">
                     <page string="Código automático" name="auto_code">
                         <group>
                             <group>
+                                <!--<field name="tiene_atributos_enabled" invisible="1"/>-->
                                 <field name="auto_code_enabled"/>
                                 <field name="code_domain_id" required="auto_code_enabled"/>
-                                <field name="codigo_template"/>
+                                <!--<field name="codigo_template" invisible="0"/>-->
                             </group>
                             <group/>
                         </group>

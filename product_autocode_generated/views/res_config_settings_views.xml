@@ -7,13 +7,17 @@
             <field name="inherit_id" ref="stock.res_config_settings_view_form"/>
             <field name="arch" type="xml">
                 <xpath expr="//setting[@id='manage_product_packaging']" position="after">
-                    <setting id="product_code_total_length" title=" Largo total del código generado (plantilla + variantes). 0 = sin límite." help=" Largo total del código generado (plantilla + variantes). 0 = sin límite.">
-                        <field name="product_code_total_length"/>
+                    <setting id="product_code_total_length_template" help="Largo total del código de la plantilla (0 = sin límite).">
+                        <field name="product_code_total_length_template"/>
                         <div class="content-group">
                             <div class="mt8">
                                 <button name="action_configure_code_domains" icon="oi-arrow-right" type="object" string="Versión / Origen" class="btn-link"/>
                             </div>
                         </div>
+                    </setting>
+
+                    <setting id="product_code_total_length_variant" help="Largo total del código de la variantes (0 = sin límite).">
+                        <field name="product_code_total_length_variant"/>
                     </setting>
                 </xpath>
             </field>

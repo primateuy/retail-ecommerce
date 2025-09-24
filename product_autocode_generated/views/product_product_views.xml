@@ -30,9 +30,9 @@
             <field name="inherit_id" ref="product.product_variant_easy_edit_view"/>
             <field name="arch" type="xml">
                 <xpath expr="//header" position="inside">
-                    <button name="codificar" type="object" string="Codificar variante" class="btn-secondary" invisible="not auto_code_enabled_product or product_variant_count == 1"/>
+                    <button name="codificar" type="object" string="Codificar variante" class="btn-secondary" invisible="not auto_code_enabled_product or product_template_attribute_value_ids == []"/>
                 </xpath>
-                
+
                 <xpath expr="//group[@name='tags']" position="after">
                     <group name="auto_code" string="Código automático">
                         <field name="auto_code_enabled_product"/>

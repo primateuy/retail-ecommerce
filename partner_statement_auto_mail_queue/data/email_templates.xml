@@ -1,0 +1,40 @@
+<?xml version="1.0" ?>
+<odoo>
+    <data noupdate="1">
+        <record id="email_template_reporte_estados_cuenta" model="mail.template">
+            <field name="name">Envío Automático de Estados de Cuenta</field>
+            <field name="model_id" ref="base.model_res_partner"/>
+            <field name="email_from">{{ object.company_id.email_formatted }}</field>
+            <field name="partner_to">{{ object.id }}</field>
+            <field name="subject">Estados de Cuenta</field>
+            <field name="description">Estados de Cuenta</field>
+            <field name="body_html" type="html">
+<div style="margin: 0px; padding: 0px;">
+    <p style="margin: 0px; padding: 0px; font-size: 13px;">
+        Estados de Cuenta
+    </p>
+</div>
+            </field>
+            <field name="lang">{{ object.lang }}</field>
+            <field name="auto_delete" eval="False"/>
+        </record>
+
+        <record id="email_template_reporte_estados_pendiente" model="mail.template">
+            <field name="name">Envío Automático de Estados Pendientes</field>
+            <field name="model_id" ref="base.model_res_partner"/>
+            <field name="email_from">{{ object.company_id.email_formatted }}</field>
+            <field name="partner_to">{{ object.id }}</field>
+            <field name="subject">Estados Pendientes</field>
+            <field name="description">Estados Pendientes</field>
+            <field name="body_html" type="html">
+<div style="margin: 0px; padding: 0px;">
+    <p style="margin: 0px; padding: 0px; font-size: 13px;">
+        Estados Pendientes
+    </p>
+</div>
+            </field>
+            <field name="lang">{{ object.lang }}</field>
+            <field name="auto_delete" eval="False"/>
+        </record>
+    </data>
+</odoo>

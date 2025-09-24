@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <record id="default_code_domain" model="product.code.domain">
+            <field name="name">Origen por defecto</field>
+            <field name="code">D</field>
+        </record>
+    </data>
+</odoo> 
