@@ -1,6 +1,6 @@
 {
     "name": "Product Auto Code V2",
-    "version": "17.0.2.1",
+    "version": "17.0.2.2",
     "category": "Inventory/Product",
     "summary": "Sistema avanzado de generación automática de códigos para productos y variantes",
     "description": """
@@ -24,14 +24,16 @@
     ],
     "data": [
         "security/ir.model.access.csv",
-        "data/default_data.xml",
-        "data/product_auto_code_actions.xml",
+
         'views/product_category_views.xml',
         'views/product_attribute_views.xml',
         'views/product_code_domain_views.xml',
         'views/product_template_views.xml',
         'views/product_product_views.xml',
         "views/res_config_settings_views.xml",
+
+        "data/product_auto_code_actions.xml",
+        "data/default_data.xml",
     ],
     "application": False,
 } 

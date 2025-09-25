@@ -22,7 +22,7 @@ class ProductTemplate(models.Model):
         domain=[('active', '=', True)],
         help='Dominio específico para la generación de códigos de esta plantilla',
         ondelete='restrict',
-        default=lambda self: self.env.ref('product_autocode_generated.default_code_domain')
+        default=lambda self: self.env.ref('product_autocode_generated.default_code_domain', raise_if_not_found=False) or False
     )
 
     # codigo_template = fields.Char('Código plantilla', tracking=True)
