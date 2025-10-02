@@ -146,7 +146,7 @@ class ResPartner(models.Model):
             except Exception as e:
                 _logger.info('Error ENVIANDO REPORTE', e)
                 msg = f"Error enviando reporte: {str(e)}"
-                rec.message_post(msg)
+                # rec.message_post(msg)
 
             rec.write({
                 'ultimo_envio': fields.Datetime.now(),
