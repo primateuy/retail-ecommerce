@@ -30,7 +30,10 @@ class PriceGroup(models.Model):
         default=True,
         help='Indica si el agrupador está activo y disponible para uso'
     )
-    
+
+    lista_precio_id = fields.Many2one('product.pricelist', 'Lista de Precio')
+    valor_fijo = fields.Float('Valor fijo', digits='Product Price')
+
     # Campos de relación
     price_group_line_ids = fields.One2many(
         'x_price_group_line',

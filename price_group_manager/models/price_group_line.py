@@ -1,5 +1,5 @@
 from odoo import models, fields, api, _
-from odoo.exceptions import ValidationError
+from odoo.exceptions import ValidationError, UserError
 from datetime import date
 
 
@@ -52,7 +52,10 @@ class PriceGroupLine(models.Model):
         ondelete='restrict',
         help='Agrupador de precio asignado al producto'
     )
-    
+    lista_precio_id = fields.Many2one(related='price_group_id.lista_precio_id', store=False, readonly=True)
+    valor_fijo = fields.Float('Valr Fijo', digits='Product Price')
+    price_list_item_id = fields.Many2one('product.pricelist.item', 'Item lista de precio')
+
     # Campos de vigencia
     date_start = fields.Date(
         string='Fecha de Inicio',
@@ -112,6 +115,12 @@ class PriceGroupLine(models.Model):
          'UNIQUE(product_tmpl_id, product_id, price_group_id, date_start, date_end)',
          'No puede haber líneas duplicadas para el mismo template, agrupador y fechas.')
     ]
+
+    @api.onchange('price_group_id')
+    def change_price_group_id(self):
+        for rec in self:
+            if rec.price_group_id and rec.price_group_id.lista_precio_id:
+                rec.valor_fijo = rec.price_group_id.valor_fijo
 
     @api.depends('product_tmpl_id', 'product_id', 'price_group_id', 'date_start', 'date_end')
     def _compute_name(self):
@@ -301,4 +310,62 @@ class PriceGroupLine(models.Model):
                 'message': _('Se heredaron %d variantes del template.') % len(variants),
                 'type': 'success',
             }
-        } 
+        }
+
+    def actualizar_lista_precio_item(self):
+        self.ensure_one()
+        if not self.price_group_id:
+            raise UserError('No se encontró agrupador de precio')
+
+        if not self.price_group_id.lista_precio_id:
+            raise UserError('No se encontró lista de precio en el agrupador')
+
+        usar_template = True if not self.product_id else False
+        applied_on = '1_product' if usar_template else '0_product_variant'
+
+        vals = {
+            'pricelist_id': self.price_group_id.lista_precio_id.id,
+            'date_start': self.date_start,
+            'date_end': self.date_end,
+            'applied_on': applied_on,
+            'compute_price': 'fixed',
+            'fixed_price': self.valor_fijo,
+        }
+
+        if usar_template:
+            vals.update({
+                'product_tmpl_id': self.product_tmpl_id.id
+            })
+        else:
+            vals.update({
+                'product_id': self.product_id.id
+            })
+
+        if not self.price_list_item_id:
+            p_id = self.env['product.pricelist.item'].create([vals])
+            self.write({'price_list_item_id': p_id.id})
+        else:
+            self.price_list_item_id.write(vals)
+
+    @api.model_create_multi
+    def create(self, vals_list):
+        new_ids = super(PriceGroupLine, self).create(vals_list)
+
+        for new_id in new_ids:
+            if not new_id.price_group_id.lista_precio_id:
+                raise UserError(f'El agrupador {new_id.price_group_id.name} no tiene lista de precio configurada')
+            new_id.actualizar_lista_precio_item()
+
+        return new_ids
+
+    def write(self, vals):
+        res = super(PriceGroupLine, self).write(vals)
+        for rec in self:
+            rec.actualizar_lista_precio_item()
+        return res
+
+    def unlink(self):
+        price_list_item_ids = self.mapped('price_list_item_id')
+        res = super(PriceGroupLine, self).unlink()
+        price_list_item_ids.sudo().unlink()
+        return res

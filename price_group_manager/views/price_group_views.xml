@@ -17,6 +17,8 @@
                         <group>
                             <group>
                                 <field name="code" placeholder="Código interno"/>
+                                <field name="lista_precio_id" required="True" options="{'no_open': True, 'no_create_edit': True, 'no_create': True}"/>
+                                <field name="valor_fijo"/>
                                 <field name="active"/>
                             </group>
                             <group>
@@ -33,6 +35,7 @@
                                         <field name="product_id"/>
                                         <field name="date_start"/>
                                         <field name="date_end"/>
+                                        <field name="valor_fijo"/>
                                         <field name="origin"/>
                                         <field name="is_current"/>
                                         <field name="active"/>
@@ -58,6 +61,8 @@
                 <tree string="Agrupadores de Precio">
                     <field name="name"/>
                     <field name="code"/>
+                    <field name="lista_precio_id"/>
+                    <field name="valor_fijo"/>
                     <field name="product_count"/>
                     <field name="active_product_count"/>
                     <field name="active"/>
@@ -100,6 +105,9 @@
                             </group>
                             <group string="Agrupador">
                                 <field name="price_group_id" domain="[('active', '=', True)]"/>
+                                <field name="lista_precio_id"/>
+                                <field name="price_list_item_id" groups="base.group_no_one" readonly="True"/>
+                                <field name="valor_fijo"/>
                                 <field name="origin"/>
                             </group>
                         </group>
