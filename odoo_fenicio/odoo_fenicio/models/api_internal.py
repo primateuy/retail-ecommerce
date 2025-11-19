@@ -75,7 +75,7 @@ class ApiInternal(models.Model):
             
             _logger.info("Producto: %s - Categoría: %s", product_template_id.name, listaCategoria)
 
-            impuesto = 0.0
+            impuesto = product_template_id.taxes_id and product_template_id.taxes_id[0].name or 'Sin Impuesto'
 
             vals = {
                 'codigo': str(product_template_id.code_e_fenicio or product_template_id.id),
@@ -93,12 +93,7 @@ class ApiInternal(models.Model):
                 'variantes': [],
             }
 
-            for product_setting_id in product_template_id.product_settings_ids:
-                vals['atributos'][product_setting_id.attribute_id.name] = product_setting_id.value_id.name
-                _logger.info("Atributo adicional: %s - Valor: %s", product_setting_id.attribute_id.name, product_setting_id.value_id.name)
-                _logger.info(f"FENICIO TYPE {product_setting_id.attribute_id.fenicio_type}")
-
-
+            
 
             if len(product_template_id.product_variant_ids) > 1:
                 for variante in product_template_id.product_variant_ids:
@@ -109,6 +104,7 @@ class ApiInternal(models.Model):
                     presentacion_attrs = variante.product_template_attribute_value_ids.filtered(
                         lambda x: x.attribute_id.fenicio_type == 'presentacion'
                     ).sorted(lambda x: x.attribute_id.sequence)
+
                     
                     codigo_parts = []
                     nombre_parts = []
@@ -145,21 +141,40 @@ class ApiInternal(models.Model):
                     for pres_attr_val in presentacion_attrs:
                         codigo = str(pres_attr_val.attribute_id.codigo) if pres_attr_val.attribute_id.codigo else '000'
                         nombre = pres_attr_val.product_attribute_value_id.name
-                        sku = product_id.default_code;
-                        stock = self._get_fenicio_stock(product_id);
+                        sku = pres_attr_val.attribute_id.codigo;
+                        stock = self._get_fenicio_stock(variante);
+
+                        listaPrecios = variante.listaPrecios;
+                        precioFijo = 0.0;
+                        descuento = 0.0;
+
+                        for lista_precio in variante.listaPrecios:
+                            
+
+                            for item in lista_precio.item_ids:
+                                if item.product_id.id == variante.id:
+                                    precioFijo = item.fixed_price;
+                                    
                     
                         variante_data['presentaciones'].append(
                             {
                                 'codigo': codigo,
                                 'nombre': nombre,
                                 'stock': stock,
+                                'sku': sku,
+                                'precioLista': {'precio': precioFijo},
+                                'precioVenta': {
+                                    'precio': variante.lst_price
+                                }
                             }
                         )
 
 
 
-
                     vals['variantes'].append(variante_data)
+
+
+                    
                         
             elif len(product_template_id.product_variant_ids) == 1:
                 product_id = product_template_id.product_variant_ids[0]
@@ -187,19 +202,20 @@ class ApiInternal(models.Model):
 
 
     def _get_fenicio_stock(self, product_id):
-        
         fenicio_locations = self.env['stock.location'].search([
             ('fenicio_visible', '=', True),
             ('usage', '=', 'internal')
         ])
         
         if not fenicio_locations:
-            _logger.warning("Producto %s: No hay ubicaciones Fenicio configuradas", product_id.default_code)
+            _logger.warning("Producto %s: No hay ubicaciones Fenicio configuradas", 
+                        product_id.default_code)
             return 0.0
         
-        _logger.info("Ubicaciones Fenicio encontradas: %s", fenicio_locations.mapped('name'))
+        _logger.info("Ubicaciones Fenicio encontradas: %s", 
+                    fenicio_locations.mapped('name'))
         
-        # Calcular stock total
+        # Calcular stock total en esas ubicaciones
         stock_real = 0.0
         for location in fenicio_locations:
             qty = self.env['stock.quant']._get_available_quantity(product_id, location)
@@ -208,7 +224,7 @@ class ApiInternal(models.Model):
         
         _logger.info("Stock real total: %.2f", stock_real)
         
-        # Aplicar lógica de threshold
+        # Aplicar lógica de threshold si existe
         show_availability = getattr(product_id, 'show_availability', False)
         available_threshold = getattr(product_id, 'available_threshold', 0)
         
