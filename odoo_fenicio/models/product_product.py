@@ -8,6 +8,36 @@ from odoo.exceptions import ValidationError
 _logger = logging.getLogger('FENICIO_PRODUCT_PRODUCT')
 
 
+class ProductProductPricelistRelation(models.Model):
+    _name = 'product.product.pricelist.relation'
+    _description = 'Relación entre Producto y Lista de Precios'
+
+
+    product_product_id = fields.Many2one(
+        'product.product',
+        string='Producto',
+        required=True,
+        ondelete='cascade'
+    )
+    
+    precio_venta = fields.Many2one(
+        'product.pricelist',
+        string='Precio Venta',
+        required=True
+    )
+
+    precio_lista = fields.Many2one(
+        'product.pricelist',
+        string='Precio Lista',
+        required=True
+    )
+
+    precio_alternativo = fields.Many2one(
+        'product.pricelist',
+        string='Precio Alternativo',
+        required=False
+    )
+
 class PrecioListaVentaPresentacion(models.Model):
     _name = 'fenicio.presentacion.price'
     _description = 'Precio Venta y Lista de una presentacion'
@@ -59,6 +89,13 @@ class ProductProduct(models.Model):
     indentificadores_ids = fields.One2many('product.identificadores', 'product_id', 'Identificadores')
     precios_alternativos_fenicio_ids = fields.One2many('precios.alternativos', 'product_id', 'Precios Alternativos')
 
+
+    pricelist_relation_ids = fields.One2many(
+        'product.product.pricelist.relation',
+        'product_product_id',
+        string='Relación de Precios'
+    )
+
     @api.constrains('default_code')
     def check_unique_fencio_default_code(self):
         for rec in self:
@@ -76,5 +113,5 @@ class ProductProduct(models.Model):
         self.ensure_one()
         for tax in self.taxes_id:
             if 'IVA' in tax.name.upper() or tax.type_tax_use == 'sale':
-                return tax
+                return tax.amount
         return False
