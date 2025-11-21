@@ -61,8 +61,9 @@ class ProductTemplate(models.Model):
     priority_fenicio = fields.Integer(
     string='Prioridad FENICIO',
     store=True,
-    readonly=False      
-)
+    readonly=False,
+    compute='website_sequence_compute'
+    )
     guia_talles = fields.Char('Guia Talles')
 
     guia_talle_id = fields.Many2one(
@@ -92,6 +93,14 @@ class ProductTemplate(models.Model):
     )
 
     descripcion_fenicio = fields.Text('Descripción e-Fenicio');
+
+
+
+
+    @api.depends('website_sequence')
+    def website_sequence_compute(self):
+        for rec in self:
+            rec.priority_fenicio = rec.website_sequence if rec.website_sequence else 0;
 
     def write(self, vals):
         res = super(ProductTemplate, self).write(vals)

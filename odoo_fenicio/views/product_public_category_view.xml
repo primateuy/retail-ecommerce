@@ -1,0 +1,20 @@
+<odoo>
+    <data>
+        <record id="view_product_public_category_form_inherit" model="ir.ui.view">
+            <field name="name">product.public.category.form.inherit</field>
+            <field name="model">product.public.category</field>
+            <field name="inherit_id" ref="website_sale.product_public_category_form_view" />
+            <field name="arch" type="xml">
+                <xpath expr="//field[@name='sequence']" position="after">
+                    <field name="fenicio_code" placeholder="Código de categoría en e-Fenicio"/>
+                </xpath>
+            </field>
+        </record>
+
+
+
+    </data>
+
+
+
+</odoo>
