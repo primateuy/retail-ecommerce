@@ -4,11 +4,6 @@ from datetime import date
 
 
 class PriceGroupLine(models.Model):
-    """
-    Línea de Agrupador de Precio por Producto
-    Establece la relación entre un producto y un agrupador de precio
-    con fechas de vigencia específicas.
-    """
     _name = 'x_price_group_line'
     _description = 'Línea de Agrupador de Precio'
     _order = 'date_start desc, date_end desc'
@@ -28,22 +23,15 @@ class PriceGroupLine(models.Model):
         store=True,
         help='Nombre formateado para mostrar en vistas'
     )
-    
-    # Campos de relación
-    product_tmpl_id = fields.Many2one(
-        'product.template',
-        string='Producto Template',
-        required=True,
-        ondelete='cascade',
-        help='Producto template al que se asigna el agrupador'
-    )
-    
-    product_id = fields.Many2one(
-        'product.product',
-        string='Variante de Producto',
-        ondelete='cascade',
-        help='Variante específica del producto (opcional)'
-    )
+
+    origin = fields.Selection([
+        ('template', 'Template'),
+        ('variant', 'Variante'),
+    ], string='Origen', default='template', required=True)
+
+    product_tmpl_relacion_id = fields.Many2one('product.template', compute='compute_product_tmpl_relacion_id', store=True)
+    product_tmpl_id = fields.Many2one('product.template', 'Producto Template', ondelete='restrict')
+    product_id = fields.Many2one('product.product', 'Variante de Producto', ondelete='restrict')
     
     price_group_id = fields.Many2one(
         'x_price_group',
@@ -53,7 +41,7 @@ class PriceGroupLine(models.Model):
         help='Agrupador de precio asignado al producto'
     )
     lista_precio_id = fields.Many2one(related='price_group_id.lista_precio_id', store=False, readonly=True)
-    valor_fijo = fields.Float('Valr Fijo', digits='Product Price')
+    valor_fijo = fields.Float(related='price_group_id.valor_fijo', store=False, readonly=True)
     price_list_item_id = fields.Many2one('product.pricelist.item', 'Item lista de precio')
 
     # Campos de vigencia
@@ -73,13 +61,6 @@ class PriceGroupLine(models.Model):
         default=True,
         help='Indica si la línea está activa'
     )
-    
-    origin = fields.Selection([
-        ('template', 'Template'),
-        ('variant', 'Variante'),
-        ('inherited', 'Heredado')
-    ], string='Origen', default='template', required=True,
-       help='Indica el origen de la línea de agrupador')
     
     is_inherited = fields.Boolean(
         string='Es Heredado',
@@ -115,6 +96,22 @@ class PriceGroupLine(models.Model):
          'UNIQUE(product_tmpl_id, product_id, price_group_id, date_start, date_end)',
          'No puede haber líneas duplicadas para el mismo template, agrupador y fechas.')
     ]
+
+    @api.depends('product_tmpl_id', 'product_id')
+    def compute_product_tmpl_relacion_id(self):
+        for rec in self:
+            template_id = False
+            if rec.origin == 'template' and rec.product_tmpl_id:
+                template_id = rec.product_tmpl_id
+            if rec.origin == 'variant' and rec.product_id:
+                template_id = rec.product_id.product_tmpl_id
+            rec.product_tmpl_relacion_id = template_id
+
+    @api.onchange('origin')
+    def change_origin_clear_productos(self):
+        for rec in self:
+            rec.product_tmpl_id = False
+            rec.product_id = False
 
     @api.onchange('price_group_id')
     def change_price_group_id(self):

@@ -1,4 +1,5 @@
 from odoo import models, fields, api
+from odoo.exceptions import UserError
 
 
 class PricelistItem(models.Model):
@@ -15,6 +16,15 @@ class PricelistItem(models.Model):
                 if len(x) > 0:
                     s = True
             rec.solo_lectura_campos = s
+
+    def unlink(self):
+        for rec in self:
+            r = self.env['x_price_group_line'].search([('price_list_item_id', '=', rec.id)], limit=1)
+            if len(r) > 0:
+                raise UserError('No puede eliminar una regla de precios que se creo a partir de un agrupador de precio')
+
+        res = super(PricelistItem, self).unlink()
+        return res
 
     # aplicar_agrupador = fields.Boolean('Aplicar agrupador', default=False)
     # price_group_id = fields.Many2one('x_price_group', 'Agrupador de Precio', help='Agrupador de precio específico para aplicar esta regla')
