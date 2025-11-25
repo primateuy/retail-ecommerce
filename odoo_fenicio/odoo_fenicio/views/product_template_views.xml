@@ -12,21 +12,13 @@
 
                 <xpath expr="//notebook" position="inside">
                     <page name="fenicio" string="Fenicio">
-
-                    <field name="pricelist_relation_ids" nolabel="1">
-                        <tree string="Listas de Precios" editable="bottom">
-                            <field name="precio_venta" string="Precio Venta"/>
-                            <field name="precio_lista" string="Precio Lista"/>
-                            <field name="precio_alternativo" string="Precio Alternativo"/>
-                        </tree>
-                    </field>
                         <group>
                             <group>
                                 <field name="product_e_fenicio"/>
                                 <!-- <field name="code_e_fenicio" invisible="not product_e_fenicio" required="product_e_fenicio"/> -->
                                 <field name="default_currency_id" invisible="not product_e_fenicio" required="product_e_fenicio"/>
                                 <!-- <field name="brand" invisible="not product_e_fenicio" required="product_e_fenicio"/> -->
-                                <!-- <field name="fenicio_check" invisible="not product_e_fenicio"/> -->
+                                <field name="fenicio_check" invisible="not product_e_fenicio"/>
                                 <field name="priority_fenicio" invisible="not product_e_fenicio"/>
                                 <field name="guia_talle_id" invisible="not product_e_fenicio"/>
                                 <field name="descripcion_fenicio" invisible="not product_e_fenicio"/>

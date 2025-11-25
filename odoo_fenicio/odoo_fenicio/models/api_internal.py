@@ -53,28 +53,29 @@ class ApiInternal(models.Model):
                 first_variant = product_template_id.product_variant_ids[0]
                 
                 if hasattr(first_variant, 'public_categ_ids') and first_variant.public_categ_ids:
-                    categorias = [cat.fenicio_code for cat in first_variant.public_categ_ids]
+                    categorias = [cat.name for cat in first_variant.public_categ_ids]
                     listaCategoria = '\/'.join(categorias)
                 elif hasattr(first_variant, 'categ_id') and first_variant.categ_id:
                  
                     categoria_actual = first_variant.categ_id
                     categorias = []
                     while categoria_actual:
-                        categorias.insert(0, categoria_actual.fenicio_code)
-                        categoria_actual = categoria_actual.fenicio_code if hasattr(categoria_actual, 'fenicio_code') else None
+                        categorias.insert(0, categoria_actual.name)
+                        categoria_actual = categoria_actual.parent_id if hasattr(categoria_actual, 'parent_id') else None
                     listaCategoria = '\/'.join(categorias)
-                elif hasattr(product_template_id, 'categ_id') and product_template_id.fenicio_code:
-                    categoria_actual = product_template_id.fenicio_code
+                elif hasattr(product_template_id, 'categ_id') and product_template_id.categ_id:
+                    categoria_actual = product_template_id.categ_id
                     categorias = []
                     while categoria_actual:
                         categorias.insert(0, categoria_actual.name)
-                        categoria_actual = categoria_actual.fenicio_code if hasattr(categoria_actual, 'fenicio_code') else None
+                        categoria_actual = categoria_actual.parent_id if hasattr(categoria_actual, 'parent_id') else None
                     listaCategoria = '\/'.join(categorias)
                 else:
                     listaCategoria = 'Sin categoría'
             
+            _logger.info("Producto: %s - Categoría: %s", product_template_id.name, listaCategoria)
 
-            impuesto = product_template_id.taxes_id and product_template_id.taxes_id[0].amount or 'Sin Impuesto'
+            impuesto = product_template_id.taxes_id and product_template_id.taxes_id[0].name or 'Sin Impuesto'
 
             vals = {
                 'codigo': str(product_template_id.code_e_fenicio or product_template_id.id),
@@ -82,11 +83,11 @@ class ApiInternal(models.Model):
                 'fechaCreacion': product_template_id.create_date.strftime('%Y-%m-%dT%H:%M:%S%z'),
                 'prioridad': product_template_id.priority_fenicio or 1,
                 'guiaTalles': product_template_id.guia_talles,
-                'monedaPredeterminada': product_template_id.pricelist_relation_ids.precio_venta if product_template_id.pricelist_relation_ids else 'UYU',
+                'monedaPredeterminada': product_template_id.default_currency_id.name if product_template_id.default_currency_id else 'USD',
                 'impuesto': impuesto,
                 'atributos': {
                     'categoria': listaCategoria,
-                    'marca': product_template_id.product_brand_id.fenicio_brand_id if product_template_id.product_brand_id and product_template_id.product_brand_id.fenicio_brand_id else '0',
+                    'marca': product_template_id.product_brand_id.name if product_template_id.product_brand_id else '',
                     'descripcion': product_template_id.descripcion_fenicio or '',
                 },
                 'variantes': [],
@@ -201,33 +202,40 @@ class ApiInternal(models.Model):
 
 
     def _get_fenicio_stock(self, product_id):
-    # Obtener ubicaciones visibles para Fenicio
         fenicio_locations = self.env['stock.location'].search([
             ('fenicio_visible', '=', True),
             ('usage', '=', 'internal')
         ])
         
         if not fenicio_locations:
-            _logger.warning("Producto %s: No hay ubicaciones Fenicio configuradas", product_id.default_code)
+            _logger.warning("Producto %s: No hay ubicaciones Fenicio configuradas", 
+                        product_id.default_code)
             return 0.0
         
-        _logger.info("Ubicaciones Fenicio encontradas: %s", fenicio_locations.mapped('name'))
+        _logger.info("Ubicaciones Fenicio encontradas: %s", 
+                    fenicio_locations.mapped('name'))
         
-        # Obtener el tope máximo de stock a mostrar
-        tope_maximo = int(self.env['ir.config_parameter'].sudo().get_param('fenicio_stock_max', default=25))
-        
-        
-        stock_atp = 0.0
+        # Calcular stock total en esas ubicaciones
+        stock_real = 0.0
         for location in fenicio_locations:
-            qty_atp = self.env['stock.quant']._get_available_quantity(product_id, location)
-            _logger.info("  - %s: %.2f unidades (ATP)", location.name, qty_atp)
-            stock_atp += qty_atp
+            qty = self.env['stock.quant']._get_available_quantity(product_id, location)
+            _logger.info("  - %s: %.2f unidades", location.name, qty)
+            stock_real += qty
         
+        _logger.info("Stock real total: %.2f", stock_real)
         
+        # Aplicar lógica de threshold si existe
+        show_availability = getattr(product_id, 'show_availability', False)
+        available_threshold = getattr(product_id, 'available_threshold', 0)
         
-        stock_final = min(stock_atp, tope_maximo)
+        if show_availability and available_threshold > 0:
+            if stock_real > available_threshold:
+                _logger.info("Stock limitado: mostrando %d en lugar de %.2f", 
+                            available_threshold, stock_real)
+                return float(available_threshold)
         
-        return stock_final
+        _logger.info("Stock enviado a Fenicio: %.2f", stock_real)
+        return float(stock_real)
 
 
     @api.model
@@ -238,13 +246,14 @@ class ApiInternal(models.Model):
             
         product_id = product_product_ids[0]
         
-        
+        # Buscar atributo color (código fenicio 'color')
         color_attr = product_id.product_template_attribute_value_ids.filtered(
             lambda l: l.attribute_id.fenicio_code == 'color'
         )
         
+        # Buscar atributo color secundario 
         color_sec_attr = product_id.product_template_attribute_value_ids.filtered(
-            lambda l: l.attribute_id.fenicio_code == 'color_secundario' 
+            lambda l: l.attribute_id.fenicio_code == 'color_secundario'  # Ajustar código
         )
         
         color_name = color_attr.product_attribute_value_id.name if color_attr else ""

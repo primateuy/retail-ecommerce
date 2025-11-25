@@ -16,8 +16,6 @@
         'views/sale_views.xml',
         'views/guia_talles_view.xml',
         'views/stock_location.xml',
-        'views/product_brand_view.xml',
-        'views/product_public_category_view.xml',
         'data/data.xml',
         # 'data/payments_diaries.xml',
     ],

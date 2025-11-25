@@ -7,41 +7,6 @@ from odoo.exceptions import ValidationError, UserError
 
 _logger = logging.getLogger('FENICIO_PRODUCT_TEMPLATE')
 
-class ProductPricelistRelation(models.Model):
-    _name = 'product.pricelist.relation'
-    _description = 'Relación entre Producto y Lista de Precios'
-
-    product_template_id = fields.Many2one(
-        'product.template',
-        string='Producto',
-        required=True,
-        ondelete='cascade'
-    )
-    
-    precio_venta = fields.Many2one(
-        'product.pricelist',
-        string='Precio Venta',
-        required=True
-    )
-
-    precio_lista = fields.Many2one(
-        'product.pricelist',
-        string='Precio Lista',
-        required=True
-    )
-
-    precio_alternativo = fields.Many2one(
-        'product.pricelist',
-        string='Precio Alternativo',
-        required=False
-    )
-
-
-class WizardConfirmation(models.TransientModel):
-    _name = 'wizard.confirmation'
-    _description = 'Confirmar acción'
-
-    
 
 class ProductTemplate(models.Model):
     _inherit = 'product.template'
@@ -61,9 +26,8 @@ class ProductTemplate(models.Model):
     priority_fenicio = fields.Integer(
     string='Prioridad FENICIO',
     store=True,
-    readonly=False,
-    compute='website_sequence_compute'
-    )
+    readonly=False      
+)
     guia_talles = fields.Char('Guia Talles')
 
     guia_talle_id = fields.Many2one(
@@ -86,44 +50,7 @@ class ProductTemplate(models.Model):
         readonly=True
     )
 
-    pricelist_relation_ids = fields.One2many(
-        'product.pricelist.relation',
-        'product_template_id',
-        string='Relación de Precios'
-    )
-
     descripcion_fenicio = fields.Text('Descripción e-Fenicio');
-
-
-
-
-    @api.depends('website_sequence')
-    def website_sequence_compute(self):
-        for rec in self:
-            rec.priority_fenicio = rec.website_sequence if rec.website_sequence else 0;
-
-    def write(self, vals):
-        res = super(ProductTemplate, self).write(vals)
-        for rec in self:
-            if rec.pricelist_relation_ids:
-                for variante in rec.product_variant_ids:
-                    variante.pricelist_relation_ids = [(5, 0, 0)]
-                    for relation in rec.pricelist_relation_ids:
-                        variante.pricelist_relation_ids = [(0, 0, {
-                            'product_product_id': variante.id,
-                            'precio_venta': relation.precio_venta.id,
-                            'precio_lista': relation.precio_lista.id,
-                            'precio_alternativo': relation.precio_alternativo.id,
-                        })]
-
-                    
-        return res
-    
-    @api.constrains('pricelist_relation_ids')
-    def _check_pricelist_relation_limit(self):
-        for record in self:
-            if len(record.pricelist_relation_ids) > 1:
-                raise ValidationError('Solo se puede agregar una línea en la tabla de Listas de Precios.')
 
     @api.depends('default_code', 'product_e_fenicio')
     def _compute_code_e_fenicio(self):
