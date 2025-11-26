@@ -55,23 +55,7 @@ class ApiInternal(models.Model):
                 if hasattr(first_variant, 'public_categ_ids') and first_variant.public_categ_ids:
                     categorias = [cat.fenicio_code for cat in first_variant.public_categ_ids]
                     listaCategoria = '\/'.join(categorias)
-                elif hasattr(first_variant, 'categ_id') and first_variant.categ_id:
-                 
-                    categoria_actual = first_variant.categ_id
-                    categorias = []
-                    while categoria_actual:
-                        categorias.insert(0, categoria_actual.fenicio_code)
-                        categoria_actual = categoria_actual.fenicio_code if hasattr(categoria_actual, 'fenicio_code') else None
-                    listaCategoria = '\/'.join(categorias)
-                elif hasattr(product_template_id, 'categ_id') and product_template_id.fenicio_code:
-                    categoria_actual = product_template_id.fenicio_code
-                    categorias = []
-                    while categoria_actual:
-                        categorias.insert(0, categoria_actual.name)
-                        categoria_actual = categoria_actual.fenicio_code if hasattr(categoria_actual, 'fenicio_code') else None
-                    listaCategoria = '\/'.join(categorias)
-                else:
-                    listaCategoria = 'Sin categoría'
+                
             
 
             impuesto = product_template_id.taxes_id and product_template_id.taxes_id[0].amount or 'Sin Impuesto'
@@ -81,8 +65,8 @@ class ApiInternal(models.Model):
                 'nombre': product_template_id.name,
                 'fechaCreacion': product_template_id.create_date.strftime('%Y-%m-%dT%H:%M:%S%z'),
                 'prioridad': product_template_id.priority_fenicio or 1,
-                'guiaTalles': product_template_id.guia_talles,
-                'monedaPredeterminada': product_template_id.pricelist_relation_ids.precio_venta if product_template_id.pricelist_relation_ids else 'UYU',
+                'guiaTalles': product_template_id.guia_talle_code or '',
+                'monedaPredeterminada': self.env.company.currency_id.name,
                 'impuesto': impuesto,
                 'atributos': {
                     'categoria': listaCategoria,
@@ -112,7 +96,7 @@ class ApiInternal(models.Model):
 
 
                     for attr_val in variant_attrs:
-                        
+                        _logger.info(f"Processing variant attribute: {attr_val}");
 
                         codigo_parts.append(str(attr_val.attribute_id.codigo) if attr_val.attribute_id.codigo else '000');
                         
@@ -123,7 +107,6 @@ class ApiInternal(models.Model):
                     
                     codigo_variante = ''.join(codigo_parts)
                     nombre_variante = ' / '.join(nombre_parts)
-                    
             
 
 
@@ -134,7 +117,9 @@ class ApiInternal(models.Model):
                         'presentaciones': [],
                     }
 
-
+                    listaVenta = variante.pricelist_relation_ids.precio_venta;
+                    listaPrecios = variante.pricelist_relation_ids.precio_lista;
+                    listaAlternativo = variante.pricelist_relation_ids.precio_alternativo;
                     
 
                     for pres_attr_val in presentacion_attrs:
@@ -143,16 +128,20 @@ class ApiInternal(models.Model):
                         sku = pres_attr_val.attribute_id.codigo;
                         stock = self._get_fenicio_stock(variante);
 
-                        listaPrecios = variante.listaPrecios;
-                        precioFijo = 0.0;
-                        descuento = 0.0;
+                        precioVenta = 0.0;
+                        precioLista = 0.0;
+                        precioAlternativo = 0.0;
 
-                        for lista_precio in variante.listaPrecios:
-                            
+                        for item in listaVenta:
+                            for precio in item.item_ids:
+                                if precio.product_id.id == variante.id:
+                                    precioVenta = precio.fixed_price;
 
-                            for item in lista_precio.item_ids:
-                                if item.product_id.id == variante.id:
-                                    precioFijo = item.fixed_price;
+                        for item in listaPrecios:
+                            for precio in item.item_ids:
+                                if precio.product_id.id == variante.id:
+                                    precioLista = precio.fixed_price;
+
                                     
                     
                         variante_data['presentaciones'].append(
@@ -161,9 +150,12 @@ class ApiInternal(models.Model):
                                 'nombre': nombre,
                                 'stock': stock,
                                 'sku': sku,
-                                'precioLista': {'precio': precioFijo},
+                                'precioLista': {'precio': precioLista},
                                 'precioVenta': {
-                                    'precio': variante.lst_price
+                                    'precio': precioVenta
+                                },
+                                'precioAlternativo': {
+
                                 }
                             }
                         )
@@ -214,8 +206,10 @@ class ApiInternal(models.Model):
         _logger.info("Ubicaciones Fenicio encontradas: %s", fenicio_locations.mapped('name'))
         
         # Obtener el tope máximo de stock a mostrar
-        tope_maximo = int(self.env['ir.config_parameter'].sudo().get_param('fenicio_stock_max', default=25))
+        variante = self.env['product.product'].browse(product_id.id);
         
+        tope_maximo = variante.available_threshold if variante.show_availability and variante.available_threshold > 0 else 25;
+
         
         stock_atp = 0.0
         for location in fenicio_locations:
