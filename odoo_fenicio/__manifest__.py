@@ -19,7 +19,7 @@
         'views/product_brand_view.xml',
         'views/product_public_category_view.xml',
         'data/data.xml',
-        # 'data/payments_diaries.xml',
+        'data/payments_diaries.xml',
     ],
     'license': 'LGPL-3',
 }

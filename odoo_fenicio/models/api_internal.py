@@ -125,7 +125,7 @@ class ApiInternal(models.Model):
                     for pres_attr_val in presentacion_attrs:
                         codigo = str(pres_attr_val.attribute_id.codigo) if pres_attr_val.attribute_id.codigo else '000'
                         nombre = pres_attr_val.product_attribute_value_id.name
-                        sku = pres_attr_val.attribute_id.codigo;
+                        sku = variante.default_code or '';
                         stock = self._get_fenicio_stock(variante);
 
                         precioVenta = 0.0;
@@ -142,7 +142,10 @@ class ApiInternal(models.Model):
                                 if precio.product_id.id == variante.id:
                                     precioLista = precio.fixed_price;
 
-                                    
+                        for item in listaAlternativo:
+                            for precio in item.item_ids:
+                                if precio.product_id.id == variante.id:
+                                    precioAlternativo = precio.fixed_price;
                     
                         variante_data['presentaciones'].append(
                             {
@@ -155,7 +158,7 @@ class ApiInternal(models.Model):
                                     'precio': precioVenta
                                 },
                                 'precioAlternativo': {
-
+                                    'precio': precioAlternativo
                                 }
                             }
                         )
@@ -323,19 +326,30 @@ class ApiInternal(models.Model):
         }
 
     @api.model
-    def stock_producto(self, json_data):
+    def stockporsku(self, json_data):
         skus_pedido = json_data['skus']
 
-        product_ids = self.env['product.product'].search([('default_code', 'in', skus_pedido)])
+        productos = [];
 
-        skus_encontrados = set(product_ids.mapped('default_code'))
+        for sku in skus_pedido:
+            product_id = self.env['product.product'].search([('default_code', '=', sku)], limit=1)
+            if product_id:
+                productos.append(product_id)
+
+        
+
+        _logger.info(f"PRODUCTOS ENCONTRADOS => {len(productos)}")
+        
+        skus_encontrados = set(productos.mapped('default_code'))
         sku_no_encontrados = set(skus_pedido) - set(skus_encontrados)
 
         vals_list = []
 
+
+
         stock_quant_encontrados_ids = self.env['stock.quant']
 
-        for product_id in product_ids:
+        for product_id in productos:
             stock_quant_id = self.env['stock.quant'].search([
                 ('product_id', '=', product_id.id),
                 ('on_hand', '=', True),
@@ -349,7 +363,7 @@ class ApiInternal(models.Model):
                 }
                 vals_list.append(vals)
 
-        sku_sin_stock = product_ids - stock_quant_encontrados_ids.mapped('product_id')
+        sku_sin_stock = productos - stock_quant_encontrados_ids.mapped('product_id')
         for product_id in sku_sin_stock:
             vals = {
                 "sku": product_id.default_code,
@@ -454,17 +468,24 @@ class ApiInternal(models.Model):
 
             sale_order_id.action_cancel()
 
+        _logger.info("ANTES DE PAGAR");
         if 'picking' in json_data and json_data['picking'] == 0:
             return {'referencia': sale_order_id.display_name}
 
+        # IMPORTANTE: Actualizar pickings ANTES de crear facturas
+        # para que los productos estén marcados como entregados
+        _logger.info("ANTES DE PICKING");
         picking_error = False
         if 'entrega' in json_data and not cancelable:
             picking_error = sale_order_id.actualizar_pickings(json_data)
 
+        _logger.info("SALIENDO DE PICKING");
         if picking_error:
             return {'error': picking_error}
 
+        _logger.info("ANTES DE PAGO");
         if estado in ['PAGO_PENDIENTE', 'REQUIERE_APROBACION', 'APROBADA']:
+            _logger.info("ANTES DE CREAR FACTURA");
             if len(sale_order_id.invoice_ids) == 0:
                 sale_order_id.create_invoice_fenicio()
                 invoice_ids = sale_order_id.invoice_ids
@@ -475,6 +496,7 @@ class ApiInternal(models.Model):
                     })
                 invoice_ids.action_post()
 
+            _logger.info("ANTES DE PAGO");
             if estado == 'APROBADA' and 'pago' in json_data and json_data['pago'] and json_data['pago']['estado'] not in ['PENDIENTE', 'ERROR', 'REVERSADO']:
                 json_data_pago = json_data['pago']
                 invoice_ids = sale_order_id.invoice_ids
@@ -486,6 +508,7 @@ class ApiInternal(models.Model):
                     # payment_ids = self.env['account.payment'].search([('id', 'in', ids_payment)])
                     payment_id = invoice_id.create_payment_fenicio(json_data_pago, mode_update=(len(payment_ids) > 0), payment_ids=payment_ids)
 
+        _logger.info("SALIENDO DE PAGAR");
         return {'referencia': sale_order_id.display_name}
 
     @api.model

@@ -62,7 +62,7 @@ class ApiController(http.Controller):
             json_data = self.get_json_data()
             id_solicitud = json_data['_idSolicitud']
 
-            response_data, msg = request.env['api.internal'].sudo().stock_producto(json_data)
+            response_data, msg = request.env['api.internal'].sudo().stockporsku(json_data)
 
             return self.build_response(id_solicitud, response_data, mensaje=msg)
         except Exception as e:
