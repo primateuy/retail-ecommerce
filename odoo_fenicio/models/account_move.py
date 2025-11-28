@@ -21,7 +21,7 @@ class AccountMove(models.Model):
                 payment_ids.cancel()
             return False
 
-        journal_id = self.env['account.journal'].search([('code', '=', json_data_pago['codigo'])], limit=1)
+        journal_id = self.env['account.journal'].search([('internal_code', '=', json_data_pago['codigo'])], limit=1)
         if not journal_id:
             raise UserError('No se encontró diario para registrar el pago, codigo: %s' % json_data_pago['codigo'])
 
