@@ -87,6 +87,21 @@ class ApiController(http.Controller):
         except Exception as e:
             return self.build_response(id_solicitud, None, status='ERROR', mensaje=str(e))
 
+    @http.route('/usuario', type="http", auth='none', cors="*", csrf=False, methods=['POST'])
+    def crear_usuario(self):
+        """https://comercios.fenicio.help/servicios/registro-de-usuario"""
+        id_solicitud = ''
+        try:
+            request.env['api.internal'].verificar_token(request.httprequest.headers['Token-Autenticacion-Efenicio'])
+            json_data = self.get_json_data()
+            id_solicitud = json_data['_idSolicitud']
+
+            response_data = request.env['api.internal'].sudo().crear_usuario(json_data)
+
+            return self.build_response(id_solicitud, response_data)
+        except Exception as e:
+            return self.build_response(id_solicitud, None, status='ERROR', mensaje=str(e))
+
     @http.route('/permitecancelar', type='http', auth='public', cors="*", csrf=False, methods=['GET'])
     def puede_cancelar(self):
         """https://comercios.fenicio.help/servicios/permiso-para-cancelacion"""

@@ -322,8 +322,61 @@ class ApiInternal(models.Model):
             'precioLista': precio_lista,
             'precioVenta': precio_venta,
             'preciosAlternativos': precios_alternativos,
-            'identificadores': identificadores,  # Corregido de 'identificador' a 'identificadores'
+            'identificadores': identificadores, 
         }
+
+
+    @api.model
+    def crear_usuario(self, json_data):
+        try:
+            _logger.info("ENTRANDO CREA USUARIO");
+
+            user = self.env['res.partner'].search([('id_fenicio', '=', json_data['id'])], limit=1);
+            pais = self.env['res.country'].search([('code', '=', json_data['documento']['pais'])], limit=1);
+
+            # allIdentificaciones = self.env['l10n_latam.identification.type'].search([]);
+
+            # _logger.info("TIPO DE IDENTIFICACION");
+            # for identificacion in allIdentificaciones:
+                
+            #     _logger.info(f"{identificacion.name} NOMBRE <=>");
+
+            tipo_doc = "CI" if json_data['documento']['tipo'] == 'DOCUMENTO_IDENTIDAD' else json_data['documento']['tipo'];
+            _logger.info(f"Buscando tipo de identificación: {tipo_doc}");
+            
+            #identificacion = self.env['l10n_latam.identification.type'].search([('name', '=', tipo_doc)], limit=1);
+            
+            #if not identificacion:
+            #    _logger.info(f"TIPO DE IDENTIFICACION NO ENCONTRADO: {tipo_doc}");
+            #    message = f"El tipo de identificacion '{tipo_doc}' no existe en la base de datos."
+            #    return False, message;
+            
+            # _logger.info(f"Tipo de identificación encontrado: {identificacion.name} (ID: {identificacion.id})");
+            if user:
+                _logger.info("USUARIO ENCONTRADO");
+                message = "El usuario ya existia, no se han insertado los datos."
+                return user.id_fenicio, message;
+            user = self.env['res.partner'].create({
+                'code_fenicio': json_data['codigo'],
+                'id_fenicio': json_data['id'],
+                'name': json_data['nombre'] + ' ' + json_data['apellido'],
+                'email': json_data['email'],
+                'phone': json_data['telefono'],
+                'vat': json_data['documento']['numero'],
+                'country_id': pais.id if pais else '',
+                'company_id': self.env.company.id,
+                'programa_millas': json_data['extras']['programaMillas']
+            })
+
+            _logger.info("Se ha creado el usuario");
+
+            return user.id_fenicio, "El usuario se ha creado correctamente.";
+            
+
+
+        except Exception as e:
+            _logger.info("Error al crear el usuario: %s", str(e))
+            return False
 
     @api.model
     def stockporsku(self, json_data):

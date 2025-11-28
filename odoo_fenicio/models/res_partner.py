@@ -9,6 +9,7 @@ class SaleOrder(models.Model):
     id_fenicio = fields.Char('ID Fenicio')
     code_fenicio = fields.Char('Código Fenicio')
     numero_doc = fields.Char('Numero Doc')
+    programa_millas = fields.Char("Programa Millas");
 
     @api.model
     def get_partner_orden_venta(self, json_data):

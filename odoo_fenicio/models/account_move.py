@@ -25,15 +25,12 @@ class AccountMove(models.Model):
         if not journal_id:
             raise UserError('No se encontró diario para registrar el pago, codigo: %s' % json_data_pago['codigo'])
 
-        _logger.info("ANTES DE HACER EL REGISTRO DE PAGO");
         payment_register_id = self.env['account.payment.register'].with_context(active_ids=self.ids, active_model='account.move', active_id=self.id).create({
             'journal_id': journal_id.id,
             'payment_date': json_data_pago['fechaPago'],
         })
 
-        _logger.info("ENTRANDO ACCOUNT MOVE");
         payment_ids = payment_register_id._create_payments()
-        _logger.info("SALIENDO ACCOUNT MOVE");
         if payment_ids:
             vals = {
                 'id_fenicio': json_data_pago['id'],

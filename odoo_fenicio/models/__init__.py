@@ -15,3 +15,4 @@ from . import guia_talles
 from . import stock_location
 from . import product_brand
 from . import product_public_category
+from . import res_partner
