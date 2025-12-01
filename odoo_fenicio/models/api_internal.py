@@ -324,7 +324,67 @@ class ApiInternal(models.Model):
             'preciosAlternativos': precios_alternativos,
             'identificadores': identificadores, 
         }
+    
 
+    @api.model
+    def canjear_puntos(self, json_data): 
+        try:
+
+            if 'numeroDocumento' not in json_data or 'puntos' not in json_data:
+                message = "El campo 'numeroDocumento' y 'puntos' es obligatorio."
+                return False, message;
+
+            user = self.env['res.partner'].search([('vat', '=', json_data['numeroDocumento'])], limit=1);
+        
+            if not user:
+                message = "El usuario no existe."
+                return False, message;
+    
+            loyaltyCard = self.env['loyalty.card'].search([('partner_id', '=', user.id)], limit=1);
+            if not loyaltyCard:
+                message = "El usuario no tiene una tarjeta de lealtad."
+                return False, message;
+    
+            if loyaltyCard.points < float(json_data['puntos']):
+                message = "El usuario no tiene suficientes puntos para canjear."
+                return False, message;
+    
+            if loyaltyCard.points >= float(json_data['puntos']):
+                loyaltyCard.points -= float(json_data['puntos'])
+
+            return {
+                'puntosRestantes': loyaltyCard.points
+            }
+
+        except Exception as e:
+            _logger.info("Error al canjear puntos: %s", str(e))
+            return False
+
+
+    @api.model
+    def consultar_puntos(self, json_data):
+        try:
+            if 'numeroDocumento' not in json_data:
+                message = "El campo 'numeroDocumento' es obligatorio."
+                return False, message;
+
+            user = self.env['res.partner'].search([('vat', '=', json_data['numeroDocumento'])], limit=1);
+
+            if not user:
+                message = "El usuario no existe."
+                return False, message;
+
+            
+            loyaltyCard = self.env['loyalty.card'].search([('partner_id', '=', user.id)], limit=1);
+            puntos = loyaltyCard.points if loyaltyCard else 0
+
+            return {
+                "puntos": puntos
+            };
+
+        except Exception as e:
+            _logger.info("Error al consultar puntos: %s", str(e))
+            return False
 
     @api.model
     def crear_usuario(self, json_data):
