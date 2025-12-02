@@ -125,7 +125,7 @@ class ApiInternal(models.Model):
                     for pres_attr_val in presentacion_attrs:
                         codigo = str(pres_attr_val.attribute_id.codigo) if pres_attr_val.attribute_id.codigo else '000'
                         nombre = pres_attr_val.product_attribute_value_id.name
-                        sku = pres_attr_val.attribute_id.codigo;
+                        sku = variante.default_code or '';
                         stock = self._get_fenicio_stock(variante);
 
                         precioVenta = 0.0;
@@ -142,7 +142,10 @@ class ApiInternal(models.Model):
                                 if precio.product_id.id == variante.id:
                                     precioLista = precio.fixed_price;
 
-                                    
+                        for item in listaAlternativo:
+                            for precio in item.item_ids:
+                                if precio.product_id.id == variante.id:
+                                    precioAlternativo = precio.fixed_price;
                     
                         variante_data['presentaciones'].append(
                             {
@@ -155,7 +158,7 @@ class ApiInternal(models.Model):
                                     'precio': precioVenta
                                 },
                                 'precioAlternativo': {
-
+                                    'precio': precioAlternativo
                                 }
                             }
                         )
@@ -319,23 +322,147 @@ class ApiInternal(models.Model):
             'precioLista': precio_lista,
             'precioVenta': precio_venta,
             'preciosAlternativos': precios_alternativos,
-            'identificadores': identificadores,  # Corregido de 'identificador' a 'identificadores'
+            'identificadores': identificadores, 
         }
+    
 
     @api.model
-    def stock_producto(self, json_data):
+    def canjear_puntos(self, json_data): 
+        try:
+
+            if 'numeroDocumento' not in json_data or 'puntos' not in json_data:
+                message = "El campo 'numeroDocumento' y 'puntos' es obligatorio."
+                return False, message;
+
+            user = self.env['res.partner'].search([('vat', '=', json_data['numeroDocumento'])], limit=1);
+        
+            if not user:
+                message = "El usuario no existe."
+                return False, message;
+    
+            loyaltyCard = self.env['loyalty.card'].search([('partner_id', '=', user.id)], limit=1);
+            if not loyaltyCard:
+                message = "El usuario no tiene una tarjeta de lealtad."
+                return False, message;
+    
+            if loyaltyCard.points < float(json_data['puntos']):
+                message = "El usuario no tiene suficientes puntos para canjear."
+                return False, message;
+    
+            if loyaltyCard.points >= float(json_data['puntos']):
+                loyaltyCard.points -= float(json_data['puntos'])
+
+            return {
+                'puntosRestantes': loyaltyCard.points
+            }
+
+        except Exception as e:
+            _logger.info("Error al canjear puntos: %s", str(e))
+            return False
+
+
+    @api.model
+    def consultar_puntos(self, json_data):
+        try:
+            if 'numeroDocumento' not in json_data:
+                message = "El campo 'numeroDocumento' es obligatorio."
+                return False, message;
+
+            user = self.env['res.partner'].search([('vat', '=', json_data['numeroDocumento'])], limit=1);
+
+            if not user:
+                message = "El usuario no existe."
+                return False, message;
+
+            
+            loyaltyCard = self.env['loyalty.card'].search([('partner_id', '=', user.id)], limit=1);
+            puntos = loyaltyCard.points if loyaltyCard else 0
+
+            return {
+                "puntos": puntos
+            };
+
+        except Exception as e:
+            _logger.info("Error al consultar puntos: %s", str(e))
+            return False
+
+    @api.model
+    def crear_usuario(self, json_data):
+        try:
+            _logger.info("ENTRANDO CREA USUARIO");
+
+            user = self.env['res.partner'].search([('id_fenicio', '=', json_data['id'])], limit=1);
+            pais = self.env['res.country'].search([('code', '=', json_data['documento']['pais'])], limit=1);
+
+            # allIdentificaciones = self.env['l10n_latam.identification.type'].search([]);
+
+            # _logger.info("TIPO DE IDENTIFICACION");
+            # for identificacion in allIdentificaciones:
+                
+            #     _logger.info(f"{identificacion.name} NOMBRE <=>");
+
+            tipo_doc = "CI" if json_data['documento']['tipo'] == 'DOCUMENTO_IDENTIDAD' else json_data['documento']['tipo'];
+            _logger.info(f"Buscando tipo de identificación: {tipo_doc}");
+            
+            #identificacion = self.env['l10n_latam.identification.type'].search([('name', '=', tipo_doc)], limit=1);
+            
+            #if not identificacion:
+            #    _logger.info(f"TIPO DE IDENTIFICACION NO ENCONTRADO: {tipo_doc}");
+            #    message = f"El tipo de identificacion '{tipo_doc}' no existe en la base de datos."
+            #    return False, message;
+            
+            # _logger.info(f"Tipo de identificación encontrado: {identificacion.name} (ID: {identificacion.id})");
+            if user:
+                _logger.info("USUARIO ENCONTRADO");
+                message = "El usuario ya existia, no se han insertado los datos."
+                return user.id_fenicio, message;
+            user = self.env['res.partner'].create({
+                'code_fenicio': json_data['codigo'],
+                'id_fenicio': json_data['id'],
+                'name': json_data['nombre'] + ' ' + json_data['apellido'],
+                'email': json_data['email'],
+                'phone': json_data['telefono'],
+                'vat': json_data['documento']['numero'],
+                'country_id': pais.id if pais else '',
+                'company_id': self.env.company.id,
+                'programa_millas': json_data['extras']['programaMillas']
+            })
+
+            _logger.info("Se ha creado el usuario");
+
+            return user.id_fenicio, "El usuario se ha creado correctamente.";
+            
+
+
+        except Exception as e:
+            _logger.info("Error al crear el usuario: %s", str(e))
+            return False
+
+    @api.model
+    def stockporsku(self, json_data):
         skus_pedido = json_data['skus']
 
-        product_ids = self.env['product.product'].search([('default_code', 'in', skus_pedido)])
+        productos = [];
 
-        skus_encontrados = set(product_ids.mapped('default_code'))
+        for sku in skus_pedido:
+            product_id = self.env['product.product'].search([('default_code', '=', sku)], limit=1)
+            if product_id:
+                productos.append(product_id)
+
+        
+
+        _logger.info(f"PRODUCTOS ENCONTRADOS => {len(productos)}")
+        
+        skus_encontrados = set(productos.mapped('default_code'))
         sku_no_encontrados = set(skus_pedido) - set(skus_encontrados)
 
         vals_list = []
 
+
+
         stock_quant_encontrados_ids = self.env['stock.quant']
 
-        for product_id in product_ids:
+        for product_id in productos:
             stock_quant_id = self.env['stock.quant'].search([
                 ('product_id', '=', product_id.id),
                 ('on_hand', '=', True),
@@ -349,7 +476,7 @@ class ApiInternal(models.Model):
                 }
                 vals_list.append(vals)
 
-        sku_sin_stock = product_ids - stock_quant_encontrados_ids.mapped('product_id')
+        sku_sin_stock = productos - stock_quant_encontrados_ids.mapped('product_id')
         for product_id in sku_sin_stock:
             vals = {
                 "sku": product_id.default_code,
@@ -454,17 +581,24 @@ class ApiInternal(models.Model):
 
             sale_order_id.action_cancel()
 
+        _logger.info("ANTES DE PAGAR");
         if 'picking' in json_data and json_data['picking'] == 0:
             return {'referencia': sale_order_id.display_name}
 
+        # IMPORTANTE: Actualizar pickings ANTES de crear facturas
+        # para que los productos estén marcados como entregados
+        _logger.info("ANTES DE PICKING");
         picking_error = False
         if 'entrega' in json_data and not cancelable:
             picking_error = sale_order_id.actualizar_pickings(json_data)
 
+        _logger.info("SALIENDO DE PICKING");
         if picking_error:
             return {'error': picking_error}
 
+        _logger.info("ANTES DE PAGO");
         if estado in ['PAGO_PENDIENTE', 'REQUIERE_APROBACION', 'APROBADA']:
+            _logger.info("ANTES DE CREAR FACTURA");
             if len(sale_order_id.invoice_ids) == 0:
                 sale_order_id.create_invoice_fenicio()
                 invoice_ids = sale_order_id.invoice_ids
@@ -475,6 +609,7 @@ class ApiInternal(models.Model):
                     })
                 invoice_ids.action_post()
 
+            _logger.info("ANTES DE PAGO");
             if estado == 'APROBADA' and 'pago' in json_data and json_data['pago'] and json_data['pago']['estado'] not in ['PENDIENTE', 'ERROR', 'REVERSADO']:
                 json_data_pago = json_data['pago']
                 invoice_ids = sale_order_id.invoice_ids
@@ -486,6 +621,7 @@ class ApiInternal(models.Model):
                     # payment_ids = self.env['account.payment'].search([('id', 'in', ids_payment)])
                     payment_id = invoice_id.create_payment_fenicio(json_data_pago, mode_update=(len(payment_ids) > 0), payment_ids=payment_ids)
 
+        _logger.info("SALIENDO DE PAGAR");
         return {'referencia': sale_order_id.display_name}
 
     @api.model
