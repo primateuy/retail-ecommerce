@@ -286,6 +286,10 @@ class PosPaymentMethod(models.Model):
             base_url_endpoint (str): URL base del endpoint
             pos_session_id (int): ID de la sesión POS
         """
+        # Guardar el ID del payment method antes de crear el nuevo cursor
+        # para usarlo dentro del nuevo entorno
+        payment_method_id = self.id
+        
         # Nuevo cursor y entorno para evitar problemas de ORM compartido
         with self.pool.cursor() as new_cr:
             env = api.Environment(new_cr, SUPERUSER_ID, {})
@@ -310,14 +314,53 @@ class PosPaymentMethod(models.Model):
 
                     response_code = result['ResponseCode']
                     rt = result['RemainingExpirationTime'] if 'RemainingExpirationTime' in result else False
+                    
+                    # Si el código de respuesta no es de espera, salir del loop
                     if response_code not in ['10', '12']:
                         break
 
+                    # Si el tiempo de espera expiró (RemainingExpirationTime == 0.0)
+                    # se debe procesar la reversión y notificar al POS para liberarlo
                     if response_code in ['10', '12'] and rt and rt == 0.0:
-                        self.processFinancialReverse(data, base_url_endpoint)
+                        _logger.warning('Tiempo de espera expirado para transacción %s. Procesando reversión...', transaction_id)
+                        
+                        # Procesar la reversión para devolver el dinero
+                        # Usar env en lugar de self para evitar problemas de cursor
+                        reverse_result = env['pos.payment.method'].browse(payment_method_id).processFinancialReverse(data, base_url_endpoint)
+                        _logger.info('Resultado de reversión: %s', pprint.pformat(reverse_result))
+                        
+                        # Construir una respuesta de error para notificar al POS
+                        # Usar código '11' que indica "Tiempo de transacción excedido"
+                        result = {
+                            'ResponseCode': '11',
+                            'msg': 'Tiempo de transacción excedido, envíe datos nuevamente.',
+                            'TransactionId': transaction_id,
+                            'RemainingExpirationTime': 0.0,
+                            'timeout_error': True,  # Flag adicional para identificar timeout
+                            'reverse_processed': True,  # Indica que se procesó la reversión
+                        }
+                        
+                        # Si la reversión fue exitosa, agregar información adicional
+                        if reverse_result.get('ResponseCode') == '0':
+                            result['reverse_success'] = True
+                            result['reverse_msg'] = 'Reversión procesada exitosamente'
+                        else:
+                            result['reverse_success'] = False
+                            result['reverse_msg'] = reverse_result.get('msg', 'Error en reversión')
+                        
+                        _logger.warning('Timeout detectado. Notificando al POS para liberar la transacción.')
+                        # Salir del loop inmediatamente después de procesar la reversión
+                        break
 
                 except Exception as e:
                     _logger.error('Error en procesamiento en segundo plano: %s', str(e))
+                    # En caso de error, construir una respuesta de error para el POS
+                    result = {
+                        'ResponseCode': '999',
+                        'msg': 'Error no determinado.',
+                        'TransactionId': transaction_id,
+                        'error': str(e),
+                    }
                     break
                 _logger.info('>>>FIN Intento>>>')
 

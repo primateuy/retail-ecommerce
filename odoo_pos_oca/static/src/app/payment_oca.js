@@ -268,7 +268,33 @@ export class PaymentOCA extends PaymentInterface {
             line.ticket = payload.Ticket;
             line.cardholder_name = payload.CardOwnerName;
         } else {
-            var msg_error = `Error POS RESPONSE CODE: ${pos_response_code}`;
+            // Construir mensaje de error más descriptivo
+            var msg_error = '';
+            
+            // Si es un timeout, mostrar mensaje específico
+            if (payload.timeout_error || response_code === '11') {
+                msg_error = payload.msg || 'Tiempo de transacción excedido. Se procesó la reversión del pago.';
+                if (payload.reverse_processed) {
+                    if (payload.reverse_success) {
+                        msg_error += ' La reversión fue exitosa. Puede intentar el pago nuevamente.';
+                    } else {
+                        msg_error += ' Hubo un problema con la reversión. Contacte al administrador.';
+                    }
+                }
+            } else if (payload.msg) {
+                // Usar el mensaje del servidor si está disponible
+                msg_error = payload.msg;
+                if (pos_response_code) {
+                    msg_error += ` (Código POS: ${pos_response_code})`;
+                }
+            } else if (pos_response_code) {
+                // Fallback al mensaje original
+                msg_error = `Error POS RESPONSE CODE: ${pos_response_code}`;
+            } else {
+                // Mensaje genérico si no hay información
+                msg_error = `Error en el pago. ResponseCode: ${response_code}`;
+            }
+            
             this._show_error(msg_error);
         }
 
