@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <record id="view_pos_session_form_cleanup" model="ir.ui.view">
+            <field name="name">pos.session.form.cleanup</field>
+            <field name="model">pos.session</field>
+            <field name="inherit_id" ref="point_of_sale.view_pos_session_form"/>
+            <field name="arch" type="xml">
+                <xpath expr="//header" position="inside">
+                    <button name="manual_cleanup_documents" 
+                            string="Limpiar Pos Orders" 
+                            type="object" 
+                            class="btn-primary"
+                            invisible="state != 'opened'"
+                            confirm="¿Está seguro de que desea eliminar todas las pos.order en borrador asociadas a esta sesión?"/>
+                </xpath>
+            </field>
+        </record>
+    </data>
+</odoo> 
