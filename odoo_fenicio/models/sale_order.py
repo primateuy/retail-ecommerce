@@ -61,11 +61,11 @@ class SaleOrder(models.Model):
 
         tarifa_id = self.env['product.pricelist'].search([
             # ('e_fenicio', '=', True),
-            ('currency_id.name', '=', json_data['moneda']),
+            ('currency_id.name', '=', json_data['pago']['moneda']),
         ])
 
         if not tarifa_id:
-            return False, 'No se encuentra configurada una tarifa para esa moneda en Odoo'
+            return False, 'No se encuenta lista de precios para la moneda {}'.format(json_data['moneda'])
 
         date_order = parse(json_data['fechaInicio'])
 
@@ -91,17 +91,17 @@ class SaleOrder(models.Model):
         if validate_qty:
             return False, validate_qty
 
-        if 'lineas' in json_data:
-            for line_data in json_data['lineas']:
+        if 'lineas' in json_data['entrega']:
+            for line_data in json_data['entrega']['lineas']:
                 product_id = self.env['product.product'].search([('default_code', '=', line_data['sku'])], limit=1)
                 if not product_id:
-                    return False, f'No se encuentra producto con sku'
-
+                    return False, f'No se encuentra producto con sku {line_data["sku"]}'
+                _logger.info("PRODUCTO ENCONTRADO: {}".format(product_id.name));
                 vals = {
                     'product_id': product_id.id,
-                    'name': line_data['nombre'],
+                    'name': product_id.name,
                     'product_uom_qty': line_data['cantidad'],
-                    'price_unit': line_data['precio'],
+                    'price_unit': product_id.list_price,
                 }
                 lines.append((0, 0, vals))
 
@@ -138,7 +138,7 @@ class SaleOrder(models.Model):
             'fecha_recuperada': fecha_recuperada,
             'fecha_cancelada': self.convert_datetime(fecha_cancelada),
             'effective_date': self.convert_datetime(effective_date),
-            'observaciones': json_data['observaciones'],
+            'observaciones': json_data['entrega']['horario']['direccionEnvio']['observaciones'],
             'order_line': lines,
             'company_id': company_id.id,
         }
@@ -215,13 +215,21 @@ class SaleOrder(models.Model):
         return chain
 
     def create_invoice_fenicio(self):
-        self.ensure_one()
-        modal_sale_invoice = self.env['sale.advance.payment.inv'].with_context(active_ids=[self.id]).create({
-            'deduct_down_payments': True,
-            'has_down_payments': False,
-        })
-        modal_sale_invoice.with_context(active_ids=[self.id]).create_invoices()
-        return True
+
+        try:
+            self.ensure_one()
+            _logger.info("ANTES DE CREAR FACTURA EN LA FUNCION ORIGINAL");
+            modal_sale_invoice = self.env['sale.advance.payment.inv'].with_context(active_ids=[self.id]).create({
+                'deduct_down_payments': True,
+                'has_down_payments': False,
+            })
+            _logger.info("ANTES DE CREAR FACTURA EN LA FUNCION ORIGINAL x2");
+            modal_sale_invoice.with_context(active_ids=[self.id]).create_invoices()
+            _logger.info("SALIENDO DE CREAR FACTURA EN LA FUNCION ORIGINAL z3");
+            return True
+        except Exception as e:
+            _logger.error("Error al crear la factura: %s", str(e))
+            return False
 
 
 class StockPicking(models.Model):
@@ -253,7 +261,7 @@ class StockPicking(models.Model):
             vals = {
                 'tipo': json_entrega_data['tipo'],
                 'estado': json_entrega_data['estado'],
-                'local': json_entrega_data['local'],
+                'local': json_entrega_data['horario']['local'],
             }
             if date_order:
                 vals['scheduled_date'] = self.convert_datetime(date_order)
