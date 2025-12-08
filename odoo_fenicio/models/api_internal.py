@@ -53,8 +53,15 @@ class ApiInternal(models.Model):
                 first_variant = product_template_id.product_variant_ids[0]
                 
                 if hasattr(first_variant, 'public_categ_ids') and first_variant.public_categ_ids:
-                    categorias = [cat.fenicio_code for cat in first_variant.public_categ_ids]
-                    listaCategoria = '\/'.join(categorias)
+                    codigos = []
+                    for cat in first_variant.public_categ_ids:
+                        if cat.fenicio_code:
+                            codigos.append(cat.fenicio_code)
+                        else:
+                            codigos.append('000')
+                            
+                        listaCategoria = '\/'.join(codigos)
+
                 
             
 
@@ -76,7 +83,8 @@ class ApiInternal(models.Model):
                 'variantes': [],
             }
 
-            
+            for atributos in product_template_id.product_settings_ids:
+                vals['atributos'][atributos.attribute_id.name] = atributos.value_id.name;
 
             if len(product_template_id.product_variant_ids) > 1:
                 for variante in product_template_id.product_variant_ids:
@@ -96,14 +104,20 @@ class ApiInternal(models.Model):
 
 
                     for attr_val in variant_attrs:
-                        _logger.info(f"Processing variant attribute: {attr_val}");
-
-                        codigo_parts.append(str(attr_val.attribute_id.codigo) if attr_val.attribute_id.codigo else '000');
                         
-                        nombre_parts.append(attr_val.product_attribute_value_id.name)
+                        codigo_fenicio = attr_val.product_attribute_value_id.fenicio_attribute_value_code
+                        nombre_fenicio = attr_val.product_attribute_value_id.name
+
+                        _logger.info(f"Codigo Fenicio: {codigo_fenicio}")
+                        _logger.info(f"Nombre Fenicio: {nombre_fenicio}")
+
+
+                        codigo_parts.append(str(codigo_fenicio) if codigo_fenicio else '000');
+                        
+                        nombre_parts.append(nombre_fenicio)
                         
                         # Atributos
-                        atributos[attr_val.attribute_id.name] = attr_val.product_attribute_value_id.name
+                        atributos[attr_val.attribute_id.name] = nombre_fenicio
                     
                     codigo_variante = ''.join(codigo_parts)
                     nombre_variante = ' / '.join(nombre_parts)
