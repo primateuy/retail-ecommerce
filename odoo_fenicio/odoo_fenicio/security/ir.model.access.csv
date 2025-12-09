@@ -1,7 +1,0 @@
-id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
-product_setting,product_setting,model_product_setting,base.group_user,1,1,1,1
-fenicio_presentacion_price,fenicio_presentacion_price,model_fenicio_presentacion_price,base.group_user,1,1,1,1
-api_internal,api_internal,model_api_internal,base.group_user,1,0,0,0
-product_identificadores,product_identificadores,model_product_identificadores,base.group_user,1,1,1,1
-precios_alternativos,precios_alternativos,model_precios_alternativos,base.group_user,1,1,1,1
-access_guia_talles_user,guia.talles.user,model_guia_talles,base.group_user,1,1,1,1

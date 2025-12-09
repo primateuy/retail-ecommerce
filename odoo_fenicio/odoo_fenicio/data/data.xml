@@ -1,9 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<odoo>
-    <data noupdate="1">
-        <record id="token_autenticacion_efenicio" model="ir.config_parameter">
-            <field name="key">token_autenticacion_efenicio</field>
-            <field name="value">inetcctn%n/aaaoo4_4ne/toooat%ae4/ionii$etec/o$ctuofa5c</field>
-        </record>
-    </data>
-</odoo>

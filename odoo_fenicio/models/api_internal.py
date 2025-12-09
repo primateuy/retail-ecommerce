@@ -136,31 +136,71 @@ class ApiInternal(models.Model):
                     listaAlternativo = variante.pricelist_relation_ids.precio_alternativo;
                     
 
+                    # Reemplaza la sección completa de obtención de precios en el método listar_productos
+                    # Aproximadamente desde la línea 120 hasta la 155
+
+                    # Reemplaza la sección completa de obtención de precios en el método listar_productos
+                    # Aproximadamente desde la línea 120 hasta la 155
+
+                    # Reemplaza la sección completa de obtención de precios en el método listar_productos
+                    # Aproximadamente desde la línea 120 hasta la 155
+
+                    # REEMPLAZA COMPLETAMENTE la sección del bucle de presentacion_attrs
+                    # Aproximadamente desde la línea 120 hasta la 155 en tu archivo api_internal.py
+
                     for pres_attr_val in presentacion_attrs:
                         codigo = str(pres_attr_val.attribute_id.codigo) if pres_attr_val.attribute_id.codigo else '000'
                         nombre = pres_attr_val.product_attribute_value_id.name
-                        sku = variante.default_code or '';
-                        stock = self._get_fenicio_stock(variante);
+                        sku = variante.default_code or ''
+                        stock = self._get_fenicio_stock(variante)
 
-                        precioVenta = 0.0;
-                        precioLista = 0.0;
-                        precioAlternativo = 0.0;
+                        precioVenta = 0.0
+                        precioLista = 0.0
+                        precioAlternativo = 0.0
 
-                        for item in listaVenta:
-                            for precio in item.item_ids:
-                                if precio.product_id.id == variante.id:
-                                    precioVenta = precio.fixed_price;
+                        # Calcular precio de venta con fórmulas/descuentos
+                        if listaVenta:
+                            try:
+                                precioVenta = listaVenta._get_product_price(
+                                    product=variante,
+                                    quantity=1.0,
+                                    partner=None,
+                                    uom_id=variante.uom_id.id
+                                )
 
-                        for item in listaPrecios:
-                            for precio in item.item_ids:
-                                if precio.product_id.id == variante.id:
-                                    precioLista = precio.fixed_price;
+                                _logger.info(f"Precio venta calculado para {sku}: {precioVenta}")
+                            except Exception as e:
+                                _logger.warning("Error calculando precio venta para %s: %s", sku, str(e))
+                                precioVenta = variante.lst_price or 0.0
 
-                        for item in listaAlternativo:
-                            for precio in item.item_ids:
-                                if precio.product_id.id == variante.id:
-                                    precioAlternativo = precio.fixed_price;
-                    
+                        # Calcular precio de lista con fórmulas/descuentos
+                        if listaPrecios:
+                            try:
+                                precioLista = listaPrecios._get_product_price(
+                                    product=variante,
+                                    quantity=1.0,
+                                    partner=None,
+                                    uom_id=variante.uom_id.id
+                                )
+
+                                _logger.info(f"Precio lista calculado para {sku}: {precioLista}")
+                            except Exception as e:
+                                _logger.warning("Error calculando precio lista para %s: %s", sku, str(e))
+                                precioLista = variante.lst_price or 0.0
+
+                        # Calcular precio alternativo con fórmulas/descuentos
+                        if listaAlternativo:
+                            try:
+                                precioAlternativo = listaAlternativo._get_product_price(
+                                    product=variante,
+                                    quantity=1.0,
+                                    partner=None,
+                                    uom_id=variante.uom_id.id
+                                )
+                            except Exception as e:
+                                _logger.warning("Error calculando precio alternativo para %s: %s", sku, str(e))
+                                precioAlternativo = variante.lst_price or 0.0
+
                         variante_data['presentaciones'].append(
                             {
                                 'codigo': codigo,
@@ -168,15 +208,10 @@ class ApiInternal(models.Model):
                                 'stock': stock,
                                 'sku': sku,
                                 'precioLista': {'precio': precioLista},
-                                'precioVenta': {
-                                    'precio': precioVenta
-                                },
-                                'precioAlternativo': {
-                                    'precio': precioAlternativo
-                                }
+                                'precioVenta': {'precio': precioVenta},
+                                'precioAlternativo': {'precio': precioAlternativo}
                             }
                         )
-
 
 
                     vals['variantes'].append(variante_data)
