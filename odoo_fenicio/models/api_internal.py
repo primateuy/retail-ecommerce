@@ -53,14 +53,16 @@ class ApiInternal(models.Model):
                 first_variant = product_template_id.product_variant_ids[0]
                 
                 if hasattr(first_variant, 'public_categ_ids') and first_variant.public_categ_ids:
-                    codigos = []
-                    for cat in first_variant.public_categ_ids:
-                        if cat.fenicio_code:
-                            codigos.append(cat.fenicio_code)
-                        else:
-                            codigos.append('000')
+                    # codigos = []
+                    # for cat in first_variant.public_categ_ids:
+                    #     if cat.fenicio_code:
+                    #         codigos.append(cat.fenicio_code)
+                    #     else:
+                    #         codigos.append('000')
                             
-                        listaCategoria = '\/'.join(codigos)
+                    #     listaCategoria = '\/'.join(codigos)
+                    
+                    listaCategoria = first_variant.public_categ_ids[0].fenicio_code or '000';
 
                 
             
