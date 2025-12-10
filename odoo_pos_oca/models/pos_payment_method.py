@@ -321,7 +321,7 @@ class PosPaymentMethod(models.Model):
 
                     # Si el tiempo de espera expiró (RemainingExpirationTime == 0.0)
                     # se debe procesar la reversión y notificar al POS para liberarlo
-                    if response_code in ['10', '12'] and rt and rt == 0.0:
+                    if response_code in ['10', '12'] and rt == 0.0:
                         _logger.warning('Tiempo de espera expirado para transacción %s. Procesando reversión...', transaction_id)
                         
                         # Procesar la reversión para devolver el dinero
