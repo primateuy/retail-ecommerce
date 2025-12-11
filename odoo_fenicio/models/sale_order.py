@@ -65,7 +65,7 @@ class SaleOrder(models.Model):
         ])
 
         if not tarifa_id:
-            return False, 'No se encuenta lista de precios para la moneda {}'.format(json_data['moneda'])
+            return False, 'No se encuenta lista de precios para la moneda {}'.format(json_data['pago']['moneda']);
 
         date_order = parse(json_data['fechaInicio'])
 

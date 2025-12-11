@@ -455,24 +455,27 @@ class ApiInternal(models.Model):
             tipo_doc = "CI" if json_data['documento']['tipo'] == 'DOCUMENTO_IDENTIDAD' else json_data['documento']['tipo'];
             _logger.info(f"Buscando tipo de identificación: {tipo_doc}");
             
-            #identificacion = self.env['l10n_latam.identification.type'].search([('name', '=', tipo_doc)], limit=1);
+            genero = '';
+
+            if json_data['genero'] and (json_data['genero'] == 'MASCULINO' or json_data['genero'] == 'Masculino' or json_data['genero'] == 'M'):
+                genero = 'male';
+            elif json_data['genero'] and (json_data['genero'] == 'FEMENINO' or json_data['genero'] == 'Femenino' or json_data['genero'] == 'F'):
+                genero = 'female';
+            elif json_data['genero'] and (json_data['genero'] == 'OTRO' or json_data['genero'] == 'Otro' or json_data['genero'] == 'O'):
+                genero = 'other';
             
-            #if not identificacion:
-            #    _logger.info(f"TIPO DE IDENTIFICACION NO ENCONTRADO: {tipo_doc}");
-            #    message = f"El tipo de identificacion '{tipo_doc}' no existe en la base de datos."
-            #    return False, message;
-            
-            # _logger.info(f"Tipo de identificación encontrado: {identificacion.name} (ID: {identificacion.id})");
+    
+
             if user:
                 _logger.info("USUARIO ENCONTRADO");
                 message = "El usuario ya existia, no se han insertado los datos."
                 return user.id_fenicio, message;
             user = self.env['res.partner'].create({
-                'code_fenicio': json_data['codigo'],
-                'id_fenicio': json_data['id'],
+                'id_fenicio': json_data['codigo'],
                 'name': json_data['nombre'] + ' ' + json_data['apellido'],
                 'email': json_data['email'],
                 'phone': json_data['telefono'],
+                'gender': genero,
                 'vat': json_data['documento']['numero'],
                 'country_id': pais.id if pais else '',
                 'company_id': self.env.company.id,
@@ -493,12 +496,12 @@ class ApiInternal(models.Model):
     def stockporsku(self, json_data):
         skus_pedido = json_data['skus']
 
-        productos = [];
+        productos = self.env['product.product'];
 
         for sku in skus_pedido:
             product_id = self.env['product.product'].search([('default_code', '=', sku)], limit=1)
             if product_id:
-                productos.append(product_id)
+                productos += product_id
 
         
 

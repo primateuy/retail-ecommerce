@@ -7,7 +7,6 @@ class SaleOrder(models.Model):
     _inherit = "res.partner"
 
     id_fenicio = fields.Char('ID Fenicio')
-    code_fenicio = fields.Char('Código Fenicio')
     numero_doc = fields.Char('Numero Doc')
     programa_millas = fields.Char("Programa Millas");
 
@@ -22,7 +21,6 @@ class SaleOrder(models.Model):
             vat = ''
             vals = {
                 'id_fenicio': comprador['id'],
-                'code_fenicio': comprador['codigo'],
                 'email': comprador['email'],
                 'name': f"{comprador['nombre']} {comprador['apellido']}",
                 'phone': comprador['telefono'],
@@ -37,7 +35,14 @@ class SaleOrder(models.Model):
                 #     'PASAPORTE': '5',
                 #     'DOCUMENTO_IDENTIDAD': '3',
                 # }
-                # vals['vat'] = comprador['documento']['numero']
+
+                # Tipos de documento
+
+                # VAT código 0
+                # RUC código 2
+                # CI código 3
+                # OTROS código 4
+                vals['vat'] = comprador['documento']['numero']
                 vals['numero_doc'] = comprador['documento']['numero']
 
             partner_id = self.env['res.partner'].create([vals])

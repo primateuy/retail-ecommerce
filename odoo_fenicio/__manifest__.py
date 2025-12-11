@@ -18,6 +18,7 @@
         'views/stock_location.xml',
         'views/product_brand_view.xml',
         'views/product_public_category_view.xml',
+        'views/product_pricelist_view.xml',
         'data/data.xml',
         'data/payments_diaries.xml',
         'views/res_partner_view.xml',
