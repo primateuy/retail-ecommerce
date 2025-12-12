@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <record id="product_pricelist_form_inherit" model="ir.ui.view">
+            <field name="name">product.pricelist.easy.form</field>
+            <field name="model">product.pricelist</field>
+            <field name="inherit_id" ref="product.product_pricelist_view"/>
+            <field name="arch" type="xml">
+                <xpath expr="//notebook" position="inside">
+                    <page name="fenicio" string="Fenicio">
+                        <group>
+
+                            <field name="e_fenicio" string="Es lista de precios Fenicio"/> 
+
+                        </group>
+                    </page>
+
+                </xpath>
+            </field>
+        </record>
+
+        
+    </data>
+</odoo>

@@ -53,8 +53,17 @@ class ApiInternal(models.Model):
                 first_variant = product_template_id.product_variant_ids[0]
                 
                 if hasattr(first_variant, 'public_categ_ids') and first_variant.public_categ_ids:
-                    categorias = [cat.fenicio_code for cat in first_variant.public_categ_ids]
-                    listaCategoria = '\/'.join(categorias)
+                    # codigos = []
+                    # for cat in first_variant.public_categ_ids:
+                    #     if cat.fenicio_code:
+                    #         codigos.append(cat.fenicio_code)
+                    #     else:
+                    #         codigos.append('000')
+                            
+                    #     listaCategoria = '\/'.join(codigos)
+                    
+                    listaCategoria = first_variant.public_categ_ids[0].fenicio_code or '000';
+
                 
             
 
@@ -76,7 +85,8 @@ class ApiInternal(models.Model):
                 'variantes': [],
             }
 
-            
+            for atributos in product_template_id.product_settings_ids:
+                vals['atributos'][atributos.attribute_id.name] = atributos.value_id.name;
 
             if len(product_template_id.product_variant_ids) > 1:
                 for variante in product_template_id.product_variant_ids:
@@ -96,14 +106,20 @@ class ApiInternal(models.Model):
 
 
                     for attr_val in variant_attrs:
-                        _logger.info(f"Processing variant attribute: {attr_val}");
-
-                        codigo_parts.append(str(attr_val.attribute_id.codigo) if attr_val.attribute_id.codigo else '000');
                         
-                        nombre_parts.append(attr_val.product_attribute_value_id.name)
+                        codigo_fenicio = attr_val.product_attribute_value_id.fenicio_attribute_value_code
+                        nombre_fenicio = attr_val.product_attribute_value_id.name
+
+                        _logger.info(f"Codigo Fenicio: {codigo_fenicio}")
+                        _logger.info(f"Nombre Fenicio: {nombre_fenicio}")
+
+
+                        codigo_parts.append(str(codigo_fenicio) if codigo_fenicio else '000');
+                        
+                        nombre_parts.append(nombre_fenicio)
                         
                         # Atributos
-                        atributos[attr_val.attribute_id.name] = attr_val.product_attribute_value_id.name
+                        atributos[attr_val.attribute_id.name] = nombre_fenicio
                     
                     codigo_variante = ''.join(codigo_parts)
                     nombre_variante = ' / '.join(nombre_parts)
@@ -122,31 +138,71 @@ class ApiInternal(models.Model):
                     listaAlternativo = variante.pricelist_relation_ids.precio_alternativo;
                     
 
+                    # Reemplaza la sección completa de obtención de precios en el método listar_productos
+                    # Aproximadamente desde la línea 120 hasta la 155
+
+                    # Reemplaza la sección completa de obtención de precios en el método listar_productos
+                    # Aproximadamente desde la línea 120 hasta la 155
+
+                    # Reemplaza la sección completa de obtención de precios en el método listar_productos
+                    # Aproximadamente desde la línea 120 hasta la 155
+
+                    # REEMPLAZA COMPLETAMENTE la sección del bucle de presentacion_attrs
+                    # Aproximadamente desde la línea 120 hasta la 155 en tu archivo api_internal.py
+
                     for pres_attr_val in presentacion_attrs:
                         codigo = str(pres_attr_val.attribute_id.codigo) if pres_attr_val.attribute_id.codigo else '000'
                         nombre = pres_attr_val.product_attribute_value_id.name
-                        sku = variante.default_code or '';
-                        stock = self._get_fenicio_stock(variante);
+                        sku = variante.default_code or ''
+                        stock = self._get_fenicio_stock(variante)
 
-                        precioVenta = 0.0;
-                        precioLista = 0.0;
-                        precioAlternativo = 0.0;
+                        precioVenta = 0.0
+                        precioLista = 0.0
+                        precioAlternativo = 0.0
 
-                        for item in listaVenta:
-                            for precio in item.item_ids:
-                                if precio.product_id.id == variante.id:
-                                    precioVenta = precio.fixed_price;
+                        # Calcular precio de venta con fórmulas/descuentos
+                        if listaVenta:
+                            try:
+                                precioVenta = listaVenta._get_product_price(
+                                    product=variante,
+                                    quantity=1.0,
+                                    partner=None,
+                                    uom_id=variante.uom_id.id
+                                )
 
-                        for item in listaPrecios:
-                            for precio in item.item_ids:
-                                if precio.product_id.id == variante.id:
-                                    precioLista = precio.fixed_price;
+                                _logger.info(f"Precio venta calculado para {sku}: {precioVenta}")
+                            except Exception as e:
+                                _logger.warning("Error calculando precio venta para %s: %s", sku, str(e))
+                                precioVenta = variante.lst_price or 0.0
 
-                        for item in listaAlternativo:
-                            for precio in item.item_ids:
-                                if precio.product_id.id == variante.id:
-                                    precioAlternativo = precio.fixed_price;
-                    
+                        # Calcular precio de lista con fórmulas/descuentos
+                        if listaPrecios:
+                            try:
+                                precioLista = listaPrecios._get_product_price(
+                                    product=variante,
+                                    quantity=1.0,
+                                    partner=None,
+                                    uom_id=variante.uom_id.id
+                                )
+
+                                _logger.info(f"Precio lista calculado para {sku}: {precioLista}")
+                            except Exception as e:
+                                _logger.warning("Error calculando precio lista para %s: %s", sku, str(e))
+                                precioLista = variante.lst_price or 0.0
+
+                        # Calcular precio alternativo con fórmulas/descuentos
+                        if listaAlternativo:
+                            try:
+                                precioAlternativo = listaAlternativo._get_product_price(
+                                    product=variante,
+                                    quantity=1.0,
+                                    partner=None,
+                                    uom_id=variante.uom_id.id
+                                )
+                            except Exception as e:
+                                _logger.warning("Error calculando precio alternativo para %s: %s", sku, str(e))
+                                precioAlternativo = variante.lst_price or 0.0
+
                         variante_data['presentaciones'].append(
                             {
                                 'codigo': codigo,
@@ -154,15 +210,10 @@ class ApiInternal(models.Model):
                                 'stock': stock,
                                 'sku': sku,
                                 'precioLista': {'precio': precioLista},
-                                'precioVenta': {
-                                    'precio': precioVenta
-                                },
-                                'precioAlternativo': {
-                                    'precio': precioAlternativo
-                                }
+                                'precioVenta': {'precio': precioVenta},
+                                'precioAlternativo': {'precio': precioAlternativo}
                             }
                         )
-
 
 
                     vals['variantes'].append(variante_data)
@@ -404,24 +455,27 @@ class ApiInternal(models.Model):
             tipo_doc = "CI" if json_data['documento']['tipo'] == 'DOCUMENTO_IDENTIDAD' else json_data['documento']['tipo'];
             _logger.info(f"Buscando tipo de identificación: {tipo_doc}");
             
-            #identificacion = self.env['l10n_latam.identification.type'].search([('name', '=', tipo_doc)], limit=1);
+            genero = '';
+
+            if json_data['genero'] and (json_data['genero'] == 'MASCULINO' or json_data['genero'] == 'Masculino' or json_data['genero'] == 'M'):
+                genero = 'male';
+            elif json_data['genero'] and (json_data['genero'] == 'FEMENINO' or json_data['genero'] == 'Femenino' or json_data['genero'] == 'F'):
+                genero = 'female';
+            elif json_data['genero'] and (json_data['genero'] == 'OTRO' or json_data['genero'] == 'Otro' or json_data['genero'] == 'O'):
+                genero = 'other';
             
-            #if not identificacion:
-            #    _logger.info(f"TIPO DE IDENTIFICACION NO ENCONTRADO: {tipo_doc}");
-            #    message = f"El tipo de identificacion '{tipo_doc}' no existe en la base de datos."
-            #    return False, message;
-            
-            # _logger.info(f"Tipo de identificación encontrado: {identificacion.name} (ID: {identificacion.id})");
+    
+
             if user:
                 _logger.info("USUARIO ENCONTRADO");
                 message = "El usuario ya existia, no se han insertado los datos."
                 return user.id_fenicio, message;
             user = self.env['res.partner'].create({
-                'code_fenicio': json_data['codigo'],
-                'id_fenicio': json_data['id'],
+                'id_fenicio': json_data['codigo'],
                 'name': json_data['nombre'] + ' ' + json_data['apellido'],
                 'email': json_data['email'],
                 'phone': json_data['telefono'],
+                'gender': genero,
                 'vat': json_data['documento']['numero'],
                 'country_id': pais.id if pais else '',
                 'company_id': self.env.company.id,
@@ -442,12 +496,12 @@ class ApiInternal(models.Model):
     def stockporsku(self, json_data):
         skus_pedido = json_data['skus']
 
-        productos = [];
+        productos = self.env['product.product'];
 
         for sku in skus_pedido:
             product_id = self.env['product.product'].search([('default_code', '=', sku)], limit=1)
             if product_id:
-                productos.append(product_id)
+                productos += product_id
 
         
 
