@@ -63,7 +63,7 @@ class PriceGroup(models.Model):
          'El nombre del agrupador debe ser único.')
     ]
 
-    @api.depends('price_group_line_ids', 'price_group_line_ids.active')
+    @api.depends('price_group_line_ids', 'price_group_line_ids.activo')
     def _compute_product_count(self):
         """
         Calcula la cantidad total de productos y productos activos
@@ -74,7 +74,7 @@ class PriceGroup(models.Model):
             record.product_count = len(record.price_group_line_ids)
             
             # Cuenta productos activos
-            active_lines = record.price_group_line_ids.filtered(lambda l: l.active)
+            active_lines = record.price_group_line_ids.filtered(lambda l: l.activo)
             record.active_product_count = len(active_lines)
 
     @api.constrains('name')

@@ -38,7 +38,7 @@
                                         <field name="date_end"/>
                                         <field name="valor_fijo"/>
                                         <field name="is_current"/>
-                                        <field name="active"/>
+                                        <field name="activo"/>
                                     </tree>
                                 </field>
                             </page>
@@ -100,8 +100,10 @@
                         <group>
                             <group string="Producto">
                                 <field name="origin" style="width: 50%" readonly="price_list_item_id != False"/>
-                                <field name="product_tmpl_id" domain="[('active', '=', True)]" invisible="origin != 'template'" required="origin == 'template'" readonly="price_list_item_id != False" style="width: 50%"/>
-                                <field name="product_id" domain="[('active', '=', True)]" invisible="origin != 'variant'" required="origin == 'variant'" readonly="price_list_item_id != False" style="width: 50%"/>
+                                <field name="product_tmpl_id" domain="[('active', '=', True)]" invisible="origin != 'template'" required="origin == 'template'" readonly="price_list_item_id != False or force_product_tmpl_id != False" style="width: 50%" force_save="1" options="{'no_create_edit': True, 'no_create': True, 'no_quick_create':True}"/>
+                                <field name="product_id" domain="product_id_domain" invisible="origin != 'variant'" required="origin == 'variant'" readonly="price_list_item_id != False" style="width: 50%" options="{'no_create_edit': True, 'no_create': True, 'no_quick_create':True}"/>
+                                <field name="force_product_tmpl_id" invisible="1"/>
+                                <field name="product_id_domain" widget="text" invisible="1"/>
                             </group>
 
                             <group string="Agrupador">
@@ -118,7 +120,7 @@
                                 <field name="date_end"/>
                             </group>
                             <group string="Estado">
-                                <field name="active"/>
+                                <field name="activo"/>
                                 <field name="is_current"/>
                                 <field name="is_inherited"/>
                             </group>
@@ -155,7 +157,7 @@
                     <field name="date_start"/>
                     <field name="date_end"/>
                     <field name="is_current"/>
-                    <field name="active"/>
+                    <field name="activo"/>
                 </tree>
             </field>
         </record>
@@ -173,13 +175,13 @@
                     <filter string="Vigentes Hoy" name="current" domain="[('is_current', '=', True)]"/>
                     <filter string="Templates" name="templates" domain="[('origin', '=', 'template')]"/>
                     <filter string="Variantes" name="variants" domain="[('origin', '=', 'variant')]"/>
-                    <filter string="Activos" name="active" domain="[('active', '=', True)]"/>
-                    <filter string="Inactivos" name="inactive" domain="[('active', '=', False)]"/>
+                    <filter string="Activos" name="active" domain="[('activo', '=', True)]"/>
+                    <filter string="Inactivos" name="inactive" domain="[('activo', '=', False)]"/>
                     <group expand="0" string="Agrupar por">
                         <filter string="Producto Template" name="group_product_tmpl" context="{'group_by': 'product_tmpl_id'}"/>
                         <filter string="Agrupador" name="group_price_group" context="{'group_by': 'price_group_id'}"/>
                         <filter string="Origen" name="group_origin" context="{'group_by': 'origin'}"/>
-                        <filter string="Estado" name="group_active" context="{'group_by': 'active'}"/>
+                        <filter string="Estado" name="group_active" context="{'group_by': 'activo'}"/>
                     </group>
                 </search>
             </field>

@@ -32,6 +32,9 @@ class PriceGroupLine(models.Model):
     product_tmpl_relacion_id = fields.Many2one('product.template', compute='compute_product_tmpl_relacion_id', store=True)
     product_tmpl_id = fields.Many2one('product.template', 'Producto Template', ondelete='restrict')
     product_id = fields.Many2one('product.product', 'Variante de Producto', ondelete='restrict')
+    product_id_domain = fields.Binary(compute='compute_product_id_domain')
+
+    force_product_tmpl_id = fields.Many2one('product.template', 'Forzar product template', ondelete='set null')
     
     price_group_id = fields.Many2one(
         'x_price_group',
@@ -56,7 +59,7 @@ class PriceGroupLine(models.Model):
     )
     
     # Campos de control
-    active = fields.Boolean(
+    activo = fields.Boolean(
         string='Activo',
         default=True,
         help='Indica si la línea está activa'
@@ -97,6 +100,16 @@ class PriceGroupLine(models.Model):
          'No puede haber líneas duplicadas para el mismo template, agrupador y fechas.')
     ]
 
+    @api.depends('force_product_tmpl_id', 'origin')
+    def compute_product_id_domain(self):
+        for rec in self:
+            domain = [('active', '=', True)]
+            if rec.force_product_tmpl_id:
+                variantes_ids = rec.force_product_tmpl_id.product_variant_ids
+                domain += [('id', 'in', variantes_ids.ids)]
+
+            rec.product_id_domain = domain
+
     @api.depends('product_tmpl_id', 'product_id')
     def compute_product_tmpl_relacion_id(self):
         for rec in self:
@@ -112,6 +125,9 @@ class PriceGroupLine(models.Model):
         for rec in self:
             rec.product_tmpl_id = False
             rec.product_id = False
+
+            if rec.origin == 'template' and rec.force_product_tmpl_id:
+                rec.product_tmpl_id = rec.force_product_tmpl_id
 
     @api.onchange('price_group_id')
     def change_price_group_id(self):
@@ -166,14 +182,14 @@ class PriceGroupLine(models.Model):
         for record in self:
             record.is_inherited = bool(record.parent_line_id)
 
-    @api.depends('date_start', 'date_end', 'active')
+    @api.depends('date_start', 'date_end', 'activo')
     def _compute_is_current(self):
         """
         Determina si el agrupador está vigente en la fecha actual.
         """
         today = date.today()
         for record in self:
-            if not record.active:
+            if not record.activo:
                 record.is_current = False
                 continue
             
@@ -215,7 +231,7 @@ class PriceGroupLine(models.Model):
         """
         domain = [
             ('id', '!=', record.id),
-            ('active', '=', True),
+            ('activo', '=', True),
             ('price_group_id', '=', record.price_group_id.id)
         ]
         

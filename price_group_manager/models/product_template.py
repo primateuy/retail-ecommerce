@@ -35,7 +35,7 @@ class ProductTemplate(models.Model):
         help='Cantidad total de agrupadores de precio asignados'
     )
 
-    @api.depends('x_price_group_line_ids', 'x_price_group_line_ids.active', 
+    @api.depends('x_price_group_line_ids', 'x_price_group_line_ids.activo',
                 'x_price_group_line_ids.date_start', 'x_price_group_line_ids.date_end')
     def _compute_price_groups(self):
         """
@@ -45,21 +45,21 @@ class ProductTemplate(models.Model):
         for record in self:
             # Obtener líneas vigentes
             current_lines = record.x_price_group_line_ids.filtered(
-                lambda l: l.active and l.is_current
+                lambda l: l.activo and l.is_current
             )
             
             # Obtener agrupadores únicos
             price_groups = current_lines.mapped('price_group_id')
             record.x_price_group_ids = [(6, 0, price_groups.ids)]
 
-    @api.depends('x_price_group_line_ids', 'x_price_group_line_ids.active', 'x_price_group_line_ids.date_start', 'x_price_group_line_ids.date_end')
+    @api.depends('x_price_group_line_ids', 'x_price_group_line_ids.activo', 'x_price_group_line_ids.date_start', 'x_price_group_line_ids.date_end')
     def _compute_current_price_group(self):
         today = date.today()
         for record in self:
             record.x_price_group_line_ids._compute_is_current()
             # Obtener líneas vigentes ordenadas por prioridad
             current_lines = record.x_price_group_line_ids.filtered(
-                lambda l: l.active and l.is_current
+                lambda l: l.activo and l.is_current
             ).sorted(lambda l: l.date_start or date.min, reverse=True)
             
             if current_lines:
@@ -108,7 +108,7 @@ class ProductTemplate(models.Model):
         
         # Obtener la última línea activa del template
         last_line = self.x_price_group_line_ids.filtered(
-            lambda l: l.active and l.origin == 'template'
+            lambda l: l.activo and l.origin == 'template'
         ).sorted(lambda l: l.date_start or date.min, reverse=True)[:1]
         
         if not last_line:
@@ -162,7 +162,8 @@ class ProductTemplate(models.Model):
             'target': 'new',
             'context': {
                 'default_product_tmpl_id': self.id,
-                'default_origin': 'template'
+                'default_origin': 'template',
+                'default_force_product_tmpl_id': self.id,
             },
         }
 
@@ -182,7 +183,7 @@ class ProductTemplate(models.Model):
         
         # Buscar líneas vigentes para la fecha específica
         valid_lines = self.x_price_group_line_ids.filtered(
-            lambda l: l.active and self._is_line_valid_for_date(l, target_date)
+            lambda l: l.activo and self._is_line_valid_for_date(l, target_date)
         )
         
         if valid_lines:

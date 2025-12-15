@@ -35,7 +35,7 @@
                                 <field name="date_start"/>
                                 <field name="date_end"/>
                                 <field name="is_current"/>
-                                <field name="active"/>
+                                <field name="activo"/>
                             </tree>
                         </field>
                         
@@ -123,7 +123,7 @@
                                 <field name="origin"/>
                                 <field name="is_current"/>
                                 <field name="is_inherited"/>
-                                <field name="active"/>
+                                <field name="activo"/>
                             </tree>
                         </field>
                     </page>

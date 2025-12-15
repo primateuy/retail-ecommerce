@@ -48,9 +48,9 @@ class ProductProduct(models.Model):
         help='Agrupador de precio heredado del template (si no tiene líneas propias)'
     )
 
-    @api.depends('x_price_group_line_ids', 'x_price_group_line_ids.active',
+    @api.depends('x_price_group_line_ids', 'x_price_group_line_ids.activo',
                 'x_price_group_line_ids.date_start', 'x_price_group_line_ids.date_end',
-                'product_tmpl_id.x_price_group_line_ids', 'product_tmpl_id.x_price_group_line_ids.active',
+                'product_tmpl_id.x_price_group_line_ids', 'product_tmpl_id.x_price_group_line_ids.activo',
                 'product_tmpl_id.x_price_group_line_ids.date_start', 'product_tmpl_id.x_price_group_line_ids.date_end')
     def _compute_price_groups(self):
         for record in self:
@@ -58,21 +58,21 @@ class ProductProduct(models.Model):
             if record.x_price_group_line_ids:
                 # Usar líneas propias de la variante
                 current_lines = record.x_price_group_line_ids.filtered(
-                    lambda l: l.active and l.is_current and l.origin == 'variant'
+                    lambda l: l.activo and l.is_current and l.origin == 'variant'
                 )
             else:
                 # Heredar del template
                 current_lines = record.product_tmpl_id.x_price_group_line_ids.filtered(
-                    lambda l: l.active and l.is_current and l.origin == 'template'
+                    lambda l: l.activo and l.is_current and l.origin == 'template'
                 )
             
             # Obtener agrupadores únicos
             price_groups = current_lines.mapped('price_group_id')
             record.x_price_group_ids = [(6, 0, price_groups.ids)]
 
-    @api.depends('x_price_group_line_ids', 'x_price_group_line_ids.active',
+    @api.depends('x_price_group_line_ids', 'x_price_group_line_ids.activo',
                 'x_price_group_line_ids.date_start', 'x_price_group_line_ids.date_end',
-                'product_tmpl_id.x_price_group_line_ids', 'product_tmpl_id.x_price_group_line_ids.active',
+                'product_tmpl_id.x_price_group_line_ids', 'product_tmpl_id.x_price_group_line_ids.activo',
                 'product_tmpl_id.x_price_group_line_ids.date_start', 'product_tmpl_id.x_price_group_line_ids.date_end')
     def compute_current_price_group(self):
         for record in self:
@@ -81,13 +81,13 @@ class ProductProduct(models.Model):
                 # Usar líneas propias de la variante
                 record.x_price_group_line_ids._compute_is_current()
                 current_lines = record.x_price_group_line_ids.filtered(
-                    lambda l: l.active and l.is_current and l.origin == 'variant'
+                    lambda l: l.activo and l.is_current and l.origin == 'variant'
                 ).sorted(lambda l: l.date_start or date.min, reverse=True)
             else:
                 # Heredar del template
                 record.product_tmpl_id.x_price_group_line_ids.filtered(lambda l: l.origin == 'template')._compute_is_current()
                 current_lines = record.product_tmpl_id.x_price_group_line_ids.filtered(
-                    lambda l: l.active and l.is_current and l.origin == 'template'
+                    lambda l: l.activo and l.is_current and l.origin == 'template'
                 ).sorted(lambda l: l.date_start or date.min, reverse=True)
             
             if current_lines:
@@ -112,7 +112,7 @@ class ProductProduct(models.Model):
             else:
                 # Heredar del template
                 current_lines = record.product_tmpl_id.x_price_group_line_ids.filtered(
-                    lambda l: l.active and l.is_current and l.origin == 'template'
+                    lambda l: l.activo and l.is_current and l.origin == 'template'
                 ).sorted(lambda l: l.date_start or date.min, reverse=True)
                 
                 if current_lines:
@@ -173,7 +173,7 @@ class ProductProduct(models.Model):
         
         # Obtener la línea vigente del template
         template_line = self.product_tmpl_id.x_price_group_line_ids.filtered(
-            lambda l: l.active and l.is_current
+            lambda l: l.activo and l.is_current
         )[:1]
         
         if not template_line:
@@ -220,12 +220,12 @@ class ProductProduct(models.Model):
         if self.x_price_group_line_ids:
             # Usar líneas propias de la variante
             valid_lines = self.x_price_group_line_ids.filtered(
-                lambda l: l.active and l.origin == 'variant' and self._is_line_valid_for_date(l, target_date)
+                lambda l: l.activo and l.origin == 'variant' and self._is_line_valid_for_date(l, target_date)
             )
         else:
             # Heredar del template
             valid_lines = self.product_tmpl_id.x_price_group_line_ids.filtered(
-                lambda l: l.active and l.origin == 'template' and self._is_line_valid_for_date(l, target_date)
+                lambda l: l.activo and l.origin == 'template' and self._is_line_valid_for_date(l, target_date)
             )
         
         if valid_lines:
