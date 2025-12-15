@@ -6,11 +6,12 @@ from odoo import models, fields, api
 class ProductAttribute(models.Model):
     _inherit = "product.attribute"
 
+    codigo = fields.Char('Código Atributo Fenicio', help='Código del atributo para integración con fenicio');
     fenicio_type = fields.Selection([
         ('variante', 'Variante'),
         ('presentacion', 'Presentación'),
     ], string='Tipo Fenicio', help='Comportamiento de atributos en variantes para integración con fenicio')
-    base_product_attribute = fields.Boolean('Es un atributo de producto', default=False)
+    base_product_attribute = fields.Boolean('Es una Característica FENICIO del producto', default=False)
     base_product_attribute_required = fields.Boolean('Atributo obligatorio', default=False)
 
 

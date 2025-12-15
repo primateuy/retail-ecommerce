@@ -8,6 +8,36 @@ from odoo.exceptions import ValidationError
 _logger = logging.getLogger('FENICIO_PRODUCT_PRODUCT')
 
 
+class ProductProductPricelistRelation(models.Model):
+    _name = 'product.product.pricelist.relation'
+    _description = 'Relación entre Producto y Lista de Precios'
+
+
+    product_product_id = fields.Many2one(
+        'product.product',
+        string='Producto',
+        required=True,
+        ondelete='cascade'
+    )
+    
+    precio_venta = fields.Many2one(
+        'product.pricelist',
+        string='Precio Venta',
+        required=True
+    )
+
+    precio_lista = fields.Many2one(
+        'product.pricelist',
+        string='Precio Lista',
+        required=True
+    )
+
+    precio_alternativo = fields.Many2one(
+        'product.pricelist',
+        string='Precio Alternativo',
+        required=False
+    )
+
 class PrecioListaVentaPresentacion(models.Model):
     _name = 'fenicio.presentacion.price'
     _description = 'Precio Venta y Lista de una presentacion'
@@ -21,6 +51,8 @@ class PrecioListaVentaPresentacion(models.Model):
     ], string="Tipo Precio", default='precioLista')
     currency_id = fields.Many2one('res.currency', 'Moneda')
     price = fields.Float('Precio Fenicio')
+
+    
 
     def compute_name(self):
         for rec in self:
@@ -52,9 +84,17 @@ class ProductProduct(models.Model):
     _inherit = 'product.product'
 
     fenicio_sale_price = fields.Float('Precio Venta Fenicio')
+    listaPrecios = fields.Many2one('product.pricelist', string='Lista de Precios')
     precios_fenicio_ids = fields.One2many('fenicio.presentacion.price', 'product_id', 'Precios Fenicio')
     indentificadores_ids = fields.One2many('product.identificadores', 'product_id', 'Identificadores')
     precios_alternativos_fenicio_ids = fields.One2many('precios.alternativos', 'product_id', 'Precios Alternativos')
+
+
+    pricelist_relation_ids = fields.One2many(
+        'product.product.pricelist.relation',
+        'product_product_id',
+        string='Relación de Precios'
+    )
 
     @api.constrains('default_code')
     def check_unique_fencio_default_code(self):
@@ -66,23 +106,12 @@ class ProductProduct(models.Model):
                 ], limit=2)
                 if len(row_ids) == 2:
                     raise ValidationError(f'Ya existe un producto con el SKU {rec.default_code}')
+                
 
-    # def get_codigo_variante(self):
-    #     self.ensure_one()
-    #     for ptav_id in self.product_template_attribute_value_ids:
-    #         if ptav_id.attribute_id.tipo == 'variante':
-    #             return ptav_id.product_attribute_value_id.codigo
-    #     return ''
-
-    # def get_product_name(self):
-    #     self.ensure_one()
-    #     product_templete_code = self.product_tmpl_id.codigo
-    #     variante_code = self.get_codigo_variante() or product_templete_code
-    #
-    #     configuraciones_variantes_tipo_variante_ids = self.product_tmpl_id.attribute_line_ids.filtered(lambda l: l.attribute_id.tipo == 'variante' and l.attribute_id in self.product_template_attribute_value_ids.mapped('attribute_id'))
-    #     for attribute_line_id in configuraciones_variantes_tipo_variante_ids:
-    #         if len(attribute_line_id.value_ids) == 1:
-    #             variante_code = self.product_tmpl_id.codigo or product_templete_code
-    #
-    #     nombre = f'{product_templete_code}_{variante_code}'
-    #     return nombre
+    def _get_primer_impuesto_iva(self):
+        """Obtener el primer impuesto IVA de venta del producto"""
+        self.ensure_one()
+        for tax in self.taxes_id:
+            if 'IVA' in tax.name.upper() or tax.type_tax_use == 'sale':
+                return tax.amount
+        return False

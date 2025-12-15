@@ -25,229 +25,498 @@ class ApiInternal(models.Model):
             raise UserError('El token de autenticacion efenicio es incorrecto.')
         return True
 
+    
+
     @api.model
     def listar_productos(self, json_data):
+        _logger.info("ENTRANDO ACA => %s", json_data)
+        
+        # Obtener parámetros con valores por defecto
+        limit = json_data.get('total', 100)
+        offset = json_data.get('desde', 0)
+        
         product_template_ids = self.env['product.template'].search([
             ('product_e_fenicio', '=', True),
             ('fenicio_check', '=', False),
-        ], limit=json_data['total'], offset=json_data['desde'], order='id asc')
-        response = {'desde': json_data['desde'], 'total': len(product_template_ids), 'productos': []}
+        ], limit=limit, offset=offset, order='id asc')
+
+        response = {
+            'desde': offset, 
+            'total': len(product_template_ids), 
+            'productos': []
+        }
 
         for product_template_id in product_template_ids:
+            listaCategoria = ''
+            
+            if product_template_id.product_variant_ids:
+                first_variant = product_template_id.product_variant_ids[0]
+                
+                if hasattr(first_variant, 'public_categ_ids') and first_variant.public_categ_ids:
+                    # codigos = []
+                    # for cat in first_variant.public_categ_ids:
+                    #     if cat.fenicio_code:
+                    #         codigos.append(cat.fenicio_code)
+                    #     else:
+                    #         codigos.append('000')
+                            
+                    #     listaCategoria = '\/'.join(codigos)
+                    
+                    listaCategoria = first_variant.public_categ_ids[0].fenicio_code or '000';
+
+                
+            
+
+            impuesto = product_template_id.taxes_id and product_template_id.taxes_id[0].amount or 'Sin Impuesto'
+
             vals = {
-                'codigo': product_template_id.code_e_fenicio or '',
+                'codigo': str(product_template_id.code_e_fenicio or product_template_id.id),
                 'nombre': product_template_id.name,
-                'fechaCreacion': product_template_id.create_date.strftime('%Y-%m-%dT%H:%M:%S+00:00'),
-                'prioridad': product_template_id.priority_fenicio,
-                'guiaTalles': product_template_id.guia_talles,
-                'monedaPredeterminada': product_template_id.default_currency_id.display_name,
-                'impuesto': (len(product_template_id.taxes_id) > 0 and product_template_id.taxes_id[0].amount) or 0.0,
+                'fechaCreacion': product_template_id.create_date.strftime('%Y-%m-%dT%H:%M:%S%z'),
+                'prioridad': product_template_id.priority_fenicio or 1,
+                'guiaTalles': product_template_id.guia_talle_code or '',
+                'monedaPredeterminada': self.env.company.currency_id.name,
+                'impuesto': impuesto,
                 'atributos': {
-                    'categoria': product_template_id.categ_id.display_name.replace(' ', '').replace(' ', ''),
-                    'marca': product_template_id.brand,
+                    'categoria': listaCategoria,
+                    'marca': product_template_id.product_brand_id.fenicio_brand_id if product_template_id.product_brand_id and product_template_id.product_brand_id.fenicio_brand_id else '0',
+                    'descripcion': product_template_id.descripcion_fenicio or '',
                 },
                 'variantes': [],
             }
 
-            for product_setting_id in product_template_id.product_settings_ids:
-                vals['atributos'][product_setting_id.attribute_id.name] = product_setting_id.value_id.name
+            for atributos in product_template_id.product_settings_ids:
+                vals['atributos'][atributos.attribute_id.name] = atributos.value_id.name;
 
-            # Configuraciones de variantes dentro de product.template de tipo "Presentación"
-            configuraciones_variantes_tipo_presentacion_ids = product_template_id.attribute_line_ids.filtered(lambda l: l.attribute_id.fenicio_type == 'presentacion')
+            if len(product_template_id.product_variant_ids) > 1:
+                for variante in product_template_id.product_variant_ids:
+                    variant_attrs = variante.product_template_attribute_value_ids.filtered(
+                        lambda x: x.attribute_id.fenicio_type == 'variante'
+                    ).sorted(lambda x: x.attribute_id.sequence)
 
-            # Configuraciones de variantes dentro de product.template de tipo "Variante"
-            configuraciones_variantes_tipo_variante_ids = product_template_id.attribute_line_ids.filtered(lambda l: l.attribute_id.fenicio_type == 'variante')
+                    presentacion_attrs = variante.product_template_attribute_value_ids.filtered(
+                        lambda x: x.attribute_id.fenicio_type == 'presentacion'
+                    ).sorted(lambda x: x.attribute_id.sequence)
 
-            for attribute_line_id in configuraciones_variantes_tipo_variante_ids:
-                for attribute_value_id in attribute_line_id.value_ids:
+                    
+                    codigo_parts = []
+                    nombre_parts = []
+                    atributos = {}
+                    
 
-                    def filter_product_product(product_product_filter_id):
-                        return (attribute_line_id, attribute_value_id) in product_product_filter_id.product_template_attribute_value_ids.mapped(lambda l: (l.attribute_line_id, l.product_attribute_value_id))
 
-                    product_product_ids = product_template_id.product_variant_ids.filtered(filter_product_product)
+                    for attr_val in variant_attrs:
+                        
+                        codigo_fenicio = attr_val.product_attribute_value_id.fenicio_attribute_value_code
+                        nombre_fenicio = attr_val.product_attribute_value_id.name
 
-                    if len(product_product_ids) > 0:
+                        _logger.info(f"Codigo Fenicio: {codigo_fenicio}")
+                        _logger.info(f"Nombre Fenicio: {nombre_fenicio}")
 
-                        codigo_variante = attribute_value_id.fenicio_attribute_value_code
-                        if len(attribute_line_id.value_ids) == 1:
-                            codigo_variante = product_template_id.code_e_fenicio or ''
 
-                        variante = {
-                            'codigo': codigo_variante,
-                            'nombre': attribute_value_id.name,
-                            'atributos': {},
-                        }
+                        codigo_parts.append(str(codigo_fenicio) if codigo_fenicio else '000');
+                        
+                        nombre_parts.append(nombre_fenicio)
+                        
+                        # Atributos
+                        atributos[attr_val.attribute_id.name] = nombre_fenicio
+                    
+                    codigo_variante = ''.join(codigo_parts)
+                    nombre_variante = ' / '.join(nombre_parts)
+            
 
-                        presentaciones = []
-                        for attribute_line_presentacion_id in configuraciones_variantes_tipo_presentacion_ids:
-                            for attribute_value_presentacion_id in attribute_line_presentacion_id.value_ids:
 
-                                def filter_product_product(product_product_filter_id):
-                                    return (attribute_line_presentacion_id, attribute_value_presentacion_id) in product_product_filter_id.product_template_attribute_value_ids.mapped(lambda l: (l.attribute_line_id, l.product_attribute_value_id))
-
-                                product_product_presentacion_ids = product_product_ids.filtered(filter_product_product)
-
-                                for product_product_presentacion_id in product_product_presentacion_ids:
-                                    stock_quant_id = self.env['stock.quant'].search([
-                                        ('product_id', '=', product_product_presentacion_id.id),
-                                        ('on_hand', '=', True),
-                                    ], limit=1)
-
-                                    # PRECIOS ALTERNATIVOS
-                                    precios_aleternativos = []
-                                    precios_aleternativos_ids = product_product_presentacion_id.precios_alternativos_fenicio_ids
-                                    for precio_alternativo_id in precios_aleternativos_ids:
-                                        alternative_sales_prices_ids = precio_alternativo_id.precios_lista_venta_ids.filtered(lambda l: l.price_type == 'precioVenta')
-                                        alternative_sales_prices_vals = {}
-                                        for sale_price_id in alternative_sales_prices_ids:
-                                            alternative_sales_prices_vals[sale_price_id.currency_id.display_name] = sale_price_id.price
-
-                                        alternative_sales_prices_ids = precio_alternativo_id.precios_lista_venta_ids.filtered(lambda l: l.price_type == 'precioLista')
-                                        alternative_sales_prices_list_vals = {}
-                                        for sale_price_id in alternative_sales_prices_ids:
-                                            alternative_sales_prices_list_vals[sale_price_id.currency_id.display_name] = sale_price_id.price
-
-                                        precio_aleternativo = {
-                                            'codigo': precio_alternativo_id.code,
-                                            'precioLista': alternative_sales_prices_list_vals,
-                                            'precioVenta': alternative_sales_prices_vals,
-                                        }
-                                        precios_aleternativos.append(precio_aleternativo)
-
-                                    product_template_currency_id = product_template_id.default_currency_id
-
-                                    # PRECIO VENTA PRESENTACION
-                                    sales_prices_ids = product_product_presentacion_id.precios_fenicio_ids.filtered(lambda l: l.price_type == 'precioVenta')
-                                    sales_prices_vals = {}
-                                    for sale_price_id in sales_prices_ids:
-                                        sales_prices_vals[sale_price_id.currency_id.display_name] = sale_price_id.price
-
-                                    # PRECIO Lista PRESENTACION
-                                    sales_prices_ids = product_product_presentacion_id.precios_fenicio_ids.filtered(lambda l: l.price_type == 'precioLista')
-                                    sales_prices_list_vals = {}
-                                    for sale_price_id in sales_prices_ids:
-                                        sales_prices_list_vals[sale_price_id.currency_id.display_name] = sale_price_id.price
-
-                                    # IDENTIFICADORES
-                                    identificadores_ids = product_product_presentacion_id.indentificadores_ids
-                                    identificadores_list = []
-                                    for identificador_id in identificadores_ids:
-                                        identificadores_list.append({
-                                            'codigo': identificador_id.code,
-                                            'value': identificador_id.value,
-                                        })
-
-                                    codigo_presentacion = product_product_presentacion_id.default_code or ''
-                                    if len(attribute_line_presentacion_id.value_ids) == 1:
-                                        codigo_presentacion = 'U'
-
-                                    presentaciones.append({
-                                        'codigo': codigo_presentacion,
-                                        'nombre': attribute_value_presentacion_id.name,
-                                        'sku': product_product_presentacion_id.default_code or '',
-                                        'stock': (stock_quant_id and stock_quant_id.quantity) or 0.0,
-                                        "precioLista": sales_prices_list_vals,
-                                        "precioVenta": sales_prices_vals,
-                                        "preciosAlternativos": precios_aleternativos,
-                                        "identificadores": identificadores_list,
-                                    })
-
-                        variante['presentaciones'] = presentaciones
-
-                        for variante_id in product_product_ids:
-                            for variante_name_value_id in variante_id.product_template_attribute_value_ids.filtered(lambda l: not l.attribute_id.fenicio_type):
-                                variante['atributos'][variante_name_value_id.attribute_id.display_name] = variante_name_value_id.product_attribute_value_id.name
-
-                        vals['variantes'].append(variante)
-
-            if len(vals['variantes']) == 0 and len(product_template_id.product_variant_ids) == 1:
-                for variante_id in product_template_id.product_variant_ids:
-                    stock_quant_id = self.env['stock.quant'].search([
-                        ('product_id', '=', variante_id.id),
-                        ('on_hand', '=', True),
-                    ])
-
-                    # PRECIOS ALTERNATIVOS
-                    precios_aleternativos = []
-                    precios_aleternativos_ids = variante_id.precios_alternativos_fenicio_ids
-                    for precio_alternativo_id in precios_aleternativos_ids:
-                        alternative_sales_prices_ids = precio_alternativo_id.precios_lista_venta_ids.filtered(lambda l: l.price_type == 'precioVenta')
-                        alternative_sales_prices_vals = {}
-                        for sale_price_id in alternative_sales_prices_ids:
-                            alternative_sales_prices_vals[sale_price_id.currency_id.display_name] = sale_price_id.price
-
-                        alternative_sales_prices_ids = precio_alternativo_id.precios_lista_venta_ids.filtered(lambda l: l.price_type == 'precioLista')
-                        alternative_sales_prices_list_vals = {}
-                        for sale_price_id in alternative_sales_prices_ids:
-                            alternative_sales_prices_list_vals[sale_price_id.currency_id.display_name] = sale_price_id.price
-
-                        precio_aleternativo = {
-                            'codigo': precio_alternativo_id.code,
-                            'precioLista': alternative_sales_prices_list_vals,
-                            'precioVenta': alternative_sales_prices_vals,
-                        }
-                        precios_aleternativos.append(precio_aleternativo)
-
-                    # PRECIO VENTA PRESENTACION
-                    sales_prices_ids = variante_id.precios_fenicio_ids.filtered(lambda l: l.price_type == 'precioVenta')
-                    sales_prices_vals = {}
-                    for sale_price_id in sales_prices_ids:
-                        sales_prices_vals[sale_price_id.currency_id.display_name] = sale_price_id.price
-
-                    # PRECIO Lista PRESENTACION
-                    sales_prices_ids = variante_id.precios_fenicio_ids.filtered(lambda l: l.price_type == 'precioLista')
-                    sales_prices_list_vals = {}
-                    for sale_price_id in sales_prices_ids:
-                        sales_prices_list_vals[sale_price_id.currency_id.display_name] = sale_price_id.price
-
-                    # IDENTIFICADORES
-                    identificadores_ids = variante_id.indentificadores_ids
-                    identificadores_list = []
-                    for identificador_id in identificadores_ids:
-                        identificadores_list.append({
-                            'codigo': identificador_id.code,
-                            'value': identificador_id.value,
-                        })
-
-                    variante = {
-                        'codigo': variante_id.default_code or '',
-                        'nombre': variante_id.name,
-                        'atributos': {},
-                        'presentaciones': [{
-                            'codigo': 'U',
-                            'nombre': variante_id.name,
-                            'sku': variante_id.default_code or '',
-                            'stock': (stock_quant_id and stock_quant_id.quantity) or 0.0,
-                            "precioLista": sales_prices_list_vals,
-                            "precioVenta": sales_prices_vals,
-                            "preciosAlternativos": precios_aleternativos,
-                            "identificador": identificadores_list,
-                        }]
+                    variante_data = {
+                        'codigo': codigo_variante,
+                        'nombre': nombre_variante,
+                        'atributos': atributos,
+                        'presentaciones': [],
                     }
 
-                    for variante_name_value_id in variante_id.product_template_attribute_value_ids:
-                        variante['atributos'][variante_name_value_id.attribute_id.display_name] = variante_name_value_id.product_attribute_value_id.name
+                    listaVenta = variante.pricelist_relation_ids.precio_venta;
+                    listaPrecios = variante.pricelist_relation_ids.precio_lista;
+                    listaAlternativo = variante.pricelist_relation_ids.precio_alternativo;
+                    
 
-                    vals['variantes'].append(variante)
+                    # Reemplaza la sección completa de obtención de precios en el método listar_productos
+                    # Aproximadamente desde la línea 120 hasta la 155
+
+                    # Reemplaza la sección completa de obtención de precios en el método listar_productos
+                    # Aproximadamente desde la línea 120 hasta la 155
+
+                    # Reemplaza la sección completa de obtención de precios en el método listar_productos
+                    # Aproximadamente desde la línea 120 hasta la 155
+
+                    # REEMPLAZA COMPLETAMENTE la sección del bucle de presentacion_attrs
+                    # Aproximadamente desde la línea 120 hasta la 155 en tu archivo api_internal.py
+
+                    for pres_attr_val in presentacion_attrs:
+                        codigo = str(pres_attr_val.attribute_id.codigo) if pres_attr_val.attribute_id.codigo else '000'
+                        nombre = pres_attr_val.product_attribute_value_id.name
+                        sku = variante.default_code or ''
+                        stock = self._get_fenicio_stock(variante)
+
+                        precioVenta = 0.0
+                        precioLista = 0.0
+                        precioAlternativo = 0.0
+
+                        # Calcular precio de venta con fórmulas/descuentos
+                        if listaVenta:
+                            try:
+                                precioVenta = listaVenta._get_product_price(
+                                    product=variante,
+                                    quantity=1.0,
+                                    partner=None,
+                                    uom_id=variante.uom_id.id
+                                )
+
+                                _logger.info(f"Precio venta calculado para {sku}: {precioVenta}")
+                            except Exception as e:
+                                _logger.warning("Error calculando precio venta para %s: %s", sku, str(e))
+                                precioVenta = variante.lst_price or 0.0
+
+                        # Calcular precio de lista con fórmulas/descuentos
+                        if listaPrecios:
+                            try:
+                                precioLista = listaPrecios._get_product_price(
+                                    product=variante,
+                                    quantity=1.0,
+                                    partner=None,
+                                    uom_id=variante.uom_id.id
+                                )
+
+                                _logger.info(f"Precio lista calculado para {sku}: {precioLista}")
+                            except Exception as e:
+                                _logger.warning("Error calculando precio lista para %s: %s", sku, str(e))
+                                precioLista = variante.lst_price or 0.0
+
+                        # Calcular precio alternativo con fórmulas/descuentos
+                        if listaAlternativo:
+                            try:
+                                precioAlternativo = listaAlternativo._get_product_price(
+                                    product=variante,
+                                    quantity=1.0,
+                                    partner=None,
+                                    uom_id=variante.uom_id.id
+                                )
+                            except Exception as e:
+                                _logger.warning("Error calculando precio alternativo para %s: %s", sku, str(e))
+                                precioAlternativo = variante.lst_price or 0.0
+
+                        variante_data['presentaciones'].append(
+                            {
+                                'codigo': codigo,
+                                'nombre': nombre,
+                                'stock': stock,
+                                'sku': sku,
+                                'precioLista': {'precio': precioLista},
+                                'precioVenta': {'precio': precioVenta},
+                                'precioAlternativo': {'precio': precioAlternativo}
+                            }
+                        )
+
+
+                    vals['variantes'].append(variante_data)
+
+
+                    
+                        
+            elif len(product_template_id.product_variant_ids) == 1:
+                product_id = product_template_id.product_variant_ids[0]
+                
+                variante = {
+                    'codigo': str(product_id.default_code or product_template_id.id),
+                    'nombre': product_id.name,
+                    'atributos': {},
+                    'presentaciones': []
+                }
+
+                # Agregar presentación única
+                presentacion_data = self._build_presentacion_data(product_id, product_id.name, True, codigo_unico=True)
+                variante['presentaciones'].append(presentacion_data)
+
+                # Agregar atributos del producto
+                for attr_val in product_id.product_template_attribute_value_ids:
+                    variante['atributos'][attr_val.attribute_id.display_name] = attr_val.product_attribute_value_id.name
+
+                vals['variantes'].append(variante)
 
             response['productos'].append(vals)
 
         return response
 
+
+    def _get_fenicio_stock(self, product_id):
+    # Obtener ubicaciones visibles para Fenicio
+        fenicio_locations = self.env['stock.location'].search([
+            ('fenicio_visible', '=', True),
+            ('usage', '=', 'internal')
+        ])
+        
+        if not fenicio_locations:
+            _logger.warning("Producto %s: No hay ubicaciones Fenicio configuradas", product_id.default_code)
+            return 0.0
+        
+        _logger.info("Ubicaciones Fenicio encontradas: %s", fenicio_locations.mapped('name'))
+        
+        # Obtener el tope máximo de stock a mostrar
+        variante = self.env['product.product'].browse(product_id.id);
+        
+        tope_maximo = variante.available_threshold if variante.show_availability and variante.available_threshold > 0 else 25;
+
+        
+        stock_atp = 0.0
+        for location in fenicio_locations:
+            qty_atp = self.env['stock.quant']._get_available_quantity(product_id, location)
+            _logger.info("  - %s: %.2f unidades (ATP)", location.name, qty_atp)
+            stock_atp += qty_atp
+        
+        
+        
+        stock_final = min(stock_atp, tope_maximo)
+        
+        return stock_final
+
+
     @api.model
-    def stock_producto(self, json_data):
+    def _build_variant_name(self, product_product_ids):
+        """Construir nombre: Color + " / " + Color Secundario"""
+        if not product_product_ids:
+            return ""
+            
+        product_id = product_product_ids[0]
+        
+        
+        color_attr = product_id.product_template_attribute_value_ids.filtered(
+            lambda l: l.attribute_id.fenicio_code == 'color'
+        )
+        
+        color_sec_attr = product_id.product_template_attribute_value_ids.filtered(
+            lambda l: l.attribute_id.fenicio_code == 'color_secundario' 
+        )
+        
+        color_name = color_attr.product_attribute_value_id.name if color_attr else ""
+        color_sec_name = color_sec_attr.product_attribute_value_id.name if color_sec_attr else ""
+        
+        if color_name and color_sec_name:
+            return f"{color_name} / {color_sec_name}"
+        elif color_name:
+            return color_name
+        else:
+            return product_id.name
+
+    @api.model
+    def _build_presentacion_data(self, product_id, nombre_presentacion, es_unico=False, codigo_unico=False):
+        """Construir datos de presentación para un producto"""
+        
+        # Obtener stock
+        stock_quant_id = self.env['stock.quant'].search([
+            ('product_id', '=', product_id.id),
+            ('on_hand', '=', True),
+        ], limit=1)
+        
+        stock = stock_quant_id.quantity if stock_quant_id else 0.0
+
+        # Obtener precios de lista
+        precios_lista_ids = product_id.precios_fenicio_ids.filtered(lambda l: l.price_type == 'precioLista')
+        precio_lista = {}
+        for precio in precios_lista_ids:
+            precio_lista[precio.currency_id.name] = precio.price
+
+        # Obtener precios de venta
+        precios_venta_ids = product_id.precios_fenicio_ids.filtered(lambda l: l.price_type == 'precioVenta')
+        precio_venta = {}
+        for precio in precios_venta_ids:
+            precio_venta[precio.currency_id.name] = precio.price
+
+        # Obtener precios alternativos
+        precios_alternativos = []
+        for precio_alt in product_id.precios_alternativos_fenicio_ids:
+            alt_lista_ids = precio_alt.precios_lista_venta_ids.filtered(lambda l: l.price_type == 'precioLista')
+            alt_venta_ids = precio_alt.precios_lista_venta_ids.filtered(lambda l: l.price_type == 'precioVenta')
+            
+            alt_precio_lista = {}
+            for precio in alt_lista_ids:
+                alt_precio_lista[precio.currency_id.name] = precio.price
+                
+            alt_precio_venta = {}
+            for precio in alt_venta_ids:
+                alt_precio_venta[precio.currency_id.name] = precio.price
+
+            precios_alternativos.append({
+                'codigo': precio_alt.code,
+                'precioLista': alt_precio_lista,
+                'precioVenta': alt_precio_venta,
+            })
+
+        # Obtener identificadores
+        identificadores = []
+        for identificador in product_id.indentificadores_ids:
+            identificadores.append({
+                'codigo': identificador.code,
+                'valor': identificador.value,  # Corregido de 'value' a 'valor'
+            })
+
+        # Determinar código de presentación
+        if codigo_unico:
+            codigo = 'U'
+        elif es_unico:
+            codigo = 'U'
+        else:
+            codigo = product_id.default_code or str(product_id.id)
+
+        return {
+            'codigo': codigo,
+            'nombre': nombre_presentacion,
+            'sku': product_id.default_code or '',
+            'stock': stock,
+            'precioLista': precio_lista,
+            'precioVenta': precio_venta,
+            'preciosAlternativos': precios_alternativos,
+            'identificadores': identificadores, 
+        }
+    
+
+    @api.model
+    def canjear_puntos(self, json_data): 
+        try:
+
+            if 'numeroDocumento' not in json_data or 'puntos' not in json_data:
+                message = "El campo 'numeroDocumento' y 'puntos' es obligatorio."
+                return False, message;
+
+            user = self.env['res.partner'].search([('vat', '=', json_data['numeroDocumento'])], limit=1);
+        
+            if not user:
+                message = "El usuario no existe."
+                return False, message;
+    
+            loyaltyCard = self.env['loyalty.card'].search([('partner_id', '=', user.id)], limit=1);
+            if not loyaltyCard:
+                message = "El usuario no tiene una tarjeta de lealtad."
+                return False, message;
+    
+            if loyaltyCard.points < float(json_data['puntos']):
+                message = "El usuario no tiene suficientes puntos para canjear."
+                return False, message;
+    
+            if loyaltyCard.points >= float(json_data['puntos']):
+                loyaltyCard.points -= float(json_data['puntos'])
+
+            return {
+                'puntosRestantes': loyaltyCard.points
+            }
+
+        except Exception as e:
+            _logger.info("Error al canjear puntos: %s", str(e))
+            return False
+
+
+    @api.model
+    def consultar_puntos(self, json_data):
+        try:
+            if 'numeroDocumento' not in json_data:
+                message = "El campo 'numeroDocumento' es obligatorio."
+                return False, message;
+
+            user = self.env['res.partner'].search([('vat', '=', json_data['numeroDocumento'])], limit=1);
+
+            if not user:
+                message = "El usuario no existe."
+                return False, message;
+
+            
+            loyaltyCard = self.env['loyalty.card'].search([('partner_id', '=', user.id)], limit=1);
+            puntos = loyaltyCard.points if loyaltyCard else 0
+
+            return {
+                "puntos": puntos
+            };
+
+        except Exception as e:
+            _logger.info("Error al consultar puntos: %s", str(e))
+            return False
+
+    @api.model
+    def crear_usuario(self, json_data):
+        try:
+            _logger.info("ENTRANDO CREA USUARIO");
+
+            user = self.env['res.partner'].search([('id_fenicio', '=', json_data['id'])], limit=1);
+            pais = self.env['res.country'].search([('code', '=', json_data['documento']['pais'])], limit=1);
+
+            # allIdentificaciones = self.env['l10n_latam.identification.type'].search([]);
+
+            # _logger.info("TIPO DE IDENTIFICACION");
+            # for identificacion in allIdentificaciones:
+                
+            #     _logger.info(f"{identificacion.name} NOMBRE <=>");
+
+            tipo_doc = "CI" if json_data['documento']['tipo'] == 'DOCUMENTO_IDENTIDAD' else json_data['documento']['tipo'];
+            _logger.info(f"Buscando tipo de identificación: {tipo_doc}");
+            
+            genero = '';
+
+            if json_data['genero'] and (json_data['genero'] == 'MASCULINO' or json_data['genero'] == 'Masculino' or json_data['genero'] == 'M'):
+                genero = 'male';
+            elif json_data['genero'] and (json_data['genero'] == 'FEMENINO' or json_data['genero'] == 'Femenino' or json_data['genero'] == 'F'):
+                genero = 'female';
+            elif json_data['genero'] and (json_data['genero'] == 'OTRO' or json_data['genero'] == 'Otro' or json_data['genero'] == 'O'):
+                genero = 'other';
+            
+    
+
+            if user:
+                _logger.info("USUARIO ENCONTRADO");
+                message = "El usuario ya existia, no se han insertado los datos."
+                return user.id_fenicio, message;
+            user = self.env['res.partner'].create({
+                'id_fenicio': json_data['codigo'],
+                'name': json_data['nombre'] + ' ' + json_data['apellido'],
+                'email': json_data['email'],
+                'phone': json_data['telefono'],
+                'gender': genero,
+                'vat': json_data['documento']['numero'],
+                'country_id': pais.id if pais else '',
+                'company_id': self.env.company.id,
+                'programa_millas': json_data['extras']['programaMillas']
+            })
+
+            _logger.info("Se ha creado el usuario");
+
+            return user.id_fenicio, "El usuario se ha creado correctamente.";
+            
+
+
+        except Exception as e:
+            _logger.info("Error al crear el usuario: %s", str(e))
+            return False
+
+    @api.model
+    def stockporsku(self, json_data):
         skus_pedido = json_data['skus']
 
-        product_ids = self.env['product.product'].search([('default_code', 'in', skus_pedido)])
+        productos = self.env['product.product'];
 
-        skus_encontrados = set(product_ids.mapped('default_code'))
+        for sku in skus_pedido:
+            product_id = self.env['product.product'].search([('default_code', '=', sku)], limit=1)
+            if product_id:
+                productos += product_id
+
+        
+
+        _logger.info(f"PRODUCTOS ENCONTRADOS => {len(productos)}")
+        
+        skus_encontrados = set(productos.mapped('default_code'))
         sku_no_encontrados = set(skus_pedido) - set(skus_encontrados)
 
         vals_list = []
 
+
+
         stock_quant_encontrados_ids = self.env['stock.quant']
 
-        for product_id in product_ids:
+        for product_id in productos:
             stock_quant_id = self.env['stock.quant'].search([
                 ('product_id', '=', product_id.id),
                 ('on_hand', '=', True),
@@ -261,7 +530,7 @@ class ApiInternal(models.Model):
                 }
                 vals_list.append(vals)
 
-        sku_sin_stock = product_ids - stock_quant_encontrados_ids.mapped('product_id')
+        sku_sin_stock = productos - stock_quant_encontrados_ids.mapped('product_id')
         for product_id in sku_sin_stock:
             vals = {
                 "sku": product_id.default_code,
@@ -366,17 +635,24 @@ class ApiInternal(models.Model):
 
             sale_order_id.action_cancel()
 
+        _logger.info("ANTES DE PAGAR");
         if 'picking' in json_data and json_data['picking'] == 0:
             return {'referencia': sale_order_id.display_name}
 
+        # IMPORTANTE: Actualizar pickings ANTES de crear facturas
+        # para que los productos estén marcados como entregados
+        _logger.info("ANTES DE PICKING");
         picking_error = False
         if 'entrega' in json_data and not cancelable:
             picking_error = sale_order_id.actualizar_pickings(json_data)
 
+        _logger.info("SALIENDO DE PICKING");
         if picking_error:
             return {'error': picking_error}
 
+        _logger.info("ANTES DE PAGO");
         if estado in ['PAGO_PENDIENTE', 'REQUIERE_APROBACION', 'APROBADA']:
+            _logger.info("ANTES DE CREAR FACTURA");
             if len(sale_order_id.invoice_ids) == 0:
                 sale_order_id.create_invoice_fenicio()
                 invoice_ids = sale_order_id.invoice_ids
@@ -387,6 +663,7 @@ class ApiInternal(models.Model):
                     })
                 invoice_ids.action_post()
 
+            _logger.info("ANTES DE PAGO");
             if estado == 'APROBADA' and 'pago' in json_data and json_data['pago'] and json_data['pago']['estado'] not in ['PENDIENTE', 'ERROR', 'REVERSADO']:
                 json_data_pago = json_data['pago']
                 invoice_ids = sale_order_id.invoice_ids
@@ -398,6 +675,7 @@ class ApiInternal(models.Model):
                     # payment_ids = self.env['account.payment'].search([('id', 'in', ids_payment)])
                     payment_id = invoice_id.create_payment_fenicio(json_data_pago, mode_update=(len(payment_ids) > 0), payment_ids=payment_ids)
 
+        _logger.info("SALIENDO DE PAGAR");
         return {'referencia': sale_order_id.display_name}
 
     @api.model

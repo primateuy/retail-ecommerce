@@ -42,12 +42,27 @@ class ApiController(http.Controller):
     def listar_productos(self):
         """https://developers.fenicio.help/integracion-de-comercios/servicios/productos"""
         id_solicitud = ''
-        try:
+        try: 
             request.env['api.internal'].verificar_token(request.httprequest.headers['Token-Autenticacion-Efenicio'])
             json_data = self.get_json_data()
             id_solicitud = json_data['_idSolicitud']
 
             response_data = request.env['api.internal'].sudo().listar_productos(json_data)
+
+            return self.build_response(id_solicitud, response_data)
+        except Exception as e:
+            return self.build_response(id_solicitud, None, status='ERROR', mensaje=str(e))
+        
+    @http.route('/consultapuntos', type='http', auth='public', cors="*", csrf=False, methods=['GET'])
+    def consultar_puntos(self):
+        """https://comercios.fenicio.help/servicios/consulta-de-puntos"""
+        id_solicitud = ''
+        try:
+            request.env['api.internal'].verificar_token(request.httprequest.headers['Token-Autenticacion-Efenicio'])
+            json_data = self.get_json_data()
+            id_solicitud = json_data['_idSolicitud']
+
+            response_data = request.env['api.internal'].sudo().consultar_puntos(json_data)
 
             return self.build_response(id_solicitud, response_data)
         except Exception as e:
@@ -62,7 +77,7 @@ class ApiController(http.Controller):
             json_data = self.get_json_data()
             id_solicitud = json_data['_idSolicitud']
 
-            response_data, msg = request.env['api.internal'].sudo().stock_producto(json_data)
+            response_data, msg = request.env['api.internal'].sudo().stockporsku(json_data)
 
             return self.build_response(id_solicitud, response_data, mensaje=msg)
         except Exception as e:
@@ -82,6 +97,35 @@ class ApiController(http.Controller):
             # request env needs to be able to access the latest changes from the auth layers
             request.env.cr.commit()
             response_data = request.env['api.internal'].sudo().crear_orden_venta(json_data)
+
+            return self.build_response(id_solicitud, response_data)
+        except Exception as e:
+            return self.build_response(id_solicitud, None, status='ERROR', mensaje=str(e))
+
+
+    @http.route('/canjepuntos', type='http', auth='none', cors="*", csrf=False, methods=['GET'])
+    def canjear_puntos(self):
+        id_solicitud = ''
+        try:
+            request.env['api.internal'].verificar_token(request.httprequest.headers['Token-Autenticacion-Efenicio'])
+            json_data = self.get_json_data()
+            id_solicitud = json_data['_idSolicitud']
+
+            response_data = request.env['api.internal'].sudo().canjear_puntos(json_data)
+
+            return self.build_response(id_solicitud, response_data)
+        except Exception as e:
+            return self.build_response(id_solicitud, None, status='ERROR', mensaje=str(e))
+
+    @http.route('/usuario', type="http", auth='none', cors="*", csrf=False, methods=['POST'])
+    def crear_usuario(self):
+        id_solicitud = ''
+        try:
+            request.env['api.internal'].verificar_token(request.httprequest.headers['Token-Autenticacion-Efenicio'])
+            json_data = self.get_json_data()
+            id_solicitud = json_data['_idSolicitud']
+
+            response_data = request.env['api.internal'].sudo().crear_usuario(json_data)
 
             return self.build_response(id_solicitud, response_data)
         except Exception as e:

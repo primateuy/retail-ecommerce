@@ -7,8 +7,8 @@ class SaleOrder(models.Model):
     _inherit = "res.partner"
 
     id_fenicio = fields.Char('ID Fenicio')
-    code_fenicio = fields.Char('Código Fenicio')
     numero_doc = fields.Char('Numero Doc')
+    programa_millas = fields.Char("Programa Millas");
 
     @api.model
     def get_partner_orden_venta(self, json_data):
@@ -21,7 +21,6 @@ class SaleOrder(models.Model):
             vat = ''
             vals = {
                 'id_fenicio': comprador['id'],
-                'code_fenicio': comprador['codigo'],
                 'email': comprador['email'],
                 'name': f"{comprador['nombre']} {comprador['apellido']}",
                 'phone': comprador['telefono'],
@@ -36,7 +35,14 @@ class SaleOrder(models.Model):
                 #     'PASAPORTE': '5',
                 #     'DOCUMENTO_IDENTIDAD': '3',
                 # }
-                # vals['vat'] = comprador['documento']['numero']
+
+                # Tipos de documento
+
+                # VAT código 0
+                # RUC código 2
+                # CI código 3
+                # OTROS código 4
+                vals['vat'] = comprador['documento']['numero']
                 vals['numero_doc'] = comprador['documento']['numero']
 
             partner_id = self.env['res.partner'].create([vals])
@@ -55,9 +61,8 @@ class SaleOrder(models.Model):
         if 'direccionFacturacion' not in json_data or not json_data['direccionFacturacion']:
             return partner_address_id
 
-        json_data = json_data['direccionFacturacion']
 
-        pais_id = self.env['res.country'].search([('name', 'ilike', json_data['pais'])], limit=1)
+        pais_id = self.env['res.country'].search([('name', 'ilike', json_data['comprador']['documento']['pais'])], limit=1)
         state_id = False
         if pais_id:
             state_id = self.env['res.country.state'].search([
@@ -74,15 +79,14 @@ class SaleOrder(models.Model):
         vals = {
             'type': 'invoice',
             'name': partner_id.name,
-            'partner_latitude': json_data['latitud'],
-            'partner_longitude': json_data['longitud'],
+            'partner_latitude': json_data['entrega']['horario']['direccionEnvio']['latitud'],
+            'partner_longitude': json_data['entrega']['horario']['direccionEnvio']['longitud'],
             'country_id': (pais_id and pais_id.id) or False,
             'state_id': (state_id and state_id.id) or False,
-            'city': json_data['localidad'],
-            'street': json_data['calle'],
-            'street2': '%s %s' % (json_data['numeroPuerta'], json_data['numeroApto']),
-            'zip': json_data['codigoPostal'],
-            'comment': json_data['observaciones'],
+            'city': json_data['entrega']['horario']['direccionEnvio']['localidad'],
+            'street': json_data['entrega']['horario']['direccionEnvio']['calle'],
+            'street2': '%s %s' % (json_data['entrega']['horario']['direccionEnvio']['numeroPuerta'], json_data['entrega']['horario']['direccionEnvio']['numeroApto']),
+            'zip': json_data['entrega']['horario']['direccionEnvio']['codigoPostal'],
             'parent_id': partner_id.id,
         }
 

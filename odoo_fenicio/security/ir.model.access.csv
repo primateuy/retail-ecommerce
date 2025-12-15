@@ -4,3 +4,6 @@ fenicio_presentacion_price,fenicio_presentacion_price,model_fenicio_presentacion
 api_internal,api_internal,model_api_internal,base.group_user,1,0,0,0
 product_identificadores,product_identificadores,model_product_identificadores,base.group_user,1,1,1,1
 precios_alternativos,precios_alternativos,model_precios_alternativos,base.group_user,1,1,1,1
+access_guia_talles_user,guia.talles.user,model_guia_talles,base.group_user,1,1,1,1
+product_pricelist_relation,product.pricelist.relation,model_product_pricelist_relation,base.group_user,1,1,1,1
+product_product_pricelist_relation,product.product.pricelist.relation,model_product_product_pricelist_relation,base.group_user,1,1,1,1
