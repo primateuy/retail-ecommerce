@@ -343,6 +343,7 @@ class PriceGroupLine(models.Model):
             'applied_on': applied_on,
             'compute_price': 'fixed',
             'fixed_price': self.valor_fijo,
+            'min_quantity': 0 if self.activo else 9999999999,
         }
 
         if usar_template:

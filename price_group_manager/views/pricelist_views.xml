@@ -8,6 +8,7 @@
             <field name="arch" type="xml">
                 <xpath expr="//field[@name='applied_on']" position="before">
                     <field name="solo_lectura_campos" invisible="1"/>
+                    <field name="visible_cantidad_minima" invisible="1"/>
                 </xpath>
 
                 <xpath expr="//field[@name='compute_price']" position="attributes">
@@ -33,6 +34,10 @@
                 <xpath expr="//field[@name='date_end']" position="attributes">
                     <attribute name="readonly">solo_lectura_campos == True</attribute>
                 </xpath>
+
+                <xpath expr="//field[@name='min_quantity']" position="attributes">
+                    <attribute name="invisible">visible_cantidad_minima == False</attribute>
+                </xpath>
             </field>
         </record>
 
@@ -43,6 +48,7 @@
             <field name="arch" type="xml">
                 <xpath expr="//field[@name='item_ids']/tree[@editable='bottom']/field[@name='product_tmpl_id']" position="after">
                     <field name="solo_lectura_campos" column_invisible="1"/>
+                    <field name="visible_cantidad_minima" column_invisible="1"/>
                 </xpath>
 
                 <xpath expr="//field[@name='item_ids']/tree[@editable='bottom']/field[@name='product_tmpl_id']" position="attributes">
@@ -63,6 +69,10 @@
 
                 <xpath expr="//field[@name='item_ids']/tree[@editable='bottom']/field[@name='date_end']" position="attributes">
                     <attribute name="readonly">solo_lectura_campos == True</attribute>
+                </xpath>
+
+                <xpath expr="//field[@name='item_ids']/tree[@editable='bottom']/field[@name='min_quantity']" position="attributes">
+                    <attribute name="readonly">visible_cantidad_minima == False</attribute>
                 </xpath>
             </field>
         </record>
