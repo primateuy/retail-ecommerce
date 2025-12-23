@@ -1,0 +1,427 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates id="add_currency_conversation">
+
+	<t t-name="InheritClosePosPopup" t-inherit="point_of_sale.ClosePosPopup" t-inherit-mode="extension" owl="1">
+		<xpath expr="//div[hasclass('payment-methods-overview')]" position="replace">
+			<t t-if = "pos.config.multi_currency">
+				<div class="payment-methods-overview overflow-auto">
+                    <table class="text-start">
+                        <thead>
+                            <tr class="text-dark">
+                                <th>Payment Method</th>
+                                <th>Expected</th>
+                                <th style="width:20%">Counted</th>
+                                <th>Difference</th>
+                            </tr>
+                        </thead>
+                        <t t-if="pos.config.cash_control">
+                            <tbody>
+                                <tr>
+                                    <td t-esc="props.default_cash_details.name"/>
+                                    <td t-esc="env.utils.formatCurrency(props.default_cash_details.amount)"/>
+                                    <td class="d-flex">
+                                        <Input tModel="[state.payments[props.default_cash_details.id], 'counted']"
+                                            callback.bind="(value) =>  this.setManualCashInput(value)"
+                                            isValid.bind="env.utils.isValidFloat"/>
+                                        <div class="button icon ClosePosPopup btn btn-secondary" t-on-click="openDetailsPopup">
+                                            <i class="fa fa-money fa-2x" role="img" title="Open the money details popup"/>
+                                        </div>
+                                    </td>
+                                    <td t-esc="env.utils.formatCurrency(getDifference(props.default_cash_details.id))"
+                                        t-att-class="{'warning text-danger fw-bolder': !env.utils.floatIsZero(getDifference(props.default_cash_details.id))}"/>
+                                </tr>
+                            </tbody>
+                            <tbody class="cash-overview border-start small text-muted">
+                                <tr>
+                                    <td>Opening</td>
+                                    <td class="align-top" t-esc="env.utils.formatCurrency(props.default_cash_details.opening)"/>
+                                </tr>
+                            	<tr t-foreach="props.default_cash_details.moves" t-as="move" t-key="move_index">
+									<t t-if="move.currency_id == props.default_cash_details.currency_id">
+								        <td>
+								            <div class="flex d-flex flex-row">
+								                <div class="cash-sign me-1" t-esc="move.amount &lt; 0 ? '-' : '+'"/>
+								                <t t-esc="move.name"/>
+								            </div>
+								        </td>
+								        <td class="align-top" t-esc="env.utils.formatCurrency(Math.abs(move.amount))"/>
+									</t>
+                            	</tr>
+                                <tr t-if="props.default_cash_details.payment_amount">
+                                    <td>
+                                        <div class="flex d-flex flex-row">
+                                            <div class="cash-sign me-1" t-esc="props.default_cash_details.payment_amount &lt; 0 ? '-' : '+'"/>
+                                            Payments in <t t-esc="props.default_cash_details.name"/>
+                                        </div>
+                                    </td>
+                                    <td class="align-top" t-esc="env.utils.formatCurrency(Math.abs(props.default_cash_details.payment_amount))"/>
+                                </tr>
+                            </tbody>
+                        </t>
+                        <tbody t-if="props.other_payment_methods.length > 0">
+                            <t t-foreach="props.other_payment_methods" t-as="pm" t-key="pm.id">
+	                            <tr>
+	                                <td t-esc="pm.name"/>
+	                                <t t-foreach="props.pay_amount" t-as="pa" t-key="pa_index">
+	                               		<t t-if="pa.id == pm.id">
+	                               			<td><t t-esc="pa.currency_id"/> <t t-esc="pa.amount"/> </td>
+	                               		</t>
+	                                </t>
+	                                <t t-set="_showDiff" t-value="pm.type === 'bank' and pm.number !== 0" />
+	                                <td t-if="_showDiff">
+	                                    <Input tModel="[state.payments[pm.id], 'counted']"
+	                                        isValid.bind="env.utils.isValidFloat" />
+	                                </td>
+	                                <t t-set="_showDiffCash" t-value="pm.type === 'cash'" />
+	                                <td t-if="_showDiffCash">
+	                                    <Input tModel="[state.payments[pm.id] || (state.payments[pm.id] = { counted: 0 }), 'counted']"
+	                                    	callback.bind="(value) =>  this.setManualCashInputCustom(value)"
+				                                        isValid.bind="env.utils.isValidFloat" />
+	                                </td>
+	                                <td t-if="_showDiffCash" t-esc="env.utils.formatCurrency(getDifferenceCash(pm.id))"
+	                                    t-att-class="{'warning text-danger fw-bolder': getDifferenceCash(pm.id)}"/>
+	                            </tr>
+	                            <t t-foreach="props.default_cash_details.moves" t-as="move" t-key="move_index">
+									<t t-if="move.journal_id == pm.journal_id">
+		                            	<tr class="cash-overview border-start small text-muted">
+			                                <td>Opening</td>
+                                            <td class="align-top" >
+                                                <t t-esc="pm.currency_symbol"/>
+                                                <t t-esc="props.default_cash_details.opening"/>
+                                            </td>
+		                                </tr>
+		                                <tr class="cash-overview border-start small text-muted">
+		                                	<td>
+									            <div class="flex d-flex flex-row">
+									                <div class="cash-sign me-1" t-esc="move.amount &lt; 0 ? '-' : '+'"/>
+									                <t t-esc="move.name"/>
+									            </div>
+		                                	</td>
+                                            <td class="align-top" >
+                                                <t t-esc="pm.currency_symbol"/>
+                                                <t t-esc="Math.abs(move.amount)"/>
+                                            </td>
+		                            	</tr>
+									</t>							    
+	                            </t>
+                                <t t-foreach="props.pay_amount" t-as="pa" t-key="pa_index">
+                                    <t t-if="pa.id == pm.id and pm.type === 'cash'">
+                                        <t t-if="pa.payment_in_amount > 0">
+                                            <tr class="cash-overview border-start small text-muted">
+                                                <td>
+                                                    <div class="flex d-flex flex-row">
+                                                        <div class="cash-sign me-1" t-esc="pa.payment_in_amount &lt; 0 ? '-' : '+'"/>
+                                                        Payments in <t t-esc="pa.name"/>
+                                                    </div>
+                                                </td>
+                                                <td class="align-top" >
+                                                    <t t-esc="pa.currency_id"/>
+                                                    <t t-esc="Math.abs(pa.payment_in_amount)"/>
+                                                </td>
+                                            </tr>
+                                        </t>
+                                    </t>
+                                </t>
+                            </t>
+                        </tbody>
+                    </table>
+                </div>
+			</t>
+			<t t-else="">
+				<div class="payment-methods-overview overflow-auto">
+                    <table class="text-start">
+                        <thead>
+                            <tr class="text-dark">
+                                <th>Payment Method</th>
+                                <th>Expected</th>
+                                <th style="width:20%">Counted</th>
+                                <th>Difference</th>
+                            </tr>
+                        </thead>
+                        <t t-if="pos.config.cash_control">
+                            <tbody>
+                                <tr>
+                                    <td t-esc="props.default_cash_details.name"/>
+                                    <td t-esc="env.utils.formatCurrency(props.default_cash_details.amount)"/>
+                                    <td class="d-flex">
+                                        <Input tModel="[state.payments[props.default_cash_details.id], 'counted']"
+                                            callback.bind="(value) =>  this.setManualCashInput(value)"
+                                            isValid.bind="env.utils.isValidFloat"/>
+                                        <div class="button icon ClosePosPopup btn btn-secondary" t-on-click="openDetailsPopup">
+                                            <i class="fa fa-money fa-2x" role="img" title="Open the money details popup"/>
+                                        </div>
+                                    </td>
+                                    <td t-esc="env.utils.formatCurrency(getDifference(props.default_cash_details.id))"
+                                        t-att-class="{'warning text-danger fw-bolder': !env.utils.floatIsZero(getDifference(props.default_cash_details.id))}"/>
+                                </tr>
+                            </tbody>
+                            <tbody class="cash-overview border-start small text-muted">
+                                <tr>
+                                    <td>Opening</td>
+                                    <td class="align-top" t-esc="env.utils.formatCurrency(props.default_cash_details.opening)"/>
+                                </tr>
+                                <tr t-foreach="props.default_cash_details.moves" t-as="move" t-key="move_index">
+                                    <td>
+                                        <div class="flex d-flex flex-row">
+                                            <div class="cash-sign me-1" t-esc="move.amount &lt; 0 ? '-' : '+'"/>
+                                            <t t-esc="move.name"/>
+                                        </div>
+                                    </td>
+                                    <td class="align-top" t-esc="env.utils.formatCurrency(Math.abs(move.amount))"/>
+                                </tr>
+                                <tr t-if="props.default_cash_details.payment_amount">
+                                    <td>
+                                        <div class="flex d-flex flex-row">
+                                            <div class="cash-sign me-1" t-esc="props.default_cash_details.payment_amount &lt; 0 ? '-' : '+'"/>
+                                            Payments in <t t-esc="props.default_cash_details.name"/>
+                                        </div>
+                                    </td>
+                                    <td class="align-top" t-esc="env.utils.formatCurrency(Math.abs(props.default_cash_details.payment_amount))"/>
+                                </tr>
+                            </tbody>
+                        </t>
+                        <tbody t-if="props.other_payment_methods.length > 0">
+                            <tr t-foreach="props.other_payment_methods" t-as="pm" t-key="pm.id">
+                                <td t-esc="pm.name"/>
+                                <td t-esc="env.utils.formatCurrency(pm.amount)"/>
+                                <t t-set="_showDiff" t-value="pm.type === 'bank' and pm.number !== 0" />
+                                <td t-if="_showDiff">
+                                    <Input tModel="[state.payments[pm.id], 'counted']"
+                                        isValid.bind="env.utils.isValidFloat" />
+                                </td>
+                                <td t-if="_showDiff" t-esc="env.utils.formatCurrency(getDifference(pm.id))"
+                                    t-att-class="{'warning text-danger fw-bolder': getDifference(pm.id)}"/>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+			</t>
+		</xpath>
+	</t>
+
+	<t t-name="InheritCashOpeningPopup" t-inherit="point_of_sale.CashOpeningPopup" t-inherit-mode="extension" owl="1">
+		<xpath expr="//div[hasclass('opening-cash-section')]" position="inside">
+			<t t-if = "pos.config.multi_currency">
+                <t t-if="state_data.payment_currency.length > 0">
+    				<span class="info-title d-flex flex-grow-1 align-items-start">Opening cash (<t t-esc="state_data.payment_currency[0].currency_id[1]"></t>)</span>
+                    <div class="cash-input-sub-section input-group">
+                        <Input tModel="[state_data, 'openingPaymentCash']"
+                            isValid.bind="env.utils.isValidFloat"
+                            callback.bind="handleInputChange"
+                            autofocus="true" />
+                        <div class="button icon btn btn-secondary" t-on-click="openDetailsPopup">
+                            <i class="fa fa-money fa-2x" role="img" title="Open the money details popup"/>
+                        </div>
+                    </div>
+                </t>
+			</t>
+		</xpath>
+	</t>
+
+	<t t-name="PaymentScreenStatus" t-inherit="point_of_sale.PaymentScreenStatus" t-inherit-mode="extension" owl="1">
+        <xpath expr="//div[hasclass('payment-status-container')]" position="replace">
+            <div class="payment-status-container d-flex flex-column-reverse flex-lg-row justify-content-between fs-2">
+                <div>
+                    <div class="payment-status-remaining">
+                        <span class="label pe-2">Remaining</span>
+                        <span class="amount" t-att-class="{ 'highlight text-primary fw-bolder': props.order.get_due() > 0 }">
+                            <t t-if="props.order.currency_amount_pay > 0 and props.order.cur_pay_id != props.order.new_currency.id">
+                            	<t t-esc="props.order.currency_symbol_pay"/>
+                            </t>
+                            <t t-esc="remainingText" />
+                        </span>
+                    </div>
+                    <div class="payment-status-total-due py-2 fs-3 text-muted">
+                        <span class="label pe-2">Total Due</span>
+                        <span>
+                            <t t-if="props.order.currency_amount_pay > 0 and props.order.cur_pay_id != props.order.new_currency.id ">
+                            	<t t-esc="props.order.currency_symbol_pay"/>
+                            </t>
+                            <t t-esc="totalDueText" />
+                        </span>
+                    </div>
+                </div>
+                <div>
+                    <div class="payment-status-change">
+                        <span class="label pe-2">Change</span>
+                        <span class="amount" t-att-class="{ 'highlight text-primary fw-bolder': props.order.get_change() > 0 }">
+                            <t t-if="props.order.currency_amount_pay > 0 and props.order.cur_pay_id != props.order.new_currency.id">
+                            	<t t-esc="props.order.currency_symbol_pay"/>
+                            </t>
+                            <t t-esc="changeText" />
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </xpath>
+    </t>
+	
+	<t t-name="PaymentScreen" t-inherit="point_of_sale.PaymentScreenTop" t-inherit-mode="extension" owl="1">
+		<xpath expr="//h2" position="after">
+			<t t-if = "pos.config.multi_currency">
+				<label class="switch">
+					<input type="checkbox" id="cur-switch" class="cur-switch" name="cur-switch" tabindex="0"/>
+					<span class="slider round" 
+						t-on-click="() => this._UpdateDetails()"
+						></span>
+				</label>
+			</t>
+		</xpath>
+	</t>
+	<t t-name="PaymentScreen" t-inherit="point_of_sale.PaymentScreen" t-inherit-mode="extension" owl="1">
+		<xpath expr="//div[hasclass('center-content')]" position="before">
+			<t t-if="env.isMobile">
+				<div class="payment-buttons">
+					<t t-if = "pos.config.multi_currency">
+						<div t-if="pos.config.multi_currency" class="button js_multi"
+							t-on-click="() => this._UpdateDetailsMobile()">
+	                        <i class="fa fa-money" /> Enable Multi Currency
+	                    </div>
+					</t>
+				</div>
+				<br/>
+				<span id = "details_mobile" class="container" style="padding-top: 0; border-bottom: dashed 1px gainsboro; min-height: 154px;font-size: 15px;">
+					<div style=" display: inline-block; width: 45%; box-sizing: border-box; padding: 16px; text-align: left; float: left;">
+						<span class='label' style="font-size:18px;"><b>Select Currency</b></span><br/>
+						<div class="client-detail">
+							<br/>
+							<select class='drop-currency' name='id'  style="font-size : 15px; border-radius:5px;" t-on-change="_ChangeCurrency">
+								<option>select currency</option>
+								<t t-foreach='pos.poscurrency' t-as='cur' t-key="cur.id">
+									<option t-att-value='cur.id'>
+										<t t-esc='cur.name'/>
+									</option>
+								</t>
+							</select>
+						</div>
+						<br/>
+						<label class="container">
+							Payment amount in <span class="currency_name" /> 
+							<input type="text" class="edit-amount" name="pos_amount" id="pos_amount" style="width: 95%;    margin-top: 5px;"/>
+						</label>
+						
+					</div>
+					<div style="display: inline-block; width: 46%; box-sizing: border-box; padding: 16px; padding-left: 0; float: right;font-size: 18px; margin-left: 12px;">
+						<t t-if='pos.config.curr_conv'>
+							<span class='label' style="font-size:18px;"><b>Currency Conversion</b></span><br/>
+							<div style="border: 3px solid black; padding: 5px; padding: 5px;border-radius: 5px;margin-top: 14px;margin-bottom: 11px;">
+								<div>
+									<span class="label">1 <t t-esc='pos.currency.name'/> =  </span><span class="currency_rate"/><span class="currency_name"/>
+								</div>
+								<div>
+									<span class= "label">Total Amount = </span><b><span class="currency_cal"/><span class="currency_symbol"/></b>
+									<input type="hidden" class="curr_cal" id="curr_cal" />
+								</div>
+							</div>
+						</t>
+						<div class="text-center">
+							<button class='button-getamount' data-action="" style="border-radius:5px; font-size:15px; background-color: #43996E;color: white; margin-left: 18px;" 
+								t-on-click="() => this._UpdateAmountt()"
+								>
+								Update Amount
+							</button>
+						</div>
+					</div>
+				</span>
+			</t>
+		</xpath>
+	</t>
+	<t t-name="PaymentScreenButtons" t-inherit="point_of_sale.PaymentScreenButtons" t-inherit-mode="extension" owl="1">
+		<xpath expr="//div[hasclass('payment-buttons')]" position="after">
+			<t t-if="!env.isMobile">
+				<div t-if='pos.config.curr_conv' id="details" class="container" style="border-bottom: dashed 1px gainsboro;width: 300px;">
+					<div style="padding: 16px;font-size: 16px;">
+						<span class='label' style="font-size:18px;"><b> Select Currency</b></span><br/>
+						<div class="client-detail">
+							<br/>
+							<select class='drop-currency' name='id'  style="font-size : 15px; border-radius:5px;" t-on-change="_ChangeCurrency">
+								<option>select currency</option>
+								<t t-foreach='pos.poscurrency' t-as='cur' t-key="cur.id">
+									<option t-att-value='cur.id'>
+										<t t-esc='cur.name'/>
+									</option>
+								</t>
+							</select>
+						</div>
+						<br/>
+						<span class='label' style="font-size:18px;"><b>Currency Conversion</b></span><br/>
+						<div style="border: 3px solid black; padding: 5px; padding: 5px;border-radius: 5px;margin-top: 14px;margin-bottom: 11px;">
+							<div>
+								<span class="label">1 <t t-esc='pos.currency.name'/> =  </span><span class="currency_rate"/><span class="currency_symbol"/>
+							</div>
+							<div>
+								<span class= "label">Total Amount = </span><b><span class="currency_cal"/><span class="currency_symbol"/></b>
+								<input type="hidden" class="curr_cal" id="curr_cal"/>
+							</div>
+						</div>
+						<br/>
+						<div class="container">
+							Payment amount in <span class="currency_name" /> 
+							<input type="text" class="edit-amount" name="pos_amount" id="pos_amount"/>
+						</div>
+						<br/>
+						<div class="text-center">
+							<button class='button-getamount' data-action="" style="border-radius:5px; font-size:15px; background-color: #43996E;color: white;" 
+								t-on-click="() => this._UpdateAmountt()"
+								>
+								Update Amount
+							</button>
+						</div>
+					</div>
+				</div>
+			</t>
+		</xpath>
+	</t>
+
+	<t t-name="PaymentScreenPaymentLines" t-inherit="point_of_sale.PaymentScreenPaymentLines" t-inherit-mode="extension" owl="1">
+		<xpath expr="//t[@t-if='line.selected']/div[hasclass('paymentline')]/div[hasclass('payment-infos')]/div[hasclass('payment-amount')]" position="before">
+			<div>
+				<t t-if="pos.currency.symbol != line.currency_symbol">
+					(<span t-esc="line.currency_amount"/>
+					 <span t-esc="line.currency_symbol"/>)
+				</t>
+			</div>
+		</xpath>
+
+		<xpath expr="//t[@t-else='']/div[hasclass('paymentline')]/div[hasclass('payment-infos')]/div[hasclass('payment-amount')]" position="before">
+			<div>
+				<t t-if="pos.currency.symbol != line.currency_symbol">
+					(<span t-esc="line.currency_amount"/>
+					 <span t-esc="line.currency_symbol"/>)
+				</t>
+			</div>
+		</xpath>
+	</t>
+
+	<t t-name="OrderReceipt" t-inherit="point_of_sale.OrderReceipt" t-inherit-mode="extension" owl="1">
+		<xpath expr="//div[hasclass('paymentlines')]" position="replace">
+			<t t-foreach="props.data.paymentlines" t-as="line" t-key="line_index">
+				<t t-if="line.currency_amount_pay > 0">
+					<div style="display: inline-flex;width:100%;">
+						<span style="width:33%;" t-esc="line.name" />
+						<div style="width:33%;text-align: center;">
+						</div>
+						<span style="width:33%;text-align: right;">
+							<t t-esc="line.currency_symbol_pay"/>
+							<t t-esc="line.currency_amount_pay"/>
+						</span>
+					</div>
+				</t>
+				<t t-else="">
+					<div style="display: inline-flex;width:100%;">
+						<span style="width:33%;" t-esc="line.name" />
+						<div style="width:33%;text-align: center;">
+							<t t-if="env.services.pos.currency.symbol != line.currency_symbol">
+								(<span t-esc="line.currency_amount"/>
+							 	<span t-esc="line.currency_symbol"/>)
+							</t>
+						</div>
+						<span style="width:33%;text-align: right;" t-esc="env.utils.formatCurrency(line.amount)"/>
+					</div>					
+				</t>
+			</t>
+			<br/>
+		</xpath>
+	</t>
+
+</templates>

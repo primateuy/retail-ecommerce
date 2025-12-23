@@ -1,0 +1,28 @@
+<?xml version="1.0"?>
+<odoo>
+    <data>
+
+	    <record id="product_pricelist_inherited" model="ir.ui.view">
+			<field name="name">inherit.product.pricelist.form.view</field>
+			<field name="model">product.pricelist</field>
+			<field name="inherit_id" ref="product.product_pricelist_view" />
+			<field name="arch" type="xml">
+				<xpath expr="//field[@name='item_ids']/tree/field[@name='min_quantity']" position="before">
+					<field name="uom_id"/>
+				</xpath>
+			</field>
+		</record>
+
+
+		<record id="product_pricelist_item_form_inherited" model="ir.ui.view">
+			<field name="name">inherit.product.pricelist.item.form.view</field>
+			<field name="model">product.pricelist.item</field>
+			<field name="inherit_id" ref="product.product_pricelist_item_form_view" />
+			<field name="arch" type="xml">
+				<xpath expr="//field[@name='applied_on']" position="after">
+					<field name="uom_id"/>
+				</xpath>
+			</field>
+		</record>
+    </data>
+</odoo>

@@ -1,0 +1,22 @@
+Version 17.0.0.1 : (21/03/2024)
+	- In config selecting currency at that time the current rate is not showing properly fixed that issue.
+
+Version 17.0.0.2 : (11/06/2024)
+	- Fix the traceback at the time of save currencies at pos config.
+
+
+Version 17.0.0.3 : (29/10/2024)
+	- Default payment boolean false. also can select paymentline.
+
+Version 17.0.0.4 : (09/12/2024)
+Customization
+	- Add payment currency for the pos side.
+	- Store payment currency in pos payment.
+	- Compatible module with bi_pos_multi_currency_pricelist.
+	- Open session at that time store amount with foreign currency.
+	- For closing the balance session at that time store the amount with foreign currency.
+
+
+Version 17.0.0.5 : (13/12/2024)
+Customization
+	- Add method in closing popup for payment diffrenece popup.

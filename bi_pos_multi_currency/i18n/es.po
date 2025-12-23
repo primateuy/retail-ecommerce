@@ -1,0 +1,254 @@
+# Translation of Odoo Server.
+# This file contains the translation of the following modules:
+# 	* bi_pos_multi_currency
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: Odoo Server 13.0\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2021-12-16 08:26+0000\n"
+"PO-Revision-Date: 2021-12-16 08:26+0000\n"
+"Last-Translator: \n"
+"Language-Team: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: \n"
+"Plural-Forms: \n"
+
+#. module: bi_pos_multi_currency
+#: model:ir.model.fields,field_description:bi_pos_multi_currency.field_account_bank_statement_line__account_currency
+#: model:ir.model.fields,field_description:bi_pos_multi_currency.field_pos_payment__account_currency
+msgid "Amount currency"
+msgstr "Monto de dinero"
+
+#. module: bi_pos_multi_currency
+#: model:ir.model,name:bi_pos_multi_currency.model_account_bank_statement_line
+msgid "Bank Statement Line"
+msgstr "Línea de extracto bancario"
+
+#. module: bi_pos_multi_currency
+#. openerp-web
+#: code:addons/bi_pos_multi_currency/static/src/xml/pos.xml:0
+#, python-format
+msgid "Change"
+msgstr "Cambio"
+
+#. module: bi_pos_multi_currency
+#: model:ir.model.fields,field_description:bi_pos_multi_currency.field_res_currency__rate_in_company_currency
+msgid "Company Currency Rate"
+msgstr "Tipo de moneda de la empresa"
+
+#. module: bi_pos_multi_currency
+#: model:ir.model.fields,field_description:bi_pos_multi_currency.field_currency_rate__create_uid
+msgid "Created by"
+msgstr "Creado por"
+
+#. module: bi_pos_multi_currency
+#: model:ir.model.fields,field_description:bi_pos_multi_currency.field_currency_rate__create_date
+msgid "Created on"
+msgstr "Creado en"
+
+#. module: bi_pos_multi_currency
+#: model:ir.model.fields,field_description:bi_pos_multi_currency.field_pos_order__cur_id
+msgid "Cur"
+msgstr "Cur"
+
+#. module: bi_pos_multi_currency
+#: model:ir.model,name:bi_pos_multi_currency.model_res_currency
+#: model:ir.model.fields,field_description:bi_pos_multi_currency.field_currency_rate__currency_id
+msgid "Currency"
+msgstr "Divisa"
+
+#. module: bi_pos_multi_currency
+#. openerp-web
+#: code:addons/bi_pos_multi_currency/static/src/xml/pos.xml:0
+#, python-format
+msgid "Currency Conversion"
+msgstr "Conversión de Moneda"
+
+#. module: bi_pos_multi_currency
+#: model:ir.model.fields,help:bi_pos_multi_currency.field_currency_rate__symbol
+msgid "Currency sign, to be used when printing amounts."
+msgstr "Signo de moneda, para usar al imprimir cantidades."
+
+#. module: bi_pos_multi_currency
+#: model:ir.model.fields,field_description:bi_pos_multi_currency.field_currency_rate__display_name
+msgid "Display Name"
+msgstr "Nombre para mostrar"
+
+#. module: bi_pos_multi_currency
+#. openerp-web
+#: code:addons/bi_pos_multi_currency/static/src/xml/pos.xml:0
+#, python-format
+msgid "Due"
+msgstr "Vencer"
+
+#. module: bi_pos_multi_currency
+#: model:ir.model.fields,field_description:bi_pos_multi_currency.field_pos_config__multi_currency
+#: model_terms:ir.ui.view,arch_db:bi_pos_multi_currency.pos_config_view_inherit_form
+msgid "Enable Multi Currency"
+msgstr "Habilitar multidivisa"
+
+#. module: bi_pos_multi_currency
+#: model:ir.model.fields,field_description:bi_pos_multi_currency.field_pos_config__curr_conv
+#: model_terms:ir.ui.view,arch_db:bi_pos_multi_currency.pos_config_view_inherit_form
+msgid "Enable Multi Currency Conversation"
+msgstr "Habilitar la conversación de varias divisas"
+
+#. module: bi_pos_multi_currency
+#: model:ir.model.fields,field_description:bi_pos_multi_currency.field_currency_rate__rate
+msgid "Exchange Rate"
+msgstr "Tipo de cambio"
+
+#. module: bi_pos_multi_currency
+#. openerp-web
+#: code:addons/bi_pos_multi_currency/static/src/xml/pos.xml:0
+#, python-format
+msgid "Exchanged Rate"
+msgstr "Tasa de cambio"
+
+#. module: bi_pos_multi_currency
+#: model:ir.model.fields,field_description:bi_pos_multi_currency.field_currency_rate__id
+msgid "ID"
+msgstr "IDENTIFICACIÓN"
+
+#. module: bi_pos_multi_currency
+#: model:ir.model.fields,field_description:bi_pos_multi_currency.field_currency_rate____last_update
+msgid "Last Modified on"
+msgstr "Última modificación el"
+
+#. module: bi_pos_multi_currency
+#: model:ir.model.fields,field_description:bi_pos_multi_currency.field_currency_rate__write_uid
+msgid "Last Updated by"
+msgstr "Actualizado por última vez por"
+
+#. module: bi_pos_multi_currency
+#: model:ir.model.fields,field_description:bi_pos_multi_currency.field_currency_rate__write_date
+msgid "Last Updated on"
+msgstr "Ultima actualización en"
+
+#. module: bi_pos_multi_currency
+#. openerp-web
+#: code:addons/bi_pos_multi_currency/static/src/xml/pos.xml:0
+#, python-format
+msgid "Method"
+msgstr "Método"
+
+#. module: bi_pos_multi_currency
+#: model_terms:ir.ui.view,arch_db:bi_pos_multi_currency.pos_config_view_inherit_form
+msgid "Multi Currency conversation"
+msgstr "Conversación multidivisa"
+
+#. module: bi_pos_multi_currency
+#: code:addons/bi_pos_multi_currency/models/pos_config_inherit.py:0
+#, python-format
+msgid ""
+"No cash statement found for this session. Unable to record returned cash."
+msgstr ""
+"No se encontró ningún estado de caja para esta sesión. No se puede registrar el efectivo devuelto."
+
+#. module: bi_pos_multi_currency
+#. openerp-web
+#: code:addons/bi_pos_multi_currency/static/src/xml/pos.xml:0
+#, python-format
+msgid "Payment amount in"
+msgstr "Importe del pago en"
+
+#. module: bi_pos_multi_currency
+#: model:ir.model,name:bi_pos_multi_currency.model_pos_config
+msgid "Point of Sale Configuration"
+msgstr "Configuración de punto de venta"
+
+#. module: bi_pos_multi_currency
+#: model:ir.model,name:bi_pos_multi_currency.model_pos_order
+msgid "Point of Sale Orders"
+msgstr "Órdenes de punto de venta"
+
+#. module: bi_pos_multi_currency
+#: model:ir.model,name:bi_pos_multi_currency.model_pos_payment
+msgid "Point of Sale Payments"
+msgstr "Pagos en el punto de venta"
+
+#. module: bi_pos_multi_currency
+#: model:ir.model.fields,field_description:bi_pos_multi_currency.field_currency_rate__pos
+msgid "Pos"
+msgstr "Pos"
+
+#. module: bi_pos_multi_currency
+#. openerp-web
+#: code:addons/bi_pos_multi_currency/static/src/xml/pos.xml:0
+#, python-format
+msgid "Receipt in"
+msgstr "Recibo en"
+
+#. module: bi_pos_multi_currency
+#. openerp-web
+#: code:addons/bi_pos_multi_currency/static/src/xml/pos.xml:0
+#, python-format
+msgid "Select Currency"
+msgstr "Seleccione el tipo de moneda"
+
+#. module: bi_pos_multi_currency
+#: model:ir.model.fields,help:bi_pos_multi_currency.field_currency_rate__rate
+msgid "The rate of the currency to the currency of rate 1."
+msgstr "La tasa de la moneda a la moneda de la tasa 1."
+
+#. module: bi_pos_multi_currency
+#. openerp-web
+#: code:addons/bi_pos_multi_currency/static/src/xml/pos.xml:0
+#, python-format
+msgid "Total Amount ="
+msgstr "Monto total ="
+
+#. module: bi_pos_multi_currency
+#. openerp-web
+#: code:addons/bi_pos_multi_currency/static/src/xml/pos.xml:0
+#, python-format
+msgid "Update Amount"
+msgstr "Monto de actualización"
+
+#. module: bi_pos_multi_currency
+#: model:ir.model.fields,field_description:bi_pos_multi_currency.field_account_bank_statement_line__currency
+#: model:ir.model.fields,field_description:bi_pos_multi_currency.field_pos_payment__currency
+msgid "currency"
+msgstr "divisa"
+
+#. module: bi_pos_multi_currency
+#: model:ir.model.fields,field_description:bi_pos_multi_currency.field_currency_rate__symbol
+msgid "currency symbol"
+msgstr "símbolo de moneda"
+
+#. module: bi_pos_multi_currency
+#: model:ir.model,name:bi_pos_multi_currency.model_currency_rate
+msgid "currency.rate"
+msgstr ""
+
+#. module: bi_pos_multi_currency
+#: model:ir.model.fields,field_description:bi_pos_multi_currency.field_currency_rate__date
+msgid "current Date"
+msgstr "fecha actual"
+
+#. module: bi_pos_multi_currency
+#. openerp-web
+#: code:addons/bi_pos_multi_currency/static/src/xml/pos.xml:0
+#, python-format
+msgid "payment"
+msgstr "pago"
+
+#. module: bi_pos_multi_currency
+#: model:ir.model.fields,field_description:bi_pos_multi_currency.field_pos_config__selected_currency
+msgid "pos"
+msgstr "pos"
+
+#. module: bi_pos_multi_currency
+#: code:addons/bi_pos_multi_currency/models/pos_config_inherit.py:0
+#, python-format
+msgid "return"
+msgstr "regreso"
+
+#. module: bi_pos_multi_currency
+#. openerp-web
+#: code:addons/bi_pos_multi_currency/static/src/xml/pos.xml:0
+#, python-format
+msgid "select currency"
+msgstr "Seleccione el tipo de moneda"
