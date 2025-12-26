@@ -30,11 +30,23 @@ class SaleOrder(models.Model):
                 pais_id = self.env['res.country'].search([('code', '=', comprador['documento']['pais'].upper())], limit=1)
                 if pais_id:
                     vals['country_id'] = pais_id.id
-                # tipo_doc_fenicio = comprador['documento']['tipo']
+                tipo_doc_fenicio = comprador['documento']['tipo']
                 # mapping_tipo_doc = {
                 #     'PASAPORTE': '5',
                 #     'DOCUMENTO_IDENTIDAD': '3',
                 # }
+
+                tipo_doc = '';
+                if json_data['documento']['tipo'] == '0':
+                    tipo_doc = 'VAT'
+                elif json_data['documento']['tipo'] == '2':
+                    tipo_doc = 'RUC'
+                elif json_data['documento']['tipo'] == '3':
+                    tipo_doc = 'CI'
+                elif json_data['documento']['tipo'] == '4':
+                    tipo_doc = 'OTROS'
+
+                tipoDocumento = self.env['res.l10n_latam.identification.type'].search([('name', '=', tipo_doc), ('active', '=', True)], limit=1);
 
                 # Tipos de documento
 
@@ -44,6 +56,7 @@ class SaleOrder(models.Model):
                 # OTROS código 4
                 vals['vat'] = comprador['documento']['numero']
                 vals['numero_doc'] = comprador['documento']['numero']
+                vals['l10n_latam_identification_type_id'] = tipoDocumento.id if tipoDocumento else False
 
             partner_id = self.env['res.partner'].create([vals])
             #partner_id.child_ids.sudo().unlink()

@@ -60,12 +60,12 @@ class SaleOrder(models.Model):
         partner_address_id = partner_id.get_partner_invoice_address_orden_venta(json_data)
 
         tarifa_id = self.env['product.pricelist'].search([
-            # ('e_fenicio', '=', True),
+            ('e_fenicio', '=', True),
             ('currency_id.name', '=', json_data['pago']['moneda']),
         ])
 
         if not tarifa_id:
-            return False, 'No se encuenta lista de precios para la moneda {}'.format(json_data['pago']['moneda']);
+            return False, 'No se encuentra lista de precios para la moneda {}'.format(json_data['pago']['moneda']);
 
         date_order = parse(json_data['fechaInicio'])
 
@@ -225,7 +225,6 @@ class SaleOrder(models.Model):
             })
             _logger.info("ANTES DE CREAR FACTURA EN LA FUNCION ORIGINAL x2");
             modal_sale_invoice.with_context(active_ids=[self.id]).create_invoices()
-            _logger.info("SALIENDO DE CREAR FACTURA EN LA FUNCION ORIGINAL z3");
             return True
         except Exception as e:
             _logger.error("Error al crear la factura: %s", str(e))

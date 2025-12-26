@@ -138,17 +138,6 @@ class ApiInternal(models.Model):
                     listaAlternativo = variante.pricelist_relation_ids.precio_alternativo;
                     
 
-                    # Reemplaza la sección completa de obtención de precios en el método listar_productos
-                    # Aproximadamente desde la línea 120 hasta la 155
-
-                    # Reemplaza la sección completa de obtención de precios en el método listar_productos
-                    # Aproximadamente desde la línea 120 hasta la 155
-
-                    # Reemplaza la sección completa de obtención de precios en el método listar_productos
-                    # Aproximadamente desde la línea 120 hasta la 155
-
-                    # REEMPLAZA COMPLETAMENTE la sección del bucle de presentacion_attrs
-                    # Aproximadamente desde la línea 120 hasta la 155 en tu archivo api_internal.py
 
                     for pres_attr_val in presentacion_attrs:
                         codigo = str(pres_attr_val.attribute_id.codigo) if pres_attr_val.attribute_id.codigo else '000'
@@ -445,16 +434,24 @@ class ApiInternal(models.Model):
             user = self.env['res.partner'].search([('id_fenicio', '=', json_data['id'])], limit=1);
             pais = self.env['res.country'].search([('code', '=', json_data['documento']['pais'])], limit=1);
 
-            # allIdentificaciones = self.env['l10n_latam.identification.type'].search([]);
-
-            # _logger.info("TIPO DE IDENTIFICACION");
-            # for identificacion in allIdentificaciones:
-                
-            #     _logger.info(f"{identificacion.name} NOMBRE <=>");
-
-            tipo_doc = "CI" if json_data['documento']['tipo'] == 'DOCUMENTO_IDENTIDAD' else json_data['documento']['tipo'];
-            _logger.info(f"Buscando tipo de identificación: {tipo_doc}");
             
+            # VAT código 0
+            # RUC código 2
+            # CI código 3
+            # OTROS código 4
+
+            tipo_doc = '';
+            if json_data['documento']['tipo'] == '0':
+                tipo_doc = 'VAT'
+            elif json_data['documento']['tipo'] == '2':
+                tipo_doc = 'RUC'
+            elif json_data['documento']['tipo'] == '3':
+                tipo_doc = 'CI'
+            elif json_data['documento']['tipo'] == '4':
+                tipo_doc = 'OTROS'
+
+            tipoDocumento = self.env['l10n_latam.identification.type'].search([('name', '=', tipo_doc), ('active', '=', True)], limit=1);
+
             genero = '';
 
             if json_data['genero'] and (json_data['genero'] == 'MASCULINO' or json_data['genero'] == 'Masculino' or json_data['genero'] == 'M'):
@@ -464,8 +461,19 @@ class ApiInternal(models.Model):
             elif json_data['genero'] and (json_data['genero'] == 'OTRO' or json_data['genero'] == 'Otro' or json_data['genero'] == 'O'):
                 genero = 'other';
             
-    
+            city = 'No definida';
+            if json_data['documento']['ciudad']:
+                city = self.env['res.country.city'].search([('name', '=', json_data['documento']['ciudad'])], limit=1);
 
+            # Por esto:
+            city = 'No definida'
+            if json_data.get('documento', {}).get('ciudad'):
+                city = json_data['documento']['ciudad']
+                city = self.env['res.country.city'].search([('name', '=', city)], limit=1)
+
+            _logger.info(f"La ciudad ha agregar sera {city.name}")
+
+            _logger.info(f"LA ID DE LA CIUDAD ES => {city.id if city else 'No definida'}");
             if user:
                 _logger.info("USUARIO ENCONTRADO");
                 message = "El usuario ya existia, no se han insertado los datos."
@@ -476,8 +484,10 @@ class ApiInternal(models.Model):
                 'email': json_data['email'],
                 'phone': json_data['telefono'],
                 'gender': genero,
+                'l10n_latam_identification_type_id': tipoDocumento.id if tipoDocumento else False,
                 'vat': json_data['documento']['numero'],
                 'country_id': pais.id if pais else '',
+                'city_id': city.id if city else '',
                 'company_id': self.env.company.id,
                 'programa_millas': json_data['extras']['programaMillas']
             })
@@ -656,6 +666,8 @@ class ApiInternal(models.Model):
             if len(sale_order_id.invoice_ids) == 0:
                 sale_order_id.create_invoice_fenicio()
                 invoice_ids = sale_order_id.invoice_ids
+
+                _logger.info("DESPUES DE CREAR FACTURA");
                 plazo_pago_id = self.env['account.payment.term'].search([('for_fenicio', '=', True)], limit=1)
                 if plazo_pago_id:
                     invoice_ids.write({
