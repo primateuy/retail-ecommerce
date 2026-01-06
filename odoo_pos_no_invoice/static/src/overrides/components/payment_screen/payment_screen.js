@@ -89,6 +89,49 @@ patch(PaymentScreen.prototype, {
                     console.log('Factura generada correctamente, no se descarga (account_move:', accountMoveId, ')');
                 }
             }
+            
+            // 3. Procesamiento posterior - Mover dentro del try para manejar errores correctamente
+            // Esto evita el error "Component is destroyed" si el componente se destruye durante el proceso
+            if (
+                syncOrderResult &&
+                syncOrderResult.length > 0 &&
+                this.currentOrder.wait_for_push_order()
+            ) {
+                try {
+                    await this.postPushOrderResolve(syncOrderResult.map((res) => res.id));
+                } catch (postResolveError) {
+                    // Si el componente fue destruido, solo registrar el error sin lanzarlo
+                    // para no interrumpir el flujo de validación
+                    // El error puede venir en diferentes formatos: mensaje de error, string, o objeto
+                    const errorMessage = postResolveError?.message || postResolveError?.toString() || String(postResolveError);
+                    if (errorMessage.includes('Component is destroyed') || 
+                        errorMessage.includes('component is destroyed') ||
+                        errorMessage.includes('destroyed')) {
+                        console.warn('Componente destruido durante postPushOrderResolve, continuando...', errorMessage);
+                    } else {
+                        // Para otros errores, re-lanzar para que se manejen en el catch principal
+                        throw postResolveError;
+                    }
+                }
+            }
+
+            // Ejecutar afterOrderValidation dentro del try para manejar errores correctamente
+            try {
+                await this.afterOrderValidation(!!syncOrderResult && syncOrderResult.length > 0);
+            } catch (afterValidationError) {
+                // Si el componente fue destruido, solo registrar el error sin lanzarlo
+                // para no interrumpir el flujo de validación
+                // El error puede venir en diferentes formatos: mensaje de error, string, o objeto
+                const errorMessage = afterValidationError?.message || afterValidationError?.toString() || String(afterValidationError);
+                if (errorMessage.includes('Component is destroyed') || 
+                    errorMessage.includes('component is destroyed') ||
+                    errorMessage.includes('destroyed')) {
+                    console.warn('Componente destruido durante afterOrderValidation, continuando...', errorMessage);
+                } else {
+                    // Para otros errores, re-lanzar para que se manejen en el catch principal
+                    throw afterValidationError;
+                }
+            }
         } catch (error) {
             if (error instanceof ConnectionLostError) {
                 this.pos.showScreen(this.nextScreen);
@@ -100,16 +143,5 @@ patch(PaymentScreen.prototype, {
         } finally {
             this.env.services.ui.unblock();
         }
-
-        // 3. Procesamiento posterior
-        if (
-            syncOrderResult &&
-            syncOrderResult.length > 0 &&
-            this.currentOrder.wait_for_push_order()
-        ) {
-            await this.postPushOrderResolve(syncOrderResult.map((res) => res.id));
-        }
-
-        await this.afterOrderValidation(!!syncOrderResult && syncOrderResult.length > 0);
     }
 });
