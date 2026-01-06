@@ -10,10 +10,13 @@
     'data': [
         'security/ir.model.access.csv',
         'data/oca_installation_data.xml',
+        'data/change_ticket_report_data.xml',
         'views/pos_payment_method_views.xml',
         'views/pos_payment_views.xml',
         'views/payment_transaction_views.xml',
         'views/account_payment_views.xml',
+        # Cargar la vista de pos_config después de que se carguen los modelos
+        'views/pos_config_views.xml',
     ],
     'assets': {
         'point_of_sale._assets_pos': [

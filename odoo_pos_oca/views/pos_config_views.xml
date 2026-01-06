@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <!-- 
+        Vista para agregar el campo de configuración del reporte de ticket de cambio
+        en la configuración del POS
+        -->
+        <record id="pos_config_view_form_inherit_change_ticket" model="ir.ui.view">
+            <field name="name">pos.config.form.inherit.change.ticket</field>
+            <field name="model">pos.config</field>
+            <field name="inherit_id" ref="point_of_sale.pos_config_view_form"/>
+            <field name="arch" type="xml">
+                <!-- Agregar el campo en una sección genérica que siempre existe -->
+                <!-- Buscamos el sheet principal y agregamos el campo dentro de un grupo -->
+                <xpath expr="//sheet" position="inside">
+                    <group string="Ticket de Cambio" col="2">
+                        <field name="change_ticket_report_id" 
+                               widget="many2one" 
+                               options="{'no_create': True, 'no_create_edit': True}"/>
+                    </group>
+                </xpath>
+            </field>
+        </record>
+    </data>
+</odoo>

@@ -1,0 +1,139 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <!-- 
+        Reporte de ejemplo para Ticket de Cambio
+        Este es un reporte básico que puede ser personalizado según las necesidades
+        -->
+        <record id="action_report_pos_order_change_ticket" model="ir.actions.report">
+            <field name="name">Ticket de Cambio POS</field>
+            <field name="model">pos.order</field>
+            <field name="report_type">qweb-pdf</field>
+            <field name="report_name">odoo_pos_oca.change_ticket_report</field>
+            <field name="report_file">odoo_pos_oca.change_ticket_report</field>
+            <field name="print_report_name">'Ticket de Cambio - %s' % (object.name)</field>
+            <field name="binding_model_id" ref="point_of_sale.model_pos_order"/>
+            <field name="binding_type">report</field>
+        </record>
+
+        <!-- Template QWeb para el ticket de cambio -->
+        <!-- El XML ID debe coincidir con el report_name para que el sistema pueda encontrarlo -->
+        <record id="change_ticket_report" model="ir.ui.view">
+            <field name="name">odoo_pos_oca.change_ticket_report</field>
+            <field name="model">pos.order</field>
+            <field name="type">qweb</field>
+            <field name="arch" type="xml">
+                <t t-call="web.html_container">
+                    <t t-foreach="docs" t-as="o">
+                        <t t-call="web.external_layout">
+                            <div class="page">
+                                <div class="oe_structure"/>
+                                
+                                <!-- Encabezado del Ticket -->
+                                <div class="row mt16 mb16">
+                                    <div class="col-12 text-center">
+                                        <h2>TICKET DE CAMBIO</h2>
+                                        <p><strong>Orden:</strong> <span t-field="o.name"/></p>
+                                        <p><strong>Fecha:</strong> <span t-field="o.date_order" t-options='{"widget": "datetime"}'/></p>
+                                    </div>
+                                </div>
+
+                                <!-- Información de la Empresa -->
+                                <div class="row mb16" t-if="o.company_id">
+                                    <div class="col-12">
+                                        <h4 t-field="o.company_id.name"/>
+                                        <p t-if="o.company_id.street"><span t-field="o.company_id.street"/></p>
+                                        <p t-if="o.company_id.city">
+                                            <span t-field="o.company_id.city"/>
+                                            <t t-if="o.company_id.state_id">, <span t-field="o.company_id.state_id.name"/></t>
+                                        </p>
+                                        <p t-if="o.company_id.phone">Tel: <span t-field="o.company_id.phone"/></p>
+                                    </div>
+                                </div>
+
+                                <!-- Información del Cliente -->
+                                <div class="row mb16" t-if="o.partner_id">
+                                    <div class="col-12">
+                                        <h5>Cliente:</h5>
+                                        <p><strong><span t-field="o.partner_id.name"/></strong></p>
+                                        <p t-if="o.partner_id.vat">RUT: <span t-field="o.partner_id.vat"/></p>
+                                    </div>
+                                </div>
+
+                                <!-- Resumen de Pagos -->
+                                <div class="row mb16">
+                                    <div class="col-12">
+                                        <h5>Resumen de Pagos:</h5>
+                                        <table class="table table-sm">
+                                            <thead>
+                                                <tr>
+                                                    <th>Método de Pago</th>
+                                                    <th class="text-end">Monto</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <t t-foreach="o.payment_ids" t-as="payment">
+                                                    <tr>
+                                                        <td><span t-field="payment.payment_method_id.name"/></td>
+                                                        <td class="text-end">
+                                                            <span t-field="payment.amount" t-options='{"widget": "monetary", "display_currency": o.currency_id}'/>
+                                                        </td>
+                                                    </tr>
+                                                </t>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+
+                                <!-- Totales -->
+                                <div class="row mb16">
+                                    <div class="col-12">
+                                        <table class="table table-sm">
+                                            <tr>
+                                                <td><strong>Total de la Orden:</strong></td>
+                                                <td class="text-end">
+                                                    <strong>
+                                                        <span t-field="o.amount_total" t-options='{"widget": "monetary", "display_currency": o.currency_id}'/>
+                                                    </strong>
+                                                </td>
+                                            </tr>
+                                            <tr>
+                                                <td><strong>Total Pagado:</strong></td>
+                                                <td class="text-end">
+                                                    <strong>
+                                                        <span t-field="o.amount_paid" t-options='{"widget": "monetary", "display_currency": o.currency_id}'/>
+                                                    </strong>
+                                                </td>
+                                            </tr>
+                                            <tr t-if="o.amount_paid > o.amount_total">
+                                                <td><strong>Cambio:</strong></td>
+                                                <td class="text-end">
+                                                    <strong>
+                                                        <span t-esc="o.amount_paid - o.amount_total" 
+                                                              t-options='{"widget": "monetary", "display_currency": o.currency_id}'/>
+                                                    </strong>
+                                                </td>
+                                            </tr>
+                                        </table>
+                                    </div>
+                                </div>
+
+                                <!-- Pie de página -->
+                                <div class="row mt16">
+                                    <div class="col-12 text-center">
+                                        <p class="text-muted">Gracias por su compra</p>
+                                        <p class="text-muted" t-if="o.session_id">
+                                            Sesión: <span t-field="o.session_id.name"/>
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <div class="oe_structure"/>
+                            </div>
+                        </t>
+                    </t>
+                </t>
+            </field>
+        </record>
+    </data>
+</odoo>
