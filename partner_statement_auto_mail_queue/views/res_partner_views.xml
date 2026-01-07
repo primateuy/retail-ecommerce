@@ -11,13 +11,17 @@
                         <group>
                             <group>
                                 <field name="enviar_estado_cuenta"/>
+                                <field name="planilla_estado_cuenta_id" invisible="enviar_estado_cuenta == False" required="enviar_estado_cuenta == True" options="{'no_open': True, 'no_create_edit': True, 'no_create': True, 'no_quick_create':True}"/>
                                 <field name="enviar_estado_pendiente"/>
+                                <field name="planilla_estado_pendiente_id" invisible="enviar_estado_pendiente == False" required="enviar_estado_pendiente == True" options="{'no_open': True, 'no_create_edit': True, 'no_create': True, 'no_quick_create':True}"/>
                                 <field name="email_alternativo"/>
                                 <field name="only_company_ids" widget="many2many_tags" options="{'no_open': True, 'no_create_edit': True, 'no_create': True, 'no_quick_create':True}"/>
                             </group>
                             <group>
+                                <field name="numero_veces" required="enviar_estado_cuenta == True or enviar_estado_pendiente == True"/>
+                                <field name="periodo" required="enviar_estado_cuenta == True or enviar_estado_pendiente == True"/>
+                                <field name="proximo_envio" required="enviar_estado_cuenta == True or enviar_estado_pendiente == True"/>
                                 <field name="ultimo_envio" readonly="1"/>
-                                <field name="proximo_envio" readonly="1"/>
                                 <field name="statement_defaults"/>
                                 <field name="outstanding_defaults"/>
                             </group>
