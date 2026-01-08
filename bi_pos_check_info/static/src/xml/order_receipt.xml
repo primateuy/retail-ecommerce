@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates id="template" xml:space="preserve">
+
+    <t t-name="bi_pos_check_info.OrderReceipt" t-inherit="point_of_sale.OrderReceipt" t-inherit-mode="extension" owl="1">
+        <xpath expr="//div[hasclass('paymentlines')]/span[hasclass('pos-receipt-right-align')]" position="after">
+            <div class="check" t-foreach="props.data.paymentlines" t-as="line" t-key="line_index">
+                <t t-if="line.allow_check_info">
+                    <div class="">
+                        <t t-foreach='env.services.pos.banks' t-as="bank" t-key="bank.id">
+                            <t t-if="bank.id == line.bank_name">
+                                <strong> Bank Name : </strong><t t-esc="bank.name"/>
+                            </t>
+                        </t>
+                    </div>
+                    <div class="">
+                       <strong> Bank Account : </strong><t t-esc="line.bank_account"/>
+                    </div>
+                    <div class="checkNO">
+                       <strong> Check Number :  </strong><t t-esc="line.check_number"/>
+                    </div>
+                    <div class="">
+                        <strong> Owner Name : </strong><t t-esc="line.owner_name"/>
+                    </div>
+                </t>
+            </div>
+        </xpath>
+    </t>
+</templates>
