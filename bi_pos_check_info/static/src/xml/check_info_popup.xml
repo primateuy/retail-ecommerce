@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates id="template" xml:space="preserve">
+    <t t-name="bi_pos_check_info.CheckInfoPopup" owl="1">
+        <div class="popup popup-CheckInfoPopup">
+            <div class="modal-header" style="color: black !important;">
+                <h4 class="modal-title"><t t-esc="props.title" /></h4>
+            </div>
+
+            <div class="modal-body">
+                    <table class="table table-sm" style="width: 100%;font-size:20px;">
+                        <tr>
+                            <td>Bank Name:</td>
+                            <td>
+                                <select id="bank_id" class="bank bank_id" name='bank_id' t-model="props.array.bank_name" required="required" style="margin: 8px auto;min-width: 80%;min-height: 40px;background: white;border: none;
+                                    box-shadow: 0px 0px 0px 1px rgb(220 220 220) inset;border-radius:4px;">
+                                    <t t-foreach='env.services.pos.banks' t-as="bank" t-key="bank.id">
+                                        <option t-att-value='bank.id'>
+                                            <t t-esc='bank.name'/>
+                                        </option>
+                                    </t>
+                                </select>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>Customer: </td>
+                            <td>
+                                <input t-model="props.array.owner_name" id="owner_name" type="text" value="" placeholder="Customer"/>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>Account No.: </td>
+                            <td>
+                                <input t-model="props.array.bank_account" id="bank_account" type="text" value="" placeholder="Account No"/>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>Check Number: </td>
+                            <td>
+                                <input t-model="props.array.check_number" id="check_number" type="text" value="" placeholder="Check Number"/>
+                            </td>
+                        </tr>
+                    </table>
+            </div>
+            <footer class="footer modal-footer">
+                <div class="button confirm btn btn-lg btn-primary" t-on-click="confirm">
+                    <t t-esc="props.confirmText"/>
+                </div>
+                <div class="button cancel btn btn-lg btn-secondary" t-on-click="cancel">
+                    <t t-esc="props.cancelText"/>
+                </div>
+            </footer>
+        </div>
+    </t>
+</templates>

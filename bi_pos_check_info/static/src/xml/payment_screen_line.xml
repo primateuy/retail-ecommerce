@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates id="template" xml:space="preserve">
+    <t t-name="PaymentScreenPaymentLines" t-inherit="point_of_sale.PaymentScreenPaymentLines"
+       t-inherit-mode="extension" owl="1">
+        <xpath expr="//div[hasclass('payment-amount')]" position="before">
+			<div>
+                <t t-log="line"/>
+				<t t-if="env.services.pos.config.allow_check_info &amp;&amp; line.payment_method.allow_check_info">
+                    <i
+                       t-on-click="() => this._CheckInfoClicked(line.cid)"
+                       class="oe_link_icon fa fa-bank oe_icon line-lot-icon oe_red"
+                       aria-label="Check Info"
+                       title="Check Info"
+                       style="margin-top:80%;"
+                    />
+                </t>
+			</div>
+		</xpath>
+
+        <xpath expr="//t[@t-else='']//div[hasclass('payment-amount')]" position="before">
+			<div>
+            <t t-log="11"/>
+				<t t-if="env.services.pos.config.allow_check_info &amp;&amp; line.payment_method.allow_check_info">
+                    <i t-on-click="() => this._CheckInfoClicked(line.cid)"
+                       class="oe_link_icon fa fa-bank oe_icon line-lot-icon oe_red"
+                       aria-label="Check Info"
+                       title="Check Info"
+                       style="margin-top:80%;"
+                    />
+                </t>
+			</div>
+		</xpath>
+    </t>
+</templates>
