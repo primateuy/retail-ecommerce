@@ -1,0 +1,225 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    
+    <!-- Vista de lista para payment.method.promotion -->
+    <record id="payment_method_promotion_tree" model="ir.ui.view">
+        <field name="name">payment.method.promotion.tree</field>
+        <field name="model">payment.method.promotion</field>
+        <field name="arch" type="xml">
+            <tree string="Promociones por Método de Pago" decoration-success="active == True" decoration-muted="active == False">
+                <field name="sequence" widget="handle"/>
+                <field name="name"/>
+                <field name="active"/>
+                <field name="discount_percent" string="Descuento %"/>
+                <field name="payment_provider_id"/>
+                <field name="payment_method_id"/>
+                <field name="date_from"/>
+                <field name="date_to"/>
+                <field name="company_id" groups="base.group_multi_company"/>
+                <field name="times_applied"/>
+            </tree>
+        </field>
+    </record>
+
+    <!-- Vista de formulario para payment.method.promotion -->
+    <record id="payment_method_promotion_form" model="ir.ui.view">
+        <field name="name">payment.method.promotion.form</field>
+        <field name="model">payment.method.promotion</field>
+        <field name="arch" type="xml">
+            <form string="Promoción por Método de Pago">
+                <header>
+                    <button name="action_increment_times_applied" string="Incrementar Contador" type="object" class="oe_stat_button" icon="fa-bar-chart"/>
+                    <field name="active" widget="boolean_toggle"/>
+                </header>
+                <sheet>
+                    <div class="oe_button_box" name="button_box">
+                        <button class="oe_stat_button" type="object" name="action_increment_times_applied" icon="fa-bar-chart">
+                            <field name="times_applied" widget="statinfo" string="Veces Aplicada"/>
+                        </button>
+                    </div>
+                    <group>
+                        <group>
+                            <field name="name" placeholder="Ej: Descuento 25% OCA Visa"/>
+                            <field name="sequence"/>
+                            <field name="active"/>
+                        </group>
+                        <group>
+                            <field name="company_id" groups="base.group_multi_company"/>
+                            <field name="date_from"/>
+                            <field name="date_to"/>
+                        </group>
+                    </group>
+                    
+                    <notebook>
+                        <page string="Configuración de Descuento" name="discount_config">
+                            <group>
+                                <group>
+                                    <field name="discount_product_id" options="{'no_create': True, 'no_create_edit': True}"/>
+                                    <field name="discount_percent"/>
+                                    <field name="discount_type"/>
+                                </group>
+                                <group>
+                                    <field name="description" placeholder="Descripción adicional de la promoción..."/>
+                                </group>
+                            </group>
+                        </page>
+                        
+                        <page string="Proveedor y Método de Pago" name="payment_config">
+                            <group>
+                                <group string="Proveedor de Pago (Web)">
+                                    <field name="payment_provider_id" 
+                                           domain="[('state', '=', 'enabled')]"
+                                           options="{'no_create': True, 'no_create_edit': True}"
+                                           help="Proveedor de pago en el que aplica esta promoción (para ventas web/eCommerce)"/>
+                                </group>
+                                <group string="Método de Pago (POS)">
+                                    <field name="payment_method_id" 
+                                           options="{'no_create': True, 'no_create_edit': True}"
+                                           help="Método de pago POS en el que aplica esta promoción"/>
+                                </group>
+                            </group>
+                        </page>
+                        
+                        <page string="Validación de BIN" name="bin_config">
+                            <group>
+                                <group string="Configuración de Validación">
+                                    <field name="require_bin_validation" 
+                                           help="Si está activado, solo se aplicará la promoción si el BIN de la tarjeta está en la lista. Si está desactivado, aplica a todas las tarjetas del proveedor."/>
+                                </group>
+                            </group>
+                            
+                            <separator string="BINs Habilitados" 
+                                       invisible="not require_bin_validation"/>
+                            <field name="bin_ids" 
+                                   string="BINs Habilitados"
+                                   invisible="not require_bin_validation"
+                                   context="{'default_promotion_id': id, 'default_active': True}"
+                                   options="{'no_create': False}">
+                                <tree string="BINs" 
+                                      editable="bottom" 
+                                      create="1" 
+                                      delete="1"
+                                      default_order="name"
+                                      decoration-success="active == True"
+                                      decoration-muted="active == False"
+                                      sample="1">
+                                    <field name="name" 
+                                           string="BIN" 
+                                           required="1"
+                                           placeholder="Ej: 542991"
+                                           width="150"/>
+                                    <field name="description" 
+                                           string="Descripción" 
+                                           placeholder="Ej: Visa Crédito Banco X"
+                                           optional="show"/>
+                                    <field name="active" 
+                                           string="Activo" 
+                                           widget="boolean_toggle"
+                                           width="80"/>
+                                </tree>
+                                <form string="BIN">
+                                    <sheet>
+                                        <group>
+                                            <group>
+                                                <field name="name" 
+                                                       required="1"
+                                                       placeholder="Ej: 542991"
+                                                       help="Primeros dígitos de la tarjeta que habilitan la promoción. Típicamente son 6 dígitos."/>
+                                                <field name="description" 
+                                                       placeholder="Ej: Visa Crédito Banco X"
+                                                       help="Descripción opcional del BIN"/>
+                                            </group>
+                                            <group>
+                                                <field name="active"/>
+                                                <field name="promotion_id" invisible="1"/>
+                                            </group>
+                                        </group>
+                                    </sheet>
+                                </form>
+                            </field>
+                            
+                            <group string="Información sobre BINs" 
+                                   invisible="not require_bin_validation"
+                                   col="1">
+                                <div>
+                                    <p><strong>Nota:</strong> Los BINs (Bank Identification Numbers) son los primeros dígitos de una tarjeta que identifican el banco emisor.</p>
+                                    <ul>
+                                        <li>Típicamente son los primeros <strong>6 dígitos</strong> de la tarjeta</li>
+                                        <li>Ejemplos: <strong>542991</strong> (Mastercard), <strong>541234</strong> (Visa)</li>
+                                        <li>Puede usar asteriscos como comodines: <strong>542***</strong> (coincide con cualquier tarjeta que empiece con 542)</li>
+                                        <li>Si no se configuran BINs y "Requiere Validación de BIN" está activado, la promoción no se aplicará</li>
+                                    </ul>
+                                </div>
+                            </group>
+                        </page>
+                        
+                        <page string="Incompatibilidades" name="incompatibilities">
+                            <group>
+                                <group>
+                                    <field name="incompatible_promotion_ids" 
+                                           widget="many2many_tags" 
+                                           domain="[('id', '!=', id)]"
+                                           options="{'no_create': True, 'no_create_edit': True}"
+                                           help="Lista de promociones que no pueden combinarse con esta. Si el pedido ya tiene una promoción incompatible aplicada, esta no se aplicará."/>
+                                </group>
+                            </group>
+                        </page>
+                    </notebook>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <!-- Vista de búsqueda para payment.method.promotion -->
+    <record id="payment_method_promotion_search" model="ir.ui.view">
+        <field name="name">payment.method.promotion.search</field>
+        <field name="model">payment.method.promotion</field>
+        <field name="arch" type="xml">
+            <search string="Promociones por Método de Pago">
+                <field name="name" string="Nombre"/>
+                <field name="payment_provider_id" string="Proveedor"/>
+                <field name="payment_method_id" string="Método de Pago"/>
+                <field name="discount_product_id" string="Producto"/>
+                <field name="company_id" groups="base.group_multi_company"/>
+                <filter string="Activas" name="active" domain="[('active', '=', True)]"/>
+                <filter string="Inactivas" name="inactive" domain="[('active', '=', False)]"/>
+                <filter string="Vigentes" name="valid_dates" 
+                        domain="['|', ('date_from', '=', False), ('date_from', '&lt;=', context_today().strftime('%Y-%m-%d')), '|', ('date_to', '=', False), ('date_to', '&gt;=', context_today().strftime('%Y-%m-%d'))]"/>
+                <separator/>
+                <filter string="Mi Compañía" name="my_company" domain="[('company_id', '=', company_id)]" groups="base.group_multi_company"/>
+                <group expand="0" string="Agrupar por">
+                    <filter string="Proveedor" name="group_provider" context="{'group_by': 'payment_provider_id'}"/>
+                    <filter string="Método de Pago" name="group_method" context="{'group_by': 'payment_method_id'}"/>
+                    <filter string="Compañía" name="group_company" context="{'group_by': 'company_id'}" groups="base.group_multi_company"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <!-- Acción para payment.method.promotion -->
+    <record id="action_payment_method_promotion" model="ir.actions.act_window">
+        <field name="name">Promociones por Método de Pago</field>
+        <field name="res_model">payment.method.promotion</field>
+        <field name="view_mode">tree,form</field>
+        <field name="search_view_id" ref="payment_method_promotion_search"/>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Crear una nueva promoción
+            </p>
+            <p>
+                Las promociones por método de pago permiten aplicar descuentos automáticamente
+                cuando se utiliza un proveedor de pago específico con una tarjeta que cumple
+                ciertos criterios (BIN, adquirente, etc.).
+            </p>
+        </field>
+    </record>
+
+    <!-- Menú en Ventas/Configuración/Pagos en línea -->
+    <menuitem id="menu_payment_method_promotion"
+              name="Promociones"
+              parent="sale.payment_menu"
+              action="action_payment_method_promotion"
+              sequence="50"
+              groups="sales_team.group_sale_manager"/>
+
+</odoo>

@@ -1,0 +1,6 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_pos_payment_method_promociones,pos.payment.method promociones,point_of_sale.model_pos_payment_method,base.group_user,1,1,1,1
+access_pos_order_promociones,pos.order promociones,point_of_sale.model_pos_order,base.group_user,1,1,1,1
+access_payment_method_promotion,payment.method.promotion,odoo_pos_oca_promociones.model_payment_method_promotion,base.group_user,1,1,1,1
+access_payment_method_promotion_bin,payment.method.promotion.bin,odoo_pos_oca_promociones.model_payment_method_promotion_bin,base.group_user,1,1,1,1
+
