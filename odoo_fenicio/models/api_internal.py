@@ -98,7 +98,6 @@ class ApiInternal(models.Model):
                         lambda x: x.attribute_id.fenicio_type == 'presentacion'
                     ).sorted(lambda x: x.attribute_id.sequence)
 
-                    
                     codigo_parts = []
                     nombre_parts = []
                     atributos = {}
