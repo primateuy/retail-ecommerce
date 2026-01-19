@@ -13,6 +13,11 @@ class PosConfig(models.Model):
     """
     _inherit = 'pos.config'
 
+    pos_points_policy = fields.Text(
+        string='Sistema de puntos',
+        help='Texto a mostrar en el recibo del POS con la política o sistema '
+             'de puntos vigente.'
+    )
     download_invoice = fields.Boolean(
         string='Descargar factura',
         default=False,

@@ -1,4 +1,8 @@
-from odoo import models, api, fields
+from datetime import date as py_date
+from datetime import datetime
+
+from odoo import _, models, api, fields
+from odoo.tools import is_html_empty
 import logging
 
 _logger = logging.getLogger(__name__)
@@ -345,3 +349,219 @@ class PosOrder(models.Model):
             return {}
         
         return cfe_data
+
+    @api.model
+    def get_receipt_data_from_invoice_or_order(self, ids, account_move_id, order_reference):
+        """
+        Retorna los datos del recibo tomando como prioridad la factura generada
+        y, si no existe, la orden del POS.
+
+        Este método centraliza la construcción de líneas, totales, impuestos,
+        información legal y adenda para asegurar consistencia con la factura.
+        """
+        # Nota: `ids` es parte de la firma estándar de @api.model y no se usa aquí.
+        # Inicializar la estructura base de respuesta para el recibo.
+        receipt_data = {
+            'source': 'none',
+            'account_move_id': False,
+            'order_id': False,
+            'orderlines': [],
+            'amount_total': 0.0,
+            'amount_tax': 0.0,
+            'total_without_tax': 0.0,
+            'tax_details': [],
+            'legal_data': {
+                'purchase_condition': '',
+                'ticket_number': '',
+                'date': '',
+                'document_type': '',
+                'customer_name': '',
+                'branch_name': '',
+            },
+            'adenda_data': {
+                'cashier': '',
+                'seller': '',
+                'points_policy': '',
+                'return_policy': '',
+            },
+        }
+
+        # Normalizar parámetros de entrada para evitar errores en búsquedas.
+        normalized_reference = (order_reference or '').strip()
+        normalized_account_move_id = int(account_move_id) if account_move_id else False
+
+        # Buscar la orden del POS por referencia para usar como respaldo.
+        pos_order = self.env['pos.order']
+        if normalized_reference:
+            pos_order = self.search(
+                ['|', ('pos_reference', '=', normalized_reference), ('name', '=', normalized_reference)],
+                limit=1,
+                order='id desc'
+            )
+
+        # Asignar la orden encontrada a la respuesta para trazabilidad.
+        if pos_order:
+            receipt_data['order_id'] = pos_order.id
+
+        # Usar la factura de la orden si no se recibió account_move_id explícito.
+        if not normalized_account_move_id and pos_order and pos_order.account_move:
+            normalized_account_move_id = pos_order.account_move.id
+
+        # Preparar la factura en caso de existir para construir el recibo.
+        invoice = self.env['account.move']
+        if normalized_account_move_id:
+            invoice = self.env['account.move'].browse(normalized_account_move_id)
+            if not invoice.exists():
+                invoice = self.env['account.move']
+                normalized_account_move_id = False
+
+        # Determinar la condición de compra priorizando la factura.
+        purchase_condition = ''
+        if invoice and invoice.invoice_payment_term_id:
+            purchase_condition = invoice.invoice_payment_term_id.name or ''
+        elif pos_order and pos_order.payment_ids:
+            purchase_condition = pos_order.payment_ids[0].payment_method_id.name or ''
+        else:
+            purchase_condition = 'Contado'
+
+        # Determinar el número de ticket usando la orden y la factura como fallback.
+        ticket_number = ''
+        if pos_order and (pos_order.pos_reference or pos_order.name):
+            ticket_number = pos_order.pos_reference or pos_order.name
+        elif invoice and invoice.name:
+            ticket_number = invoice.name
+
+        # Determinar la fecha del ticket en formato dd/mm/yyyy.
+        ticket_date = ''
+        raw_date = False
+        if invoice and (invoice.invoice_date or invoice.date):
+            raw_date = invoice.invoice_date or invoice.date
+        elif pos_order and pos_order.date_order:
+            raw_date = pos_order.date_order
+        if raw_date:
+            if isinstance(raw_date, datetime):
+                ticket_date = raw_date.strftime('%d/%m/%Y')
+            elif isinstance(raw_date, py_date):
+                ticket_date = raw_date.strftime('%d/%m/%Y')
+            else:
+                try:
+                    parsed = fields.Date.from_string(raw_date)
+                    ticket_date = parsed.strftime('%d/%m/%Y')
+                except Exception:
+                    ticket_date = str(raw_date)
+
+        # Determinar el tipo de documento desde la factura si existe.
+        document_type = ''
+        if invoice and 'cfe_type' in invoice._fields and invoice.cfe_type:
+            document_type = str(invoice.cfe_type)
+        elif invoice and invoice.move_type:
+            document_type = invoice.move_type
+
+        # Determinar el cliente desde la factura, si no, desde la orden.
+        customer_name = ''
+        if invoice and invoice.partner_id:
+            customer_name = invoice.partner_id.name or ''
+        elif pos_order and pos_order.partner_id:
+            customer_name = pos_order.partner_id.name or ''
+        if not customer_name:
+            customer_name = 'Consumidor final'
+
+        # Determinar la sucursal a partir de la configuración del POS.
+        branch_name = ''
+        if pos_order and pos_order.config_id:
+            branch_name = pos_order.config_id.name or ''
+
+        # Asignar información legal al recibo.
+        receipt_data['legal_data'].update({
+            'purchase_condition': purchase_condition,
+            'ticket_number': ticket_number,
+            'date': ticket_date,
+            'document_type': document_type,
+            'customer_name': customer_name,
+            'branch_name': branch_name,
+        })
+
+        # Construir datos de adenda desde la orden del POS.
+        if pos_order:
+            receipt_data['adenda_data'].update({
+                'cashier': pos_order.user_id.name if pos_order.user_id else '',
+                'seller': pos_order.employee_id.name if hasattr(pos_order, 'employee_id') and pos_order.employee_id else '',
+                'points_policy': pos_order.config_id.pos_points_policy if pos_order.config_id else '',
+            })
+
+        # Aplicar el comportamiento estándar de Odoo para términos y condiciones.
+        use_invoice_terms = self.env['ir.config_parameter'].sudo().get_param('account.use_invoice_terms')
+        if use_invoice_terms:
+            company = invoice.company_id if invoice else (pos_order.company_id if pos_order else False)
+            if company:
+                if company.terms_type != 'html':
+                    if not is_html_empty(company.invoice_terms or ''):
+                        receipt_data['adenda_data']['return_policy'] = company.invoice_terms
+                else:
+                    baseurl = company.get_base_url() + '/terms'
+                    receipt_data['adenda_data']['return_policy'] = _('Terms & Conditions: %s', baseurl)
+
+        # Construir líneas y totales desde la factura si está disponible.
+        if invoice:
+            receipt_data['source'] = 'invoice'
+            receipt_data['account_move_id'] = invoice.id
+            receipt_data['amount_total'] = invoice.amount_total
+            receipt_data['amount_tax'] = invoice.amount_tax
+            receipt_data['total_without_tax'] = invoice.amount_untaxed
+
+            # Construir líneas del recibo a partir de las líneas de factura.
+            for line in invoice.invoice_line_ids:
+                if line.display_type:
+                    continue
+                receipt_data['orderlines'].append({
+                    'productName': line.name or (line.product_id.display_name if line.product_id else ''),
+                    'qty': line.quantity,
+                    'unitPrice': line.price_unit,
+                    'price': line.price_total,
+                    'discount': line.discount or 0.0,
+                    'customerNote': '',
+                })
+
+            # Construir detalle de impuestos desde tax_totals si está disponible.
+            tax_totals = invoice.tax_totals or {}
+            groups_by_subtotal = tax_totals.get('groups_by_subtotal', {})
+            for group_list in groups_by_subtotal.values():
+                for group in group_list:
+                    receipt_data['tax_details'].append({
+                        'tax_group_name': group.get('tax_group_name') or '',
+                        'tax_group_rate': group.get('tax_group_rate'),
+                        'tax_group_base_amount': group.get('tax_group_base_amount') or 0.0,
+                        'tax_group_amount': group.get('tax_group_amount') or 0.0,
+                    })
+
+        # Si no hay factura, construir líneas y totales desde la orden del POS.
+        elif pos_order:
+            receipt_data['source'] = 'order'
+            receipt_data['amount_total'] = pos_order.amount_total
+            receipt_data['amount_tax'] = pos_order.amount_tax
+            receipt_data['total_without_tax'] = pos_order.amount_untaxed
+
+            # Construir líneas del recibo a partir de las líneas de la orden.
+            for line in pos_order.lines:
+                receipt_data['orderlines'].append({
+                    'productName': line.name or (line.product_id.display_name if line.product_id else ''),
+                    'qty': line.qty,
+                    'unitPrice': line.price_unit,
+                    'price': line.price_subtotal_incl if hasattr(line, 'price_subtotal_incl') else line.price_subtotal,
+                    'discount': line.discount or 0.0,
+                    'customerNote': line.note if hasattr(line, 'note') and line.note else '',
+                })
+
+            # Intentar construir detalle de impuestos desde la orden usando tax_totals si existe.
+            if hasattr(pos_order, 'tax_totals') and pos_order.tax_totals:
+                groups_by_subtotal = pos_order.tax_totals.get('groups_by_subtotal', {})
+                for group_list in groups_by_subtotal.values():
+                    for group in group_list:
+                        receipt_data['tax_details'].append({
+                            'tax_group_name': group.get('tax_group_name') or '',
+                            'tax_group_rate': group.get('tax_group_rate'),
+                            'tax_group_base_amount': group.get('tax_group_base_amount') or 0.0,
+                            'tax_group_amount': group.get('tax_group_amount') or 0.0,
+                        })
+
+        return receipt_data

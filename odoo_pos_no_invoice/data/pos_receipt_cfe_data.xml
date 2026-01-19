@@ -324,5 +324,329 @@
             </div>
         </div>]]></field>
     </record>
+
+    <record id="pos_receipt_cfe_forum" model="pos.receipt">
+        <field name="name">Recibo con CFE (FORUM)</field>
+        <field name="design_receipt"><![CDATA[
+        <div class="pos-receipt">
+            <!-- Encabezado de la empresa -->
+            <div style="font-size:13px; text-align:center;">
+                <t t-if="props.data.headerData.company.name">
+                    <div style="font-weight:bold; font-size:15px;">
+                        <t t-esc="props.data.headerData.company.name" />
+                    </div>
+                </t>
+                <t t-if="props.data.headerData.company.street">
+                    <div style="font-size:12px;">
+                        <t t-esc="props.data.headerData.company.street"/>
+                        <t t-if="props.data.headerData.company.city">
+                            , <t t-esc="props.data.headerData.company.city"/>
+                        </t>
+                    </div>
+                </t>
+                <t t-if="props.data.headerData.company.vat">
+                    <div style="font-size:12px;">
+                        RUT: <t t-esc="props.data.headerData.company.vat" />
+                    </div>
+                </t>
+                <t t-if="props.pos.env.services.pos.company.phone">
+                    Tel: <t t-esc="props.pos.env.services.pos.company.phone"/>
+                </t>
+            </div>
+            <br/>
+
+            <!-- Requisitos legales del ticket -->
+            <div style="font-size:12px;">
+                <t t-if="props.data.legal_data and props.data.legal_data.purchase_condition">
+                    <div>Condición de compra: <t t-esc="props.data.legal_data.purchase_condition"/></div>
+                </t>
+                <t t-if="props.data.legal_data and props.data.legal_data.ticket_number">
+                    <div>Número de ticket: <t t-esc="props.data.legal_data.ticket_number"/></div>
+                </t>
+                <t t-if="props.data.legal_data and props.data.legal_data.date">
+                    <div>Fecha: <t t-esc="props.data.legal_data.date"/></div>
+                </t>
+                <div>
+                    Tipo de documento:
+                    <t t-if="props.data.legal_data and props.data.legal_data.document_type">
+                        <t t-esc="props.data.legal_data.document_type"/>
+                    </t>
+                    <t t-elif="props.data.cfe_data and props.data.cfe_data.tipo">
+                        <t t-esc="props.data.cfe_data.tipo"/>
+                    </t>
+                </div>
+                <t t-if="props.data.legal_data and props.data.legal_data.customer_name">
+                    <div>Cliente: <t t-esc="props.data.legal_data.customer_name"/></div>
+                </t>
+                <t t-if="props.data.legal_data and props.data.legal_data.branch_name">
+                    <div>Sucursal: <t t-esc="props.data.legal_data.branch_name"/></div>
+                </t>
+            </div>
+            <br/>
+
+            <!-- Información del CFE -->
+            <t t-if="props.data.cfe_data and (props.data.cfe_data.tipo or props.data.cfe_data.serie or props.data.cfe_data.numero)">
+                <div style="font-size:12px; border-top:1px solid black; border-bottom:1px solid black; padding:5px; margin:10px 0;">
+                    <div style="text-align:center; font-weight:bold; margin-bottom:5px; font-size:13px;">
+                        COMPROBANTE FISCAL ELECTRÓNICO
+                    </div>
+                    <div style="text-align:center; font-size:12px;">
+                        <t t-if="props.data.cfe_data.tipo">
+                            Tipo: <t t-esc="props.data.cfe_data.tipo"/>
+                        </t>
+                    </div>
+                    <div style="text-align:center; font-size:12px;">
+                        <t t-if="props.data.cfe_data.serie">
+                            Serie: <t t-esc="props.data.cfe_data.serie"/>
+                        </t>
+                        <t t-if="props.data.cfe_data.numero">
+                            <t t-if="props.data.cfe_data.serie"> - </t>
+                            Nro.: <t t-esc="props.data.cfe_data.numero"/>
+                        </t>
+                    </div>
+                    <div style="text-align:center; font-size:12px;">
+                        <t t-if="props.data.cfe_data.ruc_emisor">
+                            RUT: <t t-esc="props.data.cfe_data.ruc_emisor"/>
+                        </t>
+                    </div>
+                    <div style="text-align:center; font-size:12px;">
+                        <t t-if="props.data.cfe_data.pago">
+                            Pago: <t t-esc="props.data.cfe_data.pago"/>
+                        </t>
+                    </div>
+                </div>
+            </t>
+
+            <!-- Mensaje de consumo final -->
+            <div style="text-align:center; font-weight:bold; border:2px solid black; padding:8px; margin:10px 0; font-size:13px;">
+                CONSUMO FINAL
+            </div>
+
+            <!-- Líneas de productos -->
+            <div>
+                <table class='receipt-orderlines' style="font-size:13px; border-style:double;
+                    border-left:none; border-right:none; border-bottom:none; width:100%;">
+                    <colgroup>
+                        <col width='40%' />
+                        <col width='20%' />
+                        <col width='20%' />
+                        <col width='20%' />
+                    </colgroup>
+                    <tr style="border-bottom:1px dashed black;">
+                        <th style="text-align:left;">Producto</th>
+                        <th style="text-align:right;">Cant.</th>
+                        <th style="text-align:right;">P. Unit.</th>
+                        <th style="text-align:right;">Total</th>
+                    </tr>
+                    <t t-if="props.orderlines and props.orderlines.length">
+                        <tr t-foreach="props.orderlines" t-as="orderline" t-key="orderline_index">
+                            <td style="padding-top:1%; padding-bottom:1%; text-align:left; font-size:12px;">
+                                <t t-esc="orderline.productName"/>
+                                <t t-if="orderline.discount > 0">
+                                    <div style="font-size:11px; font-style:italic; color:#808080;">
+                                        <t t-esc="orderline.discount"/>% desc.
+                                    </div>
+                                </t>
+                                <t t-if="orderline.customerNote">
+                                    <div style="font-size:11px;" t-esc="orderline.customerNote"/>
+                                </t>
+                            </td>
+                            <td style="text-align:right; font-size:12px;">
+                                <t t-esc="orderline.qty"/>
+                            </td>
+                            <td style="text-align:right; font-size:12px;">
+                                <t t-if="typeof orderline.unitPrice === 'number'">
+                                    <t t-esc="props.pos.env.utils.formatCurrency(orderline.unitPrice)"/>
+                                </t>
+                                <t t-else="">
+                                    <t t-esc="orderline.unitPrice"/>
+                                </t>
+                            </td>
+                            <td style="text-align:right; font-size:12px;">
+                                <t t-if="typeof orderline.price === 'number'">
+                                    <t t-esc="props.pos.env.utils.formatCurrency(orderline.price)"/>
+                                </t>
+                                <t t-else="">
+                                    <t t-esc="orderline.price"/>
+                                </t>
+                            </td>
+                        </tr>
+                    </t>
+                </table>
+            </div>
+            <br />
+
+            <!-- Detalle de impuestos con nombres requeridos -->
+            <t t-if="props.data.tax_details and props.data.tax_details.length">
+                <div style="font-size:12px; border-top:1px dashed; padding-top:5px;">
+                    <table style="width:100%;">
+                        <tr>
+                            <th style="text-align:left;">Tasa 22%</th>
+                            <th style="text-align:right;">IVA</th>
+                            <th style="text-align:right;">Neto</th>
+                        </tr>
+                        <tr t-foreach="props.data.tax_details" t-as="tax_detail" t-key="tax_detail_index">
+                            <td style="text-align:left; font-size:12px;">
+                            <t t-if="tax_detail.tax_group_rate !== undefined &amp;&amp; tax_detail.tax_group_rate !== null">
+                                    Tasa 22%: <t t-esc="tax_detail.tax_group_rate"/>%
+                                </t>
+                                <t t-else="">
+                                    <t t-esc="tax_detail.tax_group_name"/>
+                                </t>
+                            </td>
+                            <td style="text-align:right; font-size:12px;">
+                                <t t-if="typeof tax_detail.tax_group_amount === 'number'">
+                                    <t t-esc="props.pos.env.utils.formatCurrency(tax_detail.tax_group_amount)"/>
+                                </t>
+                            </td>
+                            <td style="text-align:right; font-size:12px;">
+                                <t t-if="typeof tax_detail.tax_group_base_amount === 'number'">
+                                    <t t-esc="props.pos.env.utils.formatCurrency(tax_detail.tax_group_base_amount)"/>
+                                </t>
+                            </td>
+                        </tr>
+                    </table>
+                </div>
+                <br/>
+            </t>
+
+            <!-- Totales -->
+            <div style="padding-top:6px;">
+                <div style="font-weight:700; font-size:14px; border-top:1px solid black; padding-top:5px;">
+                    <span style="margin-left:40%;">TOTAL: </span>
+                    <t t-if="typeof props.data.amount_total === 'number'">
+                        <span t-esc='props.pos.env.utils.formatCurrency(props.data.amount_total)' class="pos-receipt-right-align"/>
+                    </t>
+                </div>
+                <br/><br/>
+            </div>
+
+            <!-- Líneas de pago -->
+            <t t-foreach='props.paymentlines' t-as='line' t-key="line_index">
+                <div style="font-size:13px; border-top:1px dashed; padding-top:5px;">
+                    <span style="margin-left:40%;"><t t-esc='line.name' /></span>
+                    <t t-if="typeof line.amount === 'number'">
+                        <span t-esc='props.pos.env.utils.formatCurrency(line.amount)' class="pos-receipt-right-align"/>
+                    </t>
+                </div>
+            </t>
+            <br/>
+
+            <!-- Cambio -->
+            <div class="receipt-change" style="font-size:13px;">
+                <span style="margin-left:40%;">CAMBIO: </span>
+                <t t-if="typeof props.receipt.change === 'number'">
+                    <span t-esc='props.pos.env.utils.formatCurrency(props.receipt.change)' class="pos-receipt-right-align"/>
+                </t>
+            </div>
+            <br/>
+
+            <!-- Información adicional (ADENDA) -->
+            <div style="font-size:11px; border-top:1px dashed; padding-top:5px; margin-top:10px;">
+                <div style="text-align:center; font-weight:bold; margin-bottom:5px; font-size:12px;">
+                    ADENDA
+                </div>
+                <div style="text-align:left; padding-left:10px;">
+                    <t t-if="props.data.adenda_data and props.data.adenda_data.cashier">
+                        <div>Cajero: <t t-esc="props.data.adenda_data.cashier"/></div>
+                    </t>
+                    <t t-if="props.data.adenda_data and props.data.adenda_data.seller">
+                        <div>Vendedor: <t t-esc="props.data.adenda_data.seller"/></div>
+                    </t>
+                    <t t-if="props.data.adenda_data and props.data.adenda_data.points_policy">
+                        <div>Sistema de puntos: <t t-esc="props.data.adenda_data.points_policy"/></div>
+                    </t>
+                    <t t-if="props.data.adenda_data and props.data.adenda_data.return_policy">
+                        <div>Política de cambio: <t t-raw="props.data.adenda_data.return_policy"/></div>
+                    </t>
+                </div>
+            </div>
+
+            <!-- FIN ADENDA y verificación del CFE -->
+            <div style="font-size:11px; border-top:1px dashed; padding-top:5px; margin-top:10px; text-align:center;">
+                <div style="font-weight:bold; margin-bottom:10px; font-size:12px;">
+                    FIN ADENDA
+                </div>
+
+                <!-- Código QR del CFE -->
+                <t t-if="props.data.cfe_data and props.data.cfe_data.qr_base64">
+                    <div style="text-align:center; margin:10px 0;">
+                        <img t-att-src="'data:image/png;base64,' + props.data.cfe_data.qr_base64"
+                             style="max-width:150px; height:auto;"/>
+                    </div>
+                </t>
+
+                <!-- Código de Seguridad -->
+                <t t-if="props.data.cfe_data and props.data.cfe_data.codigo_seguridad">
+                    <div style="margin-bottom:5px; font-size:11px;">
+                        <strong>Código de Seguridad:</strong> <t t-esc="props.data.cfe_data.codigo_seguridad"/>
+                    </div>
+                </t>
+
+                <!-- URL de verificación -->
+                <t t-if="props.data.cfe_data and props.data.cfe_data.url_verificacion">
+                    <div style="margin-bottom:5px; font-size:10px;">
+                        Puede verificar comprobante en:<br/>
+                        <t t-esc="props.data.cfe_data.url_verificacion"/>
+                    </div>
+                </t>
+
+                <!-- Información CAE -->
+                <t t-if="props.data.cfe_data and props.data.cfe_data.cae_numero">
+                    <div style="margin-top:10px; padding-top:5px;">
+                        <div style="font-size:11px;"><strong>IVA al día. Nro. CAE:</strong> <t t-esc="props.data.cfe_data.cae_numero"/></div>
+                        <t t-if="props.data.cfe_data.cae_rango_desde and props.data.cfe_data.cae_rango_hasta">
+                            <div style="font-size:11px;"><strong>Rango:</strong> <t t-esc="props.data.cfe_data.cae_rango_desde"/> - <t t-esc="props.data.cfe_data.cae_rango_hasta"/></div>
+                        </t>
+                        <t t-if="props.data.cfe_data.serie">
+                            <div style="font-size:11px;"><strong>Serie:</strong> <t t-esc="props.data.cfe_data.serie"/></div>
+                        </t>
+                        <t t-if="props.data.cfe_data.cae_fecha_vencimiento">
+                            <div style="font-size:11px;"><strong>Fecha de vencimiento:</strong> <t t-esc="props.data.cfe_data.cae_fecha_vencimiento"/></div>
+                        </t>
+                    </div>
+                </t>
+            </div>
+
+            <!-- Código de barras del número de orden debajo de la adenda -->
+            <t t-if="props.data.barcode_src">
+                <div style="text-align:center; margin-top:10px;">
+                    <img t-att-src="props.data.barcode_src"
+                         style="max-width:100%; height:auto;"/>
+                    <div style="font-size:11px; margin-top:4px;">
+                        <t t-esc="props.data.barcode_value"/>
+                    </div>
+                </div>
+            </t>
+
+            <div class='before-footer' />
+
+            <!-- Footer -->
+            <div t-if='props.receipt.footer_html and !props.data.skip_footer' style="text-align:center; font-size:12px;">
+                <t t-raw='props.receipt.footer_html'/>
+            </div>
+            <div t-if='!props.receipt.footer_html and props.receipt.footer and !props.data.skip_footer' style="text-align:center; font-size:12px;">
+                <br/>
+                <t t-esc='props.receipt.footer'/>
+                <br/><br/>
+            </div>
+
+            <div class='after-footer' style="font-size:12px;">
+                <t t-foreach='props.paymentlines' t-as='line' t-key="line_index">
+                    <t t-if='line.ticket'>
+                        <br />
+                        <div class="pos-payment-terminal-receipt">
+                            <t t-raw='line.ticket'/>
+                        </div>
+                    </t>
+                </t>
+            </div>
+
+            <br/><br/>
+            <div style="font-size:12px; text-align:center;">
+                ¡Gracias por su compra!
+            </div>
+        </div>]]></field>
+    </record>
 </odoo>
 
