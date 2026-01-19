@@ -451,7 +451,8 @@ class PosPaymentMethod(models.Model):
                                 )
                                 
                                 if not promotion:
-                                    _logger.info('No se encontró promoción aplicable para esta transacción')
+                                    _logger.info('No se encontró promoción aplicable para esta transacción (BIN no coincide o no hay promociones configuradas)')
+                                    _logger.info('Procesando pago normalmente sin aplicar descuento ni promoción')
                                     # Confirmar sin promoción (valores originales)
                                     confirm_data = {
                                         "PosID": data['PosID'],
@@ -460,20 +461,27 @@ class PosPaymentMethod(models.Model):
                                         "ClientAppId": data['ClientAppId'],
                                         "UserId": data['UserId'],
                                         "TransactionDateTimeyyyyMMddHHmmssSSS": payment_method.get_formatted_timestamp(),
-                                        "TransactionId": transaction_id,
+                                        "TransactionId": str(transaction_id),  # String según documentación
                                         "Amount": data.get('Amount', '0'),
-                                        "Quotas": "0",
-                                        "Plan": "0",
+                                        "Quotas": int(data.get('Installments', 1)),  # Número según documentación
+                                        "Plan": 0,  # Número según documentación
                                         "Currency": data.get('Currency', '858'),
+                                        "TaxRefund": int(data.get('TaxRefund', 1)),  # Número según documentación
                                         "TaxableAmount": data.get('TaxableAmount', '0'),
                                         "InvoiceAmount": data.get('InvoiceAmount', '0'),
                                         "InvoiceNumber": data.get('InvoiceNumber', '1'),
+                                        "TaxAmount": "0",  # Monto de impuestos (string)
+                                        "TipAmount": "0",  # Monto de propina (string)
+                                        "CardAccountType": "0",  # Tipo de cuenta de tarjeta (string)
+                                        # Datos de la tarjeta que ya fueron leídos (requeridos por POSLink)
                                         "Acquirer": result.get('Acquirer', ''),
                                         "Issuer": result.get('Issuer', ''),
                                         "CardNumber": result.get('CardNumber', ''),
                                     }
-                                    payment_method.processConfirmFinancialPurchase(confirm_data, pos_session_id)
-                                    continue
+                                    confirm_response = payment_method.processConfirmFinancialPurchase(confirm_data, pos_session_id)
+                                    _logger.info('Confirmación sin promoción enviada: ResponseCode=%s', confirm_response.get('ResponseCode'))
+                                    # NO hacer continue aquí - continuar con el flujo normal esperando a que la transacción se complete
+                                    # El bucle seguirá consultando hasta que ResponseCode = '0' (transacción completada)
                                 
                                 # Promoción encontrada: calcular descuento
                                 original_amount = float(data.get('Amount', 0)) / 100.0  # Convertir de centavos a pesos
@@ -581,24 +589,32 @@ class PosPaymentMethod(models.Model):
                                         "ClientAppId": data['ClientAppId'],
                                         "UserId": data['UserId'],
                                         "TransactionDateTimeyyyyMMddHHmmssSSS": payment_method.get_formatted_timestamp(),
-                                        "TransactionId": transaction_id,
+                                        "TransactionId": str(transaction_id),  # String según documentación
                                         "Amount": data.get('Amount', '0'),
-                                        "Quotas": "0",
-                                        "Plan": "0",
+                                        "Quotas": int(data.get('Installments', 1)),  # Número según documentación
+                                        "Plan": 0,  # Número según documentación
                                         "Currency": data.get('Currency', '858'),
+                                        "TaxRefund": int(data.get('TaxRefund', 1)),  # Número según documentación
                                         "TaxableAmount": data.get('TaxableAmount', '0'),
                                         "InvoiceAmount": data.get('InvoiceAmount', '0'),
                                         "InvoiceNumber": data.get('InvoiceNumber', '1'),
+                                        "TaxAmount": "0",  # Monto de impuestos (string)
+                                        "TipAmount": "0",  # Monto de propina (string)
+                                        "CardAccountType": "0",  # Tipo de cuenta de tarjeta (string)
+                                        # Datos de la tarjeta que ya fueron leídos (requeridos por POSLink)
                                         "Acquirer": result.get('Acquirer', ''),
                                         "Issuer": result.get('Issuer', ''),
                                         "CardNumber": result.get('CardNumber', ''),
                                     }
                                     confirm_response = payment_method.processConfirmFinancialPurchase(confirm_data, pos_session_id)
-                                    _logger.info('Confirmación sin promoción enviada: %s', confirm_response.get('ResponseCode'))
+                                    _logger.info('Confirmación sin promoción enviada: ResponseCode=%s', confirm_response.get('ResponseCode'))
+                                    # NO hacer continue aquí - continuar con el flujo normal esperando a que la transacción se complete
                                     
                             except Exception as promo_error:
                                 _logger.error('Error al procesar promoción automáticamente: %s', str(promo_error))
-                                # Continuar sin promoción
+                                import traceback
+                                _logger.error('Traceback: %s', traceback.format_exc())
+                                # Continuar sin promoción - procesar pago normalmente
                                 try:
                                     payment_method = env['pos.payment.method'].browse(payment_method_id)
                                     confirm_data = {
@@ -608,24 +624,31 @@ class PosPaymentMethod(models.Model):
                                         "ClientAppId": data['ClientAppId'],
                                         "UserId": data['UserId'],
                                         "TransactionDateTimeyyyyMMddHHmmssSSS": payment_method.get_formatted_timestamp(),
-                                        "TransactionId": transaction_id,
+                                        "TransactionId": str(transaction_id),  # String según documentación
                                         "Amount": data.get('Amount', '0'),
-                                        "Quotas": "0",
-                                        "Plan": "0",
+                                        "Quotas": int(data.get('Installments', 1)),  # Número según documentación
+                                        "Plan": 0,  # Número según documentación
                                         "Currency": data.get('Currency', '858'),
+                                        "TaxRefund": int(data.get('TaxRefund', 1)),  # Número según documentación
                                         "TaxableAmount": data.get('TaxableAmount', '0'),
                                         "InvoiceAmount": data.get('InvoiceAmount', '0'),
                                         "InvoiceNumber": data.get('InvoiceNumber', '1'),
+                                        "TaxAmount": "0",  # Monto de impuestos (string)
+                                        "TipAmount": "0",  # Monto de propina (string)
+                                        "CardAccountType": "0",  # Tipo de cuenta de tarjeta (string)
                                         # Datos de la tarjeta que ya fueron leídos (requeridos por POSLink)
                                         "Acquirer": result.get('Acquirer', ''),
                                         "Issuer": result.get('Issuer', ''),
                                         "CardNumber": result.get('CardNumber', ''),
                                     }
-                                    payment_method.processConfirmFinancialPurchase(confirm_data, pos_session_id)
+                                    confirm_response = payment_method.processConfirmFinancialPurchase(confirm_data, pos_session_id)
+                                    _logger.info('Confirmación sin promoción (por error) enviada: ResponseCode=%s', confirm_response.get('ResponseCode'))
+                                    # NO hacer continue aquí - continuar con el flujo normal esperando a que la transacción se complete
                                 except Exception as confirm_error:
                                     _logger.error('Error al confirmar sin promoción: %s', str(confirm_error))
                                     import traceback
                                     _logger.error('Traceback: %s', traceback.format_exc())
+                                    # Aunque haya error, continuar con el flujo normal para no quedar trabado
                     
                     # Si el código de respuesta no es de espera, salir del loop
                     # IMPORTANTE: Preservar promotion_info si existe antes de salir
