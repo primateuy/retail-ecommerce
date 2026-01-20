@@ -20,9 +20,9 @@
         'views/product_public_category_view.xml',
         'views/product_pricelist_view.xml',
         'data/data.xml',
-        'data/installation_data.xml',
+        'data/payments_diaries.xml',
         'views/res_partner_view.xml',
-        'views/res_config_view.xml'
+        'views/res_config.xml'
     ],
     'license': 'LGPL-3',
 }

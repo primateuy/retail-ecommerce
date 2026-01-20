@@ -20,7 +20,6 @@ class ApiController(http.Controller):
             json_data = json.loads(http_data)
         except ValueError:
             msg = 'Invalid JSON data: %r' % (http_data,)
-            _logger.info('%s: %s', request.httprequest.path, msg)
             raise Exception(msg)
 
         if '_idSolicitud' not in json_data:
@@ -98,7 +97,12 @@ class ApiController(http.Controller):
             request.env.cr.commit()
             response_data = request.env['api.internal'].sudo().crear_orden_venta(json_data)
 
-            return self.build_response(id_solicitud, response_data)
+            # Extraer mensaje de la respuesta
+            mensaje = response_data.get('mensaje') if isinstance(response_data, dict) else None
+            # Crear data sin el mensaje para pasarlo por parámetro
+            data = {k: v for k, v in response_data.items() if k != 'mensaje'} if isinstance(response_data, dict) else response_data
+            
+            return self.build_response(id_solicitud, data, mensaje=mensaje)
         except Exception as e:
             return self.build_response(id_solicitud, None, status='ERROR', mensaje=str(e))
 

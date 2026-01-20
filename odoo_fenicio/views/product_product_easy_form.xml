@@ -10,13 +10,13 @@
                 <xpath expr="//notebook" position="inside">
                     <page name="fenicio" string="Fenicio">
 
-                        <field name="pricelist_relation_ids" nolabel="1">
-                        <tree string="Listas de Precios" editable="bottom" create="1" delete="1" limit="1">
-                            <field name="precio_venta" string="Precio Venta"/>
-                            <field name="precio_lista" string="Precio Lista"/>
-                            <field name="precio_alternativo" string="Precio Alternativo"/>
-                        </tree>
-                    </field>
+                        <!-- <field name="pricelist_relation_ids" nolabel="1">
+                            <tree string="Listas de Precios" editable="bottom" create="1" delete="1" limit="1">
+                                <field name="precio_venta" string="Precio Venta"/>
+                                <field name="precio_lista" string="Precio Lista"/>
+                                <field name="precio_alternativo" string="Precio Alternativo"/>
+                            </tree>
+                        </field> -->
 
                         <!-- <group>
                             <field name="listaPrecios" placeholder="Agregar una lista de precios"/>
