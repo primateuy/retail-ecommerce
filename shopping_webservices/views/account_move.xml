@@ -1,0 +1,46 @@
+<odoo>
+
+<data>
+
+    <record id="view_order_form_inherit_shopping_ws" model="ir.ui.view">
+        <field name="name">account.move.form.inherit.shopping.ws</field>
+        <field name="model">account.move</field>
+        <field name="inherit_id" ref="account.view_move_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//notebook" position="inside">
+                <page string="Shopping">
+
+                    
+                    <group>
+                        <field name="ventaEnviada" readonly="1"/>
+                        <!-- <field name="homologacion"/> -->
+                        
+                    </group>
+                    
+                    
+                        <widget name="account_move_widget"/>
+                    
+                    <group>
+                         <field name="payment_distribution_complete" readonly="1"/>
+                    </group>
+
+                </page>
+            </xpath>
+
+            <xpath expr="//button[@name='action_register_payment']" position="after">
+                <field name="mostrar_botones_declaracion" invisible="1"/>
+                <div invisible="not mostrar_botones_declaracion">
+                    <field name="metodoUnico" invisible="1"/>
+                    <button name="declararVentaUnicoMetodo" type="object" 
+                            string="Declarar Venta" 
+                            invisible="not metodoUnico"/>
+                    <button name="declararVentaVariosMetodos" type="object" 
+                            string="Declarar Venta Varios Métodos" 
+                            invisible="metodoUnico"/>
+                </div>
+            </xpath>
+        </field>
+    </record>
+</data>
+
+</odoo>

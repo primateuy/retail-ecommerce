@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+
+    <!-- Vista Tree -->
+    <record id="view_ventas_log_tree" model="ir.ui.view">
+        <field name="name">ventas.log.tree</field>
+        <field name="model">ventas.log</field>
+        <field name="arch" type="xml">
+            <tree decoration-success="estado == 'exito'" 
+                  decoration-danger="estado == 'error'" 
+                  decoration-warning="estado == 'warning'"
+                  default_order="fecha_declaracion desc">
+                <field name="fecha_declaracion"/>
+                <field name="estado" widget="badge" decoration-success="estado == 'exito'" 
+                  decoration-danger="estado == 'error'" 
+                  decoration-warning="estado == 'warning'"/>
+                <field name="texto"/>
+            </tree>
+        </field>
+    </record>
+
+    <!-- Acción -->
+    <record id="action_logs_shopping" model="ir.actions.act_window">
+        <field name="name">Logs Shopping</field>
+        <field name="res_model">ventas.log</field>
+        <field name="view_mode">tree,form</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Ver logs de Shopping
+            </p>
+            <p>
+                Aquí se muestran todos los registros de logs generados
+                por las operaciones de Shopping.
+            </p>
+        </field>
+    </record>
+
+    <!-- Menú en Configuración > Contabilidad -->
+    <menuitem id="logs_shopping_menu"
+              name="Logs Shopping"
+              parent="account.menu_finance_configuration"
+              action="action_logs_shopping"
+              sequence="110"/>
+
+</odoo>

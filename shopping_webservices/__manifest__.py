@@ -1,0 +1,43 @@
+# -*- coding: utf-8 -*-
+{
+    'name': "Shopping Webservices",
+
+    'summary': "Integración para el registro de ventas en Shoppings",
+
+    'description': """
+
+    """,
+
+    'author': "Avance Software",
+    'website': "https://avancesoftware.us/",
+
+    'category': 'Accounting',
+    'version': '0.1',
+
+    
+    'depends': ['base', 'web', 'l10n_uy', 'l10n_uy_edi', 'l10n_uy_einvoice_uruware', 'account', 'account_accountant', 'sale_management', 'loyalty'],
+
+    'data': [
+        'security/ir.model.access.csv',
+        'views/views.xml',
+        'views/templates.xml',
+        'views/res_config_settings.xml',
+        'views/account_journal.xml',
+        'views/loyalty_program.xml',
+        'views/shopping_payment_method.xml',
+        'views/account_move.xml',
+        'views/message_wizard.xml',
+        'views/ventas_log.xml',
+    ],
+
+    'assets': {
+        'web.assets_backend': [
+            'shopping_webservices/static/src/js/*',
+        ],
+    },
+    # only loaded in demonstration mode
+    'demo': [
+        'demo/demo.xml',
+    ],
+}
+

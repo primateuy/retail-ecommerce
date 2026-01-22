@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+    <record id="view_loyalty_program_form_inherit" model="ir.ui.view">
+        <field name="name">loyalty.program.form.inherit</field>
+        <field name="model">loyalty.program</field>
+        <field name="inherit_id" ref="loyalty.loyalty_program_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='currency_id']" position="after">
+                <field name="promocionShopping"/>
+            </xpath>
+        </field>
+    </record>
+</odoo>

@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates>
+    <t t-name="shopping_webservices.AccountMoveWidget">
+        <div class="account_move_widget">
+            <t t-if="state.multiplesPagos">
+                <div class="card p-3">
+                    <h5 class="mb-3">Distribución de Pagos</h5>
+                    
+                    <!-- Selector de tipo de entrada -->
+                    <div class="mb-3">
+                        <label class="form-label">Tipo de entrada:</label>
+                        <div class="btn-group w-100" role="group">
+                            <input 
+                                type="radio" 
+                                class="btn-check" 
+                                name="inputType" 
+                                id="inputAmount" 
+                                value="amount"
+                                checked="state.inputType === 'amount'"
+                                t-on-change="onInputTypeChange"/>
+                            <label class="btn btn-outline-primary" for="inputAmount">
+                                Monto
+                            </label>
+                            
+                            <input 
+                                type="radio" 
+                                class="btn-check" 
+                                name="inputType" 
+                                id="inputPercentage" 
+                                value="percentage"
+                                checked="state.inputType === 'percentage'"
+                                t-on-change="onInputTypeChange"/>
+                            <label class="btn btn-outline-primary" for="inputPercentage">
+                                Porcentaje
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Total a distribuir -->
+                    <div class="alert alert-info mb-3">
+                        <strong>Total a distribuir:</strong> 
+                        <t t-esc="formatCurrency(state.totalAmount)"/>
+                    </div>
+
+                    <!-- Inputs para cada método de pago -->
+                    <div class="payment-methods">
+                        <t t-foreach="state.payments" t-as="payment" t-key="payment.id">
+                            <div class="mb-3">
+                                <label class="form-label">
+                                    <strong t-esc="payment.name"/>
+                                    <t t-if="payment.payment_code">
+                                        <small class="text-muted">
+                                            (Código: <t t-esc="payment.payment_code"/>)
+                                        </small>
+                                    </t>
+                                </label>
+                                
+                                <div class="input-group">
+                                    <t t-if="state.inputType === 'amount'">
+                                        <span class="input-group-text">$</span>
+                                        <input 
+                                            type="number" 
+                                            class="form-control" 
+                                            step="0.01"
+                                            min="0"
+                                            t-att-value="payment.amount"
+                                            t-on-input="(ev) => this.onPaymentChange(payment.id, ev.target.value)"
+                                            placeholder="0.00"/>
+                                        <span class="input-group-text text-muted">
+                                            <t t-esc="payment.percentage.toFixed(2)"/>%
+                                        </span>
+                                    </t>
+                                    
+                                    <t t-else="">
+                                        <input 
+                                            type="number" 
+                                            class="form-control" 
+                                            step="0.01"
+                                            min="0"
+                                            max="100"
+                                            t-att-value="payment.percentage"
+                                            t-on-input="(ev) => this.onPaymentChange(payment.id, ev.target.value)"
+                                            placeholder="0.00"/>
+                                        <span class="input-group-text">%</span>
+                                        <span class="input-group-text text-muted">
+                                            <t t-esc="formatCurrency(payment.amount)"/>
+                                        </span>
+                                    </t>
+                                </div>
+                            </div>
+                        </t>
+                    </div>
+
+                    <!-- Resumen del restante -->
+                    <div class="alert mt-3" t-att-class="'alert-' + (Math.abs(state.remainingAmount) &lt; 0.01 ? 'success' : state.remainingAmount &lt; 0 ? 'danger' : 'warning')">
+                        <div class="d-flex justify-content-between">
+                            <strong>Restante:</strong>
+                            <span t-att-class="getRemainingColor()">
+                                <t t-if="state.inputType === 'amount'">
+                                    <t t-esc="formatCurrency(state.remainingAmount)"/>
+                                    (<t t-esc="state.remainingPercentage.toFixed(2)"/>%)
+                                </t>
+                                <t t-else="">
+                                    <t t-esc="state.remainingPercentage.toFixed(2)"/>%
+                                    (<t t-esc="formatCurrency(state.remainingAmount)"/>)
+                                </t>
+                            </span>
+                        </div>
+                        
+                        <t t-if="Math.abs(state.remainingAmount) &lt; 0.01">
+                            <small class="text-success">✓ Total distribuido correctamente</small>
+                        </t>
+                        <t t-elif="state.remainingAmount &lt; 0">
+                            <small class="text-danger">⚠ Excede el total</small>
+                        </t>
+                        <t t-else="">
+                            <small class="text-warning">⚠ Falta asignar</small>
+                        </t>
+                    </div>
+                </div>
+            </t>
+        </div>
+    </t>
+</templates>

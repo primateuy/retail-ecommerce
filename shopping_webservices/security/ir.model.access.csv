@@ -1,0 +1,4 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_shopping_payment_method_all,shopping.payment.method.all,model_shopping_payment_method,base.group_user,1,1,1,1
+access_message_wizard,message.wizard,model_message_wizard,base.group_user,1,1,1,1
+access_ventas_log,ventas.log,model_ventas_log,base.group_user,1,1,1,1
