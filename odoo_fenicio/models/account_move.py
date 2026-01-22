@@ -21,13 +21,19 @@ class AccountMove(models.Model):
                 payment_ids.cancel()
             return False
 
-        journal_id = self.env['account.journal'].search([('internal_code', '=', json_data_pago['codigo'])], limit=1)
+        journal_id = self.env['account.journal'].search([('code', '=', json_data_pago['codigo'])], limit=1)
         if not journal_id:
             raise UserError('No se encontró diario para registrar el pago, codigo: %s' % json_data_pago['codigo'])
+
+        # Obtener el método de pago inbound del diario
+        payment_method_line = journal_id.inbound_payment_method_line_ids and journal_id.inbound_payment_method_line_ids[0] or False
+        if not payment_method_line:
+            raise UserError('El diario %s no tiene configurado un método de pago inbound' % journal_id.name)
 
         payment_register_id = self.env['account.payment.register'].with_context(active_ids=self.ids, active_model='account.move', active_id=self.id).create({
             'journal_id': journal_id.id,
             'payment_date': json_data_pago['fechaPago'],
+            'payment_method_line_id': payment_method_line.id,
         })
 
         payment_ids = payment_register_id._create_payments()
@@ -50,7 +56,6 @@ class AccountMove(models.Model):
             payment_ids.action_draft()
             payment_ids.cancel()
 
-        _logger.info("SE REALIZO EL PAGO");
 
         return payment_ids
 

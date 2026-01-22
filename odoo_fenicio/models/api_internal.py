@@ -29,7 +29,6 @@ class ApiInternal(models.Model):
 
     @api.model
     def listar_productos(self, json_data):
-        _logger.info("ENTRANDO ACA => %s", json_data)
         
         # Obtener parámetros con valores por defecto
         limit = json_data.get('total', 100)
@@ -110,9 +109,6 @@ class ApiInternal(models.Model):
                         codigo_fenicio = attr_val.product_attribute_value_id.fenicio_attribute_value_code
                         nombre_fenicio = attr_val.product_attribute_value_id.name
 
-                        _logger.info(f"Codigo Fenicio: {codigo_fenicio}")
-                        _logger.info(f"Nombre Fenicio: {nombre_fenicio}")
-
 
                         codigo_parts.append(str(codigo_fenicio) if codigo_fenicio else '000');
                         
@@ -133,22 +129,17 @@ class ApiInternal(models.Model):
                         'presentaciones': [],
                     }
 
-                    listaVenta = variante.pricelist_relation_ids.precio_venta;
-                    listaPrecios = variante.pricelist_relation_ids.precio_lista;
-                    listaAlternativo = variante.pricelist_relation_ids.precio_alternativo;
+                    # Obtener listas de precio de la configuración global de Fenicio
+                    config_params = self.env['ir.config_parameter'].sudo()
+                    listaVenta_id = config_params.get_param('odoo_fenicio.pricelist_venta')
+                    listaPrecios_id = config_params.get_param('odoo_fenicio.pricelist_lista')
+                    listaAlternativo_id = config_params.get_param('odoo_fenicio.pricelist_alternativo')
+                    
+                    listaVenta = self.env['product.pricelist'].sudo().browse(int(listaVenta_id)) if listaVenta_id else False
+                    listaPrecios = self.env['product.pricelist'].sudo().browse(int(listaPrecios_id)) if listaPrecios_id else False
+                    listaAlternativo = self.env['product.pricelist'].sudo().browse(int(listaAlternativo_id)) if listaAlternativo_id else False
                     
 
-                    # Reemplaza la sección completa de obtención de precios en el método listar_productos
-                    # Aproximadamente desde la línea 120 hasta la 155
-
-                    # Reemplaza la sección completa de obtención de precios en el método listar_productos
-                    # Aproximadamente desde la línea 120 hasta la 155
-
-                    # Reemplaza la sección completa de obtención de precios en el método listar_productos
-                    # Aproximadamente desde la línea 120 hasta la 155
-
-                    # REEMPLAZA COMPLETAMENTE la sección del bucle de presentacion_attrs
-                    # Aproximadamente desde la línea 120 hasta la 155 en tu archivo api_internal.py
 
                     for pres_attr_val in presentacion_attrs:
                         codigo = str(pres_attr_val.attribute_id.codigo) if pres_attr_val.attribute_id.codigo else '000'
@@ -170,9 +161,7 @@ class ApiInternal(models.Model):
                                     uom_id=variante.uom_id.id
                                 )
 
-                                _logger.info(f"Precio venta calculado para {sku}: {precioVenta}")
                             except Exception as e:
-                                _logger.warning("Error calculando precio venta para %s: %s", sku, str(e))
                                 precioVenta = variante.lst_price or 0.0
 
                         # Calcular precio de lista con fórmulas/descuentos
@@ -185,9 +174,7 @@ class ApiInternal(models.Model):
                                     uom_id=variante.uom_id.id
                                 )
 
-                                _logger.info(f"Precio lista calculado para {sku}: {precioLista}")
                             except Exception as e:
-                                _logger.warning("Error calculando precio lista para %s: %s", sku, str(e))
                                 precioLista = variante.lst_price or 0.0
 
                         # Calcular precio alternativo con fórmulas/descuentos
@@ -200,7 +187,6 @@ class ApiInternal(models.Model):
                                     uom_id=variante.uom_id.id
                                 )
                             except Exception as e:
-                                _logger.warning("Error calculando precio alternativo para %s: %s", sku, str(e))
                                 precioAlternativo = variante.lst_price or 0.0
 
                         variante_data['presentaciones'].append(
@@ -257,7 +243,6 @@ class ApiInternal(models.Model):
             _logger.warning("Producto %s: No hay ubicaciones Fenicio configuradas", product_id.default_code)
             return 0.0
         
-        _logger.info("Ubicaciones Fenicio encontradas: %s", fenicio_locations.mapped('name'))
         
         # Obtener el tope máximo de stock a mostrar
         variante = self.env['product.product'].browse(product_id.id);
@@ -268,7 +253,6 @@ class ApiInternal(models.Model):
         stock_atp = 0.0
         for location in fenicio_locations:
             qty_atp = self.env['stock.quant']._get_available_quantity(product_id, location)
-            _logger.info("  - %s: %.2f unidades (ATP)", location.name, qty_atp)
             stock_atp += qty_atp
         
         
@@ -317,37 +301,54 @@ class ApiInternal(models.Model):
         
         stock = stock_quant_id.quantity if stock_quant_id else 0.0
 
-        # Obtener precios de lista
-        precios_lista_ids = product_id.precios_fenicio_ids.filtered(lambda l: l.price_type == 'precioLista')
-        precio_lista = {}
-        for precio in precios_lista_ids:
-            precio_lista[precio.currency_id.name] = precio.price
+        # Obtener listas de precio de la configuración global de Fenicio
+        config_params = self.env['ir.config_parameter'].sudo()
+        listaVenta_id = config_params.get_param('odoo_fenicio.pricelist_venta')
+        listaPrecios_id = config_params.get_param('odoo_fenicio.pricelist_lista')
+        listaAlternativo_id = config_params.get_param('odoo_fenicio.pricelist_alternativo')
+        
+        listaVenta = self.env['product.pricelist'].sudo().browse(int(listaVenta_id)) if listaVenta_id else False
+        listaPrecios = self.env['product.pricelist'].sudo().browse(int(listaPrecios_id)) if listaPrecios_id else False
+        listaAlternativo = self.env['product.pricelist'].sudo().browse(int(listaAlternativo_id)) if listaAlternativo_id else False
 
-        # Obtener precios de venta
-        precios_venta_ids = product_id.precios_fenicio_ids.filtered(lambda l: l.price_type == 'precioVenta')
-        precio_venta = {}
-        for precio in precios_venta_ids:
-            precio_venta[precio.currency_id.name] = precio.price
+        # Obtener precio de lista
+        precio_lista = 0.0
+        if listaPrecios:
+            try:
+                precio_lista = listaPrecios._get_product_price(
+                    product=product_id,
+                    quantity=1.0,
+                    partner=None,
+                    uom_id=product_id.uom_id.id
+                )
+            except Exception as e:
+                precio_lista = product_id.lst_price or 0.0
 
-        # Obtener precios alternativos
-        precios_alternativos = []
-        for precio_alt in product_id.precios_alternativos_fenicio_ids:
-            alt_lista_ids = precio_alt.precios_lista_venta_ids.filtered(lambda l: l.price_type == 'precioLista')
-            alt_venta_ids = precio_alt.precios_lista_venta_ids.filtered(lambda l: l.price_type == 'precioVenta')
-            
-            alt_precio_lista = {}
-            for precio in alt_lista_ids:
-                alt_precio_lista[precio.currency_id.name] = precio.price
-                
-            alt_precio_venta = {}
-            for precio in alt_venta_ids:
-                alt_precio_venta[precio.currency_id.name] = precio.price
+        # Obtener precio de venta
+        precio_venta = 0.0
+        if listaVenta:
+            try:
+                precio_venta = listaVenta._get_product_price(
+                    product=product_id,
+                    quantity=1.0,
+                    partner=None,
+                    uom_id=product_id.uom_id.id
+                )
+            except Exception as e:
+                precio_venta = product_id.lst_price or 0.0
 
-            precios_alternativos.append({
-                'codigo': precio_alt.code,
-                'precioLista': alt_precio_lista,
-                'precioVenta': alt_precio_venta,
-            })
+        # Obtener precio alternativo
+        precio_alternativo = 0.0
+        if listaAlternativo:
+            try:
+                precio_alternativo = listaAlternativo._get_product_price(
+                    product=product_id,
+                    quantity=1.0,
+                    partner=None,
+                    uom_id=product_id.uom_id.id
+                )
+            except Exception as e:
+                precio_alternativo = product_id.lst_price or 0.0
 
         # Obtener identificadores
         identificadores = []
@@ -370,9 +371,9 @@ class ApiInternal(models.Model):
             'nombre': nombre_presentacion,
             'sku': product_id.default_code or '',
             'stock': stock,
-            'precioLista': precio_lista,
-            'precioVenta': precio_venta,
-            'preciosAlternativos': precios_alternativos,
+            'precioLista': {'precio': precio_lista},
+            'precioVenta': {'precio': precio_venta},
+            'precioAlternativo': {'precio': precio_alternativo},
             'identificadores': identificadores, 
         }
     
@@ -408,7 +409,6 @@ class ApiInternal(models.Model):
             }
 
         except Exception as e:
-            _logger.info("Error al canjear puntos: %s", str(e))
             return False
 
 
@@ -434,27 +434,33 @@ class ApiInternal(models.Model):
             };
 
         except Exception as e:
-            _logger.info("Error al consultar puntos: %s", str(e))
             return False
 
     @api.model
     def crear_usuario(self, json_data):
         try:
-            _logger.info("ENTRANDO CREA USUARIO");
 
             user = self.env['res.partner'].search([('id_fenicio', '=', json_data['id'])], limit=1);
             pais = self.env['res.country'].search([('code', '=', json_data['documento']['pais'])], limit=1);
 
-            # allIdentificaciones = self.env['l10n_latam.identification.type'].search([]);
-
-            # _logger.info("TIPO DE IDENTIFICACION");
-            # for identificacion in allIdentificaciones:
-                
-            #     _logger.info(f"{identificacion.name} NOMBRE <=>");
-
-            tipo_doc = "CI" if json_data['documento']['tipo'] == 'DOCUMENTO_IDENTIDAD' else json_data['documento']['tipo'];
-            _logger.info(f"Buscando tipo de identificación: {tipo_doc}");
             
+            # VAT código 0
+            # RUC código 2
+            # CI código 3
+            # OTROS código 4
+
+            tipo_doc = '';
+            if json_data['documento']['tipo'] == '0':
+                tipo_doc = 'VAT'
+            elif json_data['documento']['tipo'] == '2':
+                tipo_doc = 'RUC'
+            elif json_data['documento']['tipo'] == '3':
+                tipo_doc = 'CI'
+            elif json_data['documento']['tipo'] == '4':
+                tipo_doc = 'OTROS'
+
+            tipoDocumento = self.env['l10n_latam.identification.type'].search([('name', '=', tipo_doc), ('active', '=', True)], limit=1);
+
             genero = '';
 
             if json_data['genero'] and (json_data['genero'] == 'MASCULINO' or json_data['genero'] == 'Masculino' or json_data['genero'] == 'M'):
@@ -464,10 +470,18 @@ class ApiInternal(models.Model):
             elif json_data['genero'] and (json_data['genero'] == 'OTRO' or json_data['genero'] == 'Otro' or json_data['genero'] == 'O'):
                 genero = 'other';
             
-    
+            city = 'No definida';
+            if json_data['documento']['ciudad']:
+                city = self.env['res.country.city'].search([('name', '=', json_data['documento']['ciudad'])], limit=1);
 
+            # Por esto:
+            city = 'No definida'
+            if json_data.get('documento', {}).get('ciudad'):
+                city = json_data['documento']['ciudad']
+                city = self.env['res.country.city'].search([('name', '=', city)], limit=1)
+
+            
             if user:
-                _logger.info("USUARIO ENCONTRADO");
                 message = "El usuario ya existia, no se han insertado los datos."
                 return user.id_fenicio, message;
             user = self.env['res.partner'].create({
@@ -476,20 +490,20 @@ class ApiInternal(models.Model):
                 'email': json_data['email'],
                 'phone': json_data['telefono'],
                 'gender': genero,
+                'l10n_latam_identification_type_id': tipoDocumento.id if tipoDocumento else False,
                 'vat': json_data['documento']['numero'],
                 'country_id': pais.id if pais else '',
+                'city_id': city.id if city else '',
                 'company_id': self.env.company.id,
                 'programa_millas': json_data['extras']['programaMillas']
             })
 
-            _logger.info("Se ha creado el usuario");
 
             return user.id_fenicio, "El usuario se ha creado correctamente.";
             
 
 
         except Exception as e:
-            _logger.info("Error al crear el usuario: %s", str(e))
             return False
 
     @api.model
@@ -505,7 +519,6 @@ class ApiInternal(models.Model):
 
         
 
-        _logger.info(f"PRODUCTOS ENCONTRADOS => {len(productos)}")
         
         skus_encontrados = set(productos.mapped('default_code'))
         sku_no_encontrados = set(skus_pedido) - set(skus_encontrados)
@@ -555,128 +568,135 @@ class ApiInternal(models.Model):
         # verificar que sea un estado valido
         if 'estado' not in json_data or json_data['estado'] not in estados:
             return {'error': 'Estado de la orden no válido'}
+        try:
 
-        # obtener el valor del estado
-        estado = json_data['estado']
-        # obtener el id de la orden
-        id_orden_fenicio = json_data['idOrden']
+            # obtener el valor del estado
+            estado = json_data['estado']
+            # obtener el id de la orden
+            id_orden_fenicio = json_data['idOrden']
 
-        SALE_ORDER_ENV = self.env['sale.order']
-        # obtener cualquier orden anteriormente creada
-        sale_order_id = SALE_ORDER_ENV.search([('id_order_fenicio', '=', id_orden_fenicio)], limit=1)
 
-        # boolean para saber si la orden es recien creada o no
-        is_new_order = False
+            SALE_ORDER_ENV = self.env['sale.order']
+            # obtener cualquier orden anteriormente creada
+            sale_order_id = SALE_ORDER_ENV.search([('id_order_fenicio', '=', id_orden_fenicio)], limit=1)
 
-        error = ''
-        if sale_order_id and sale_order_id.state == 'draft' and estado == 'EN_CURSO':
-            # si hay un presupuesto y el estado del json es EN_CURSO:
-            # actualizar los datos de la orden
-            sale_order_id, error = sale_order_id.create_or_update_order(json_data)
-        elif not sale_order_id:
-            # si no existe ninguna orden: crearla
-            sale_order_id, error = SALE_ORDER_ENV.create_or_update_order(json_data)
-            is_new_order = True
+            # boolean para saber si la orden es recien creada o no
+            is_new_order = False
 
-        # si no se pudo crear la orden: retornar error
-        if not sale_order_id:
-            return {'error': error}
 
-        if estado in ['PAGO_PENDIENTE', 'REQUIERE_APROBACION', 'APROBADA']:
-            if sale_order_id.state in ['draft', 'sent']:
-                sale_order_id.action_confirm()
+            error = ''
+            if sale_order_id and sale_order_id.state == 'draft' and estado == 'EN_CURSO':
+                # si hay un presupuesto y el estado del json es EN_CURSO:
+                # actualizar los datos de la orden
+                sale_order_id, error = sale_order_id.create_or_update_order(json_data)
+            elif not sale_order_id:
+                # si no existe ninguna orden: crearla
+                sale_order_id, error = SALE_ORDER_ENV.create_or_update_order(json_data)
+                is_new_order = True
 
-            # si no es recien creada la orden: actualizar los datos de fenicio
-            if not is_new_order:
-                sale_order_id.update_fenicio(json_data)
+            # si no se pudo crear la orden: retornar error
+            if not sale_order_id:
+                return {'error': error}
 
-        cancelable = False
-        if estado in ['ABANDONADA', 'CANCELADA']:
-            # cancelable, cancel_error = SALE_ORDER_ENV.is_cancelable(id_orden_fenicio)
-            cancelable = True
+            if estado in ['PAGO_PENDIENTE', 'REQUIERE_APROBACION', 'APROBADA']:
+                if sale_order_id.state in ['draft', 'sent']:
+                    sale_order_id.action_confirm()
 
-        _logger.info("La orden {} {}será cancelada.".format(id_orden_fenicio, "" if cancelable else "no "))
+                # si no es recien creada la orden: actualizar los datos de fenicio
+                if not is_new_order:
+                    sale_order_id.update_fenicio(json_data)
 
-        if cancelable:
-            invoices_ids = sale_order_id.invoice_ids
-            picking_ids = sale_order_id.picking_ids
+            cancelable = False
+            if estado in ['ABANDONADA', 'CANCELADA']:
+                # cancelable, cancel_error = SALE_ORDER_ENV.is_cancelable(id_orden_fenicio)
+                cancelable = True
 
-            # payment_ids = self.env['account.payment'].search([('invoice_ids', 'in', invoices_ids.ids)])
-            ids_payment = []
-            for invoice_id in invoices_ids:
-                reconciled_invoices_partials = invoice_id._get_reconciled_invoices_partials()
-                ids_payment += list(map(lambda l: l[2].payment_id and l[2].payment_id.id or False, reconciled_invoices_partials))
+            
+            if cancelable:
+                invoices_ids = sale_order_id.invoice_ids
+                picking_ids = sale_order_id.picking_ids
 
-            payment_ids = self.env['account.payment'].search([('id', 'in', ids_payment)])
-            payment_ids.action_draft()
-            payment_ids.action_cancel()
+                # payment_ids = self.env['account.payment'].search([('invoice_ids', 'in', invoices_ids.ids)])
+                ids_payment = []
+                for invoice_id in invoices_ids:
+                    reconciled_invoices_partials = invoice_id._get_reconciled_invoices_partials()
+                    ids_payment += list(map(lambda l: l[2].payment_id and l[2].payment_id.id or False, reconciled_invoices_partials))
 
-            # No se puede por FACTURACION ELECTRONICA TOCA HACER NOTA DE CREDITO
-            # invoices_ids.button_draft()
-            # invoices_ids.button_cancel()
-            invoices_ids.crear_nota_credito()
+                payment_ids = self.env['account.payment'].search([('id', 'in', ids_payment)])
+                payment_ids.action_draft()
+                payment_ids.action_cancel()
 
-            # picking_ids.action_cancel()
-            for picking_id in picking_ids:
-                move_lines_ids = picking_id.mapped('move_lines')
-                any_done = any(move.state == 'done' for move in move_lines_ids)
+                
+                invoices_ids.crear_nota_credito()
 
-                if not any_done:
-                    picking_ids.action_cancel()
-                else:
-                    w_id = self.env['stock.return.picking'].create({
-                        'picking_id': picking_id.id,
-                    })
-                    w_id._onchange_picking_id()
-                    new_picking_id, pick_type_id = w_id._create_returns()
-                    new_picking_id = self.env['stock.picking'].search([('id', '=', new_picking_id)], limit=1)
-                    if new_picking_id:
-                        new_picking_id.auto_validate()
+                # picking_ids.action_cancel()
+                for picking_id in picking_ids:
+                    move_lines_ids = picking_id.mapped('move_lines')
+                    any_done = any(move.state == 'done' for move in move_lines_ids)
 
-            sale_order_id.action_cancel()
+                    if not any_done:
+                        picking_ids.action_cancel()
+                    else:
+                        w_id = self.env['stock.return.picking'].create({
+                            'picking_id': picking_id.id,
+                        })
+                        w_id._onchange_picking_id()
+                        new_picking_id, pick_type_id = w_id._create_returns()
+                        new_picking_id = self.env['stock.picking'].search([('id', '=', new_picking_id)], limit=1)
+                        if new_picking_id:
+                            new_picking_id.auto_validate()
 
-        _logger.info("ANTES DE PAGAR");
-        if 'picking' in json_data and json_data['picking'] == 0:
-            return {'referencia': sale_order_id.display_name}
+                sale_order_id.action_cancel()
 
-        # IMPORTANTE: Actualizar pickings ANTES de crear facturas
-        # para que los productos estén marcados como entregados
-        _logger.info("ANTES DE PICKING");
-        picking_error = False
-        if 'entrega' in json_data and not cancelable:
-            picking_error = sale_order_id.actualizar_pickings(json_data)
+            if 'picking' in json_data and json_data['picking'] == 0:
+                return {'referencia': sale_order_id.display_name}
 
-        _logger.info("SALIENDO DE PICKING");
-        if picking_error:
-            return {'error': picking_error}
+            
+            picking_error = False
+            if 'entrega' in json_data and not cancelable:
+                picking_error = sale_order_id.actualizar_pickings(json_data)
 
-        _logger.info("ANTES DE PAGO");
-        if estado in ['PAGO_PENDIENTE', 'REQUIERE_APROBACION', 'APROBADA']:
-            _logger.info("ANTES DE CREAR FACTURA");
-            if len(sale_order_id.invoice_ids) == 0:
-                sale_order_id.create_invoice_fenicio()
-                invoice_ids = sale_order_id.invoice_ids
-                plazo_pago_id = self.env['account.payment.term'].search([('for_fenicio', '=', True)], limit=1)
-                if plazo_pago_id:
-                    invoice_ids.write({
-                        'invoice_payment_term_id': plazo_pago_id and plazo_pago_id.id,
-                    })
-                invoice_ids.action_post()
+           
+            if picking_error:
+                return {'error': picking_error}
 
-            _logger.info("ANTES DE PAGO");
-            if estado == 'APROBADA' and 'pago' in json_data and json_data['pago'] and json_data['pago']['estado'] not in ['PENDIENTE', 'ERROR', 'REVERSADO']:
-                json_data_pago = json_data['pago']
-                invoice_ids = sale_order_id.invoice_ids
-                for invoice_id in invoice_ids:
-                    # reconciled_invoices_partials = invoice_id._get_reconciled_invoices_partials()
-                    payment_ids = invoice_id.payment_ids
+            if estado in ['PAGO_PENDIENTE', 'REQUIERE_APROBACION', 'APROBADA']:
+                
+                if len(sale_order_id.invoice_ids) == 0:
+                    sale_order_id.create_invoice_fenicio()
+                    invoice_ids = sale_order_id.invoice_ids
 
-                    # ids_payment = list(map(lambda l: l[2].payment_id and l[2].payment_id.id or False, reconciled_invoices_partials))
-                    # payment_ids = self.env['account.payment'].search([('id', 'in', ids_payment)])
-                    payment_id = invoice_id.create_payment_fenicio(json_data_pago, mode_update=(len(payment_ids) > 0), payment_ids=payment_ids)
+                    plazo_pago_id = self.env['account.payment.term'].search([('for_fenicio', '=', True)], limit=1)
+                    if plazo_pago_id:
+                        invoice_ids.write({
+                            'invoice_payment_term_id': plazo_pago_id and plazo_pago_id.id,
+                        })
+                    invoice_ids.action_post()
 
-        _logger.info("SALIENDO DE PAGAR");
-        return {'referencia': sale_order_id.display_name}
+                if estado == 'APROBADA' and 'pago' in json_data and json_data['pago'] and json_data['pago']['estado'] not in ['PENDIENTE', 'ERROR', 'REVERSADO']:
+                    json_data_pago = json_data['pago']
+                    invoice_ids = sale_order_id.invoice_ids
+                    for invoice_id in invoice_ids:
+                        payment_ids = invoice_id.payment_ids
+
+                        invoice_id.create_payment_fenicio(json_data_pago, mode_update=(len(payment_ids) > 0), payment_ids=payment_ids)
+
+
+            # Crear transacción de pago si la orden fue aprobada
+            if estado == 'APROBADA' and sale_order_id.invoice_ids:
+                transaction_result = sale_order_id.create_payment_transaction(json_data)
+                # Si hay error en la transacción, retornarlo
+                if 'error' in transaction_result:
+                    return transaction_result
+            
+            return {
+                'referencia': sale_order_id.display_name,
+                'mensaje': 'Orden de venta procesada exitosamente',
+                'estado': estado
+            }
+        except Exception as e:
+            _logger.error("Error al crear o actualizar la orden de venta: %s", str(e))
+            return {'error': 'Error al procesar la orden de venta: ' + str(e)}
 
     @api.model
     def puede_cancelar(self, json_data):
