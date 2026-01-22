@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="res_config_settings_view_form_inherit_shopping_webservices" model="ir.ui.view">
+        <field name="name">res.config.settings.view.form.inherit.shopping_webservices</field>
+        <field name="model">res.config.settings</field>
+        <field name="inherit_id" ref="base.res_config_settings_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//app[@name='general_settings']" position="after">
+                <app string="Shopping Webservices" name="shopping_webservices">
+                   
+                        <block title="API y Seguridad">
+                            <div class="o_setting_box o_setting_box_full">
+                                <div class="o_setting_box o_setting_box_full">
+                                    <span class="o_form_label">RUT</span>
+                                    <div class="text-muted">RUT de la compañía registrada</div>
+                                    <field name="rut" placeholder="Ingrese el RUT de la compañía"/>
+                                </div>
+                                <div class="o_setting_box o_setting_box_full">
+                                    <span class="o_form_label">Password</span>
+                                    <div class="text-muted">Password para acceso a la API (si aplica)</div>
+                                    <field name="password" password="True" placeholder="Contraseña API"/>
+                                </div>
+                                <!-- <div class="o_setting_box o_setting_box_full">
+                                    <span class="o_form_label">Tecnología / proveedor</span>
+                                    <div class="text-muted">Tecnología / proveedor</div>
+                                    <field name="tecnologia"/>
+                                </div> -->
+                            </div>
+                        </block>
+
+                        <!-- <block title="Datos del Contrato">
+                            <div class="o_setting_box o_setting_box_full">
+                                <div class="o_setting_box o_setting_box_full">
+                                    <span class="o_form_label">Nombre del contrato asociado</span>
+                                    <br></br>
+                                    <field name="nombreContrato" placeholder="Nombre del contrato"/>
+                                </div>
+                                <div class="o_setting_box o_setting_box_full">
+                                    <span class="o_form_label">Número de contrato</span>
+                                    <br></br>
+                                    <field name="nroContrato" placeholder="000000"/>
+                                </div>
+                                <div class="o_setting_box o_setting_box_full">
+                                    <span class="o_form_label">Código de rubro</span>
+                                    <br></br>
+                                    <field name="codigoRubro" placeholder="Código rubro"/>
+                                </div>
+                            </div>
+                        </block> -->
+
+                        <block title="URLs y Endpoints">
+                            <group col="1">
+                                <br></br>
+                                <div class="o_setting_box o_setting_box_full">
+                                    <span class="o_form_label">URL Declaración Ventas</span>
+                                    <div class="text-muted">URL para declarar ventas</div>
+                                    <field name="urlDeclaracionVentas" placeholder="https://api.example.com/declaracion_ventas"/>
+                                </div>
+                              
+                            </group>
+                        </block>
+
+                </app>
+            </xpath>
+        </field>
+    </record>
+</odoo>

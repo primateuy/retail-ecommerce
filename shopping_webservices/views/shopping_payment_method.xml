@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+
+    <!-- Vista Tree -->
+    <record id="view_shopping_payment_method_tree" model="ir.ui.view">
+        <field name="name">shopping.payment.method.tree</field>
+        <field name="model">shopping.payment.method</field>
+        <field name="arch" type="xml">
+            <tree>
+                <field name="shopping_code"/>
+                <field name="payment_code"/>
+            </tree>
+        </field>
+    </record>
+
+    <!-- Vista Form -->
+    <record id="view_shopping_payment_method_form" model="ir.ui.view">
+        <field name="name">shopping.payment.method.form</field>
+        <field name="model">shopping.payment.method</field>
+        <field name="arch" type="xml">
+            <form string="Método de Pago Shopping">
+                <sheet>
+                    <group>
+                        <group>
+                            <field name="shopping_code"/>
+                            <field name="payment_code"/>
+                        </group>
+                       
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <!-- Acción -->
+    <record id="action_shopping_payment_method" model="ir.actions.act_window">
+        <field name="name">Métodos de Pago Shopping</field>
+        <field name="res_model">shopping.payment.method</field>
+        <field name="view_mode">tree,form</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Crear un nuevo método de pago para Shopping
+            </p>
+            <p>
+                Configure las combinaciones de shopping y código de forma de pago
+                que serán utilizadas en los diarios contables.
+            </p>
+        </field>
+    </record>
+
+    <!-- Menú en Configuración > Contabilidad -->
+    <menuitem id="menu_shopping_payment_method"
+              name="Métodos Pago Shopping"
+              parent="account.menu_finance_configuration"
+              action="action_shopping_payment_method"
+              sequence="100"/>
+
+</odoo>

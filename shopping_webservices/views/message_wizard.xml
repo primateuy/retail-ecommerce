@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    
+    <!-- Vista del formulario del wizard -->
+    <record id="view_message_wizard_form" model="ir.ui.view">
+        <field name="name">message.wizard.form</field>
+        <field name="model">message.wizard</field>
+        <field name="arch" type="xml">
+            <form>
+                <sheet>
+                    <group>
+                        <field name="message"/>
+                    </group>
+                </sheet>
+               
+            </form>
+        </field>
+    </record>
+
+    <!-- Acción para abrir el wizard -->
+    <record id="action_message_wizard" model="ir.actions.act_window">
+        <field name="name">Mensaje</field>
+        <field name="res_model">message.wizard</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>  <!-- Importante: abre como popup -->
+        <field name="binding_model_id" ref="model_account_move"/>  <!-- Opcional: si lo llamas desde account.move -->
+    </record>
+
+</odoo>

@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+
+    <record id="view_account_journal_form_inherit_shopping_webservices" model="ir.ui.view">
+        <field name="name">account.journal.form.inherit.shopping_webservices</field>
+        <field name="model">account.journal</field>
+        <field name="inherit_id" ref="account.view_account_journal_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//notebook" position="inside">
+                <page string="Shopping Webservices">
+                    <group>
+                        <field name="tecnologia"/>
+                        <field name="homologacion"/>
+                        <field name="codigoShopping" />
+                        <field name="nroContrato" />
+                        <field name="codigoCanal" />
+                        <field name="caja" invisible="1"/>
+                        <field name="codigoRubro" />
+                    </group>
+                </page>
+            </xpath>
+            <xpath expr="//notebook" position="inside">
+                <page string="Métodos de pago Shopping">
+                    <group>
+
+                        <field name="shopping_payment_method_ids" widget="many2many_tags"/>
+                                        </group>
+                </page>
+            </xpath>
+        </field>
+    </record>
+</odoo>
