@@ -26,3 +26,8 @@ class PosConfig(models.Model):
         domain=[('model', '=', 'pos.order')],
         help='Seleccione el reporte que se imprimirá cuando se haga clic en el botón "Ticket de cambio" en la pantalla de recibo.'
     )
+    change_ticket_note = fields.Html(
+        string='Texto final Ticket de Cambio',
+        help='Texto que se imprimirá al final del ticket de cambio. '
+             'Permite detallar condiciones o mensajes adicionales.'
+    )

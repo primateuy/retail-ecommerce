@@ -21,17 +21,14 @@
                             </div>
                         </div>
                     </div>
-                    <div class="col-12 col-lg-6 o_setting_box">
-                        <div class="o_setting_left_pane">
-                            <field name="pos_points_policy" placeholder="Ej: Puntos del ticket = 35, Saldo = 545"/>
-                        </div>
-                        <div class="o_setting_right_pane">
-                            <label for="pos_points_policy" string="Sistema de puntos"/>
-                            <div class="text-muted">
-                                Texto que se imprime en la adenda del ticket con el sistema de puntos.
-                            </div>
-                        </div>
-                    </div>
+<!--                    <div class="col-12 col-lg-6 o_setting_box">-->
+<!--                        <div class="o_setting_left_pane">-->
+<!--                            <field name="pos_points_policy" placeholder="Ej: Puntos del ticket = 35, Saldo = 545"/>-->
+<!--                        </div>-->
+<!--                        <div class="o_setting_right_pane">-->
+<!--                            <label for="pos_points_policy" string="Sistema de puntos"/>-->
+<!--                        </div>-->
+<!--                    </div>-->
                 </setting>
             </xpath>
         </field>

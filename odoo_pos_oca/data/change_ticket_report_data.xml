@@ -33,88 +33,48 @@
                                 <div class="row mt16 mb16">
                                     <div class="col-12 text-center">
                                         <h2>TICKET DE CAMBIO</h2>
-                                        <p><strong>Orden:</strong> <span t-field="o.name"/></p>
+                                        <t t-set="ticket_number" t-value="o.pos_reference or o.name"/>
+                                        <t t-set="order_number" t-value="o.name or o.pos_reference"/>
+                                        <p><strong>Número de ticket:</strong> <span t-esc="ticket_number"/></p>
+                                        <p><strong>Orden asociada:</strong> <span t-esc="order_number"/></p>
                                         <p><strong>Fecha:</strong> <span t-field="o.date_order" t-options='{"widget": "datetime"}'/></p>
                                     </div>
                                 </div>
 
-                                <!-- Información de la Empresa -->
-                                <div class="row mb16" t-if="o.company_id">
+                                <!-- Información de la Sucursal -->
+                                <t t-set="branch_partner"
+                                   t-value="(o.config_id.picking_type_id.warehouse_id.partner_id if o.config_id and o.config_id.picking_type_id and o.config_id.picking_type_id.warehouse_id and o.config_id.picking_type_id.warehouse_id.partner_id else (o.config_id.company_id.partner_id if o.config_id and o.config_id.company_id else o.company_id.partner_id))"/>
+                                <div class="row mb16" t-if="branch_partner">
                                     <div class="col-12">
-                                        <h4 t-field="o.company_id.name"/>
-                                        <p t-if="o.company_id.street"><span t-field="o.company_id.street"/></p>
-                                        <p t-if="o.company_id.city">
-                                            <span t-field="o.company_id.city"/>
-                                            <t t-if="o.company_id.state_id">, <span t-field="o.company_id.state_id.name"/></t>
+                                        <h4 t-if="o.config_id" t-esc="o.config_id.name"/>
+                                        <p t-if="branch_partner.street"><span t-field="branch_partner.street"/></p>
+                                        <p t-if="branch_partner.city">
+                                            <span t-field="branch_partner.city"/>
+                                            <t t-if="branch_partner.state_id">, <span t-field="branch_partner.state_id.name"/></t>
                                         </p>
-                                        <p t-if="o.company_id.phone">Tel: <span t-field="o.company_id.phone"/></p>
+                                        <p t-if="branch_partner.vat">RUT: <span t-field="branch_partner.vat"/></p>
                                     </div>
                                 </div>
 
-                                <!-- Información del Cliente -->
-                                <div class="row mb16" t-if="o.partner_id">
+                                <!-- Datos del comprobante electrónico -->
+                                <t t-set="cfe_serie_num" t-value="o.account_move and o.account_move.cfe_serie_num or ''"/>
+                                <t t-set="cfe_type_code" t-value="cfe_serie_num.split('-')[0] if cfe_serie_num and '-' in cfe_serie_num else (o.account_move.cfe_type if o.account_move and o.account_move.cfe_type else '')"/>
+                                <t t-set="cfe_type_name" t-value="('eTicket' if cfe_type_code in ['101', '111'] else ('eFactura' if cfe_type_code in ['112'] else cfe_type_code))"/>
+                                <div class="row mb16" t-if="cfe_type_name or cfe_serie_num">
                                     <div class="col-12">
-                                        <h5>Cliente:</h5>
-                                        <p><strong><span t-field="o.partner_id.name"/></strong></p>
-                                        <p t-if="o.partner_id.vat">RUT: <span t-field="o.partner_id.vat"/></p>
+                                        <p><strong>Tipo de comprobante electrónico:</strong> <span t-esc="cfe_type_name"/></p>
+                                        <p t-if="cfe_serie_num"><strong>CFE:</strong> <span t-esc="cfe_serie_num"/></p>
                                     </div>
                                 </div>
 
-                                <!-- Resumen de Pagos -->
-                                <div class="row mb16">
-                                    <div class="col-12">
-                                        <h5>Resumen de Pagos:</h5>
-                                        <table class="table table-sm">
-                                            <thead>
-                                                <tr>
-                                                    <th>Método de Pago</th>
-                                                    <th class="text-end">Monto</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                <t t-foreach="o.payment_ids" t-as="payment">
-                                                    <tr>
-                                                        <td><span t-field="payment.payment_method_id.name"/></td>
-                                                        <td class="text-end">
-                                                            <span t-field="payment.amount" t-options='{"widget": "monetary", "display_currency": o.currency_id}'/>
-                                                        </td>
-                                                    </tr>
-                                                </t>
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                </div>
-
-                                <!-- Totales -->
-                                <div class="row mb16">
-                                    <div class="col-12">
-                                        <table class="table table-sm">
-                                            <tr>
-                                                <td><strong>Total de la Orden:</strong></td>
-                                                <td class="text-end">
-                                                    <strong>
-                                                        <span t-field="o.amount_total" t-options='{"widget": "monetary", "display_currency": o.currency_id}'/>
-                                                    </strong>
-                                                </td>
-                                            </tr>
-                                            <tr>
-                                                <td><strong>Total Pagado:</strong></td>
-                                                <td class="text-end">
-                                                    <strong>
-                                                        <span t-field="o.amount_paid" t-options='{"widget": "monetary", "display_currency": o.currency_id}'/>
-                                                    </strong>
-                                                </td>
-                                            </tr>
-                                            <tr t-if="o.amount_paid > o.amount_total">
-                                                <td><strong>Cambio:</strong></td>
-                                                <td class="text-end">
-                                                    <strong>
-                                                        <span t-esc="o.amount_paid - o.amount_total" 
-                                                              t-options='{"widget": "monetary", "display_currency": o.currency_id}'/>
-                                                    </strong>
-                                                </td>
-                                            </tr>
-                                        </table>
+                                <!-- Código de barras de la orden asociada -->
+                                <div class="row mb16" t-if="order_number">
+                                    <div class="col-12 text-center">
+                                        <img t-att-src="'/report/barcode/Code128/%s?width=300&amp;height=80' % (order_number.replace(' ', '%20'))"
+                                             style="max-width:100%; height:auto;"/>
+                                        <div style="font-size:11px; margin-top:4px;">
+                                            <span t-esc="order_number"/>
+                                        </div>
                                     </div>
                                 </div>
 
@@ -125,6 +85,13 @@
                                         <p class="text-muted" t-if="o.session_id">
                                             Sesión: <span t-field="o.session_id.name"/>
                                         </p>
+                                    </div>
+                                </div>
+
+                                <!-- Texto final configurable -->
+                                <div class="row mt16" t-if="o.config_id and o.config_id.change_ticket_note">
+                                    <div class="col-12 text-center">
+                                        <div t-raw="o.config_id.change_ticket_note"/>
                                     </div>
                                 </div>
 

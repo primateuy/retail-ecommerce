@@ -17,6 +17,7 @@
                         <field name="change_ticket_report_id" 
                                widget="many2one" 
                                options="{'no_create': True, 'no_create_edit': True}"/>
+                        <field name="change_ticket_note" widget="html"/>
                     </group>
                 </xpath>
             </field>
