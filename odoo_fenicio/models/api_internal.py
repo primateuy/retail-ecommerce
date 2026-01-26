@@ -34,6 +34,9 @@ class ApiInternal(models.Model):
         limit = json_data.get('total', 100)
         offset = json_data.get('desde', 0)
         
+        # Obtener código de moneda
+        currency_code = self.env.company.currency_id.name
+        
         product_template_ids = self.env['product.template'].search([
             ('product_e_fenicio', '=', True),
             ('fenicio_check', '=', False),
@@ -88,6 +91,9 @@ class ApiInternal(models.Model):
                 vals['atributos'][atributos.attribute_id.name] = atributos.value_id.name;
 
             if len(product_template_id.product_variant_ids) > 1:
+                # Agrupar variantes por atributos de variante
+                variantes_map = {}
+                
                 for variante in product_template_id.product_variant_ids:
                     variant_attrs = variante.product_template_attribute_value_ids.filtered(
                         lambda x: x.attribute_id.fenicio_type == 'variante'
@@ -121,13 +127,14 @@ class ApiInternal(models.Model):
                     nombre_variante = ' / '.join(nombre_parts)
             
 
-
-                    variante_data = {
-                        'codigo': codigo_variante,
-                        'nombre': nombre_variante,
-                        'atributos': atributos,
-                        'presentaciones': [],
-                    }
+                    # Usar código de variante como clave para agrupar
+                    if codigo_variante not in variantes_map:
+                        variantes_map[codigo_variante] = {
+                            'codigo': codigo_variante,
+                            'nombre': nombre_variante,
+                            'atributos': atributos,
+                            'presentaciones': [],
+                        }
 
                     # Obtener listas de precio de la configuración global de Fenicio
                     config_params = self.env['ir.config_parameter'].sudo()
@@ -140,10 +147,10 @@ class ApiInternal(models.Model):
                     listaAlternativo = self.env['product.pricelist'].sudo().browse(int(listaAlternativo_id)) if listaAlternativo_id else False
                     
 
-
-                    for pres_attr_val in presentacion_attrs:
-                        codigo = str(pres_attr_val.attribute_id.codigo) if pres_attr_val.attribute_id.codigo else '000'
-                        nombre = pres_attr_val.product_attribute_value_id.name
+                    # Si no hay atributos de presentación, crear una presentación por defecto
+                    if not presentacion_attrs:
+                        codigo = variante.default_code or ''
+                        nombre = variante.name
                         sku = variante.default_code or ''
                         stock = self._get_fenicio_stock(variante)
 
@@ -160,7 +167,6 @@ class ApiInternal(models.Model):
                                     partner=None,
                                     uom_id=variante.uom_id.id
                                 )
-
                             except Exception as e:
                                 precioVenta = variante.lst_price or 0.0
 
@@ -173,7 +179,6 @@ class ApiInternal(models.Model):
                                     partner=None,
                                     uom_id=variante.uom_id.id
                                 )
-
                             except Exception as e:
                                 precioLista = variante.lst_price or 0.0
 
@@ -189,19 +194,81 @@ class ApiInternal(models.Model):
                             except Exception as e:
                                 precioAlternativo = variante.lst_price or 0.0
 
-                        variante_data['presentaciones'].append(
+                        variantes_map[codigo_variante]['presentaciones'].append(
                             {
                                 'codigo': codigo,
                                 'nombre': nombre,
                                 'stock': stock,
                                 'sku': sku,
-                                'precioLista': {'precio': precioLista},
-                                'precioVenta': {'precio': precioVenta},
-                                'precioAlternativo': {'precio': precioAlternativo}
+                                'precioLista': {currency_code: precioLista},
+                                'precioVenta': {currency_code: precioVenta},
+                                'precioAlternativo': {currency_code: precioAlternativo}
                             }
                         )
+                    else:
+                        # Agregar todas las presentaciones para esta variante
+                        for pres_attr_val in presentacion_attrs:
+                            codigo = str(pres_attr_val.attribute_id.codigo) if pres_attr_val.attribute_id.codigo else '000'
+                            nombre = pres_attr_val.product_attribute_value_id.name
+                            sku = variante.default_code or ''
+                            stock = self._get_fenicio_stock(variante)
 
+                            precioVenta = 0.0
+                            precioLista = 0.0
+                            precioAlternativo = 0.0
 
+                            # Calcular precio de venta con fórmulas/descuentos
+                            if listaVenta:
+                                try:
+                                    precioVenta = listaVenta._get_product_price(
+                                        product=variante,
+                                        quantity=1.0,
+                                        partner=None,
+                                        uom_id=variante.uom_id.id
+                                    )
+
+                                except Exception as e:
+                                    precioVenta = variante.lst_price or 0.0
+
+                            # Calcular precio de lista con fórmulas/descuentos
+                            if listaPrecios:
+                                try:
+                                    precioLista = listaPrecios._get_product_price(
+                                        product=variante,
+                                        quantity=1.0,
+                                        partner=None,
+                                        uom_id=variante.uom_id.id
+                                    )
+
+                                except Exception as e:
+                                    precioLista = variante.lst_price or 0.0
+
+                            # Calcular precio alternativo con fórmulas/descuentos
+                            if listaAlternativo:
+                                try:
+                                    precioAlternativo = listaAlternativo._get_product_price(
+                                        product=variante,
+                                        quantity=1.0,
+                                        partner=None,
+                                        uom_id=variante.uom_id.id
+                                    )
+                                except Exception as e:
+                                    precioAlternativo = variante.lst_price or 0.0
+
+                            variantes_map[codigo_variante]['presentaciones'].append(
+                                {
+                                    'codigo': codigo,
+                                    'nombre': nombre,
+                                    'stock': stock,
+                                    'sku': sku,
+                                    'precioLista': {currency_code: precioLista},
+                                    'precioVenta': {currency_code: precioVenta},
+                                    'precioAlternativo': {currency_code: precioAlternativo}
+                                }
+                            )
+
+                # Agregar todas las variantes agrupadas al response
+                for variante_data in variantes_map.values():
                     vals['variantes'].append(variante_data)
 
 
@@ -366,14 +433,17 @@ class ApiInternal(models.Model):
         else:
             codigo = product_id.default_code or str(product_id.id)
 
+        # Obtener código de moneda
+        currency_code = self.env.company.currency_id.name
+        
         return {
             'codigo': codigo,
             'nombre': nombre_presentacion,
             'sku': product_id.default_code or '',
             'stock': stock,
-            'precioLista': {'precio': precio_lista},
-            'precioVenta': {'precio': precio_venta},
-            'precioAlternativo': {'precio': precio_alternativo},
+            'precioLista': {currency_code: precio_lista},
+            'precioVenta': {currency_code: precio_venta},
+            'precioAlternativo': {currency_code: precio_alternativo},
             'identificadores': identificadores, 
         }
     
