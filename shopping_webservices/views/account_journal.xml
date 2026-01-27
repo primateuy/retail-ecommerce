@@ -6,10 +6,17 @@
         <field name="model">account.journal</field>
         <field name="inherit_id" ref="account.view_account_journal_form"/>
         <field name="arch" type="xml">
-            <xpath expr="//notebook" position="inside">
-                <page string="Shopping Webservices">
+
+            <xpath expr="//field[@name='type']" position="after">
+                <field name="integracionShopping"/>
+            </xpath>
+
+            <xpath expr="//notebook" position="inside" >
+                <page string="Shopping Webservices" invisible="not integracionShopping">
                     <group>
                         <field name="tecnologia"/>
+                        <field name="url"/>
+                        <field name="password" password="True"/>
                         <field name="homologacion"/>
                         <field name="codigoShopping" />
                         <field name="nroContrato" />
@@ -20,7 +27,7 @@
                 </page>
             </xpath>
             <xpath expr="//notebook" position="inside">
-                <page string="Métodos de pago Shopping">
+                <page string="Métodos de pago Shopping" invisible="not integracionShopping">
                     <group>
 
                         <field name="shopping_payment_method_ids" widget="many2many_tags"/>
