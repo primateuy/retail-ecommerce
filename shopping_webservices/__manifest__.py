@@ -21,7 +21,6 @@
         'security/ir.model.access.csv',
         'views/views.xml',
         'views/templates.xml',
-        'views/res_config_settings.xml',
         'views/account_journal.xml',
         'views/loyalty_program.xml',
         'views/shopping_payment_method.xml',

@@ -1,9 +1,11 @@
 from odoo import models, fields, api
+from odoo.exceptions import ValidationError
 
 class AccountJournal(models.Model):
     _inherit = 'account.journal'
 
-    
+    integracionShopping = fields.Boolean(
+        string="Integración con Shopping", default=False);
     codigoShopping = fields.Char(string="Código Shopping", help="Código asignado por el shopping para identificar este punto de venta en sus sistemas.")
     nroContrato = fields.Char(string="Nro Contrato", help="Número de contrato asociado a este punto de venta en el shopping.")
     codigoCanal = fields.Char(string="Código Canal", help="Código del canal de ventas asignado por el shopping.")
@@ -13,6 +15,8 @@ class AccountJournal(models.Model):
         ('lecueder', 'Lecueder'),
         ('costa_urbana', 'Costa Urbana'),
     ], string="Tecnología", default='lecueder');
+    url = fields.Char(string="URL", help="URL del servicio web proporcionado por el shopping para la integración.")
+    password = fields.Char(string="Password", help="Contraseña para autenticar en el servicio web del shopping.")
 
     homologacion = fields.Boolean(
         string="Modo Homologación", default=False);
@@ -24,3 +28,27 @@ class AccountJournal(models.Model):
         'payment_method_id',              # Columna para payment method
         string='Métodos de Pago Shopping'
     )
+
+    def write(self, vals):
+        for record in self:
+            integracion_activa = vals.get('integracionShopping', record.integracionShopping)
+            
+            if integracion_activa:
+                codigo_shopping = vals.get('codigoShopping', record.codigoShopping)
+                nro_contrato = vals.get('nroContrato', record.nroContrato)
+                codigo_canal = vals.get('codigoCanal', record.codigoCanal)
+                tecnologia = vals.get('tecnologia', record.tecnologia)
+                url = vals.get('url', record.url)
+                password = vals.get('password', record.password)
+                
+                if not (codigo_shopping and nro_contrato and codigo_canal and tecnologia and url and password):
+                    raise ValidationError("Para activar la integración con Shopping, debe completar todos los campos requeridos: Código Shopping, Nro Contrato, Código Canal, Tecnología, URL y Password.")
+        
+        return super(AccountJournal, self).write(vals)
+    
+    def create(self, vals):
+        if vals.get('integracionShopping') and (not vals.get('codigoShopping') or not vals.get('nroContrato') or not vals.get('codigoCanal') or not vals.get('tecnologia') or not vals.get('url') or not vals.get('password')):
+            raise ValidationError("Para activar la integración con Shopping, debe completar todos los campos requeridos: Código Shopping, Nro Contrato, Código Canal, Tecnología, URL y Password.")
+        
+        return super(AccountJournal, self).create(vals)
+    

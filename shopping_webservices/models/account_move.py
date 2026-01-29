@@ -90,12 +90,10 @@ class AccountMove(models.Model):
             self.metodoUnico = False;
 
     def get_credentials(self):
-        rut = self.env['ir.config_parameter'].sudo().get_param('shopping_webservices.rut')
-        password = self.env['ir.config_parameter'].sudo().get_param('shopping_webservices.password')
+        rut = self.env['res.company'].browse(self.journal_id.company_id.id).vat;
 
-
-        _logger.info("Credenciales obtenidas: RUT=%s", rut);
-        _logger.info("CREDENCIALES OBTENIDAS: PASSWORD=%s", password);
+        _logger.info(f"EL RUT DE LA EMPRESA ES {rut}");
+        password = self.journal_id.password;
 
         if not rut or not password:
             raise ValueError("Faltan credenciales del shopping")
@@ -112,7 +110,6 @@ class AccountMove(models.Model):
 
         transport = Transport(session=session, timeout=20)
 
-        _logger.info("Creando cliente Zeep para %s", wsdl_url)
         client = Client(wsdl=wsdl_url, transport=transport)
 
         if client is None:
@@ -124,7 +121,6 @@ class AccountMove(models.Model):
         tipo = self.env['account.journal'].browse(self.journal_id.id).tecnologia;
 
         if not tipo or tipo == '':
-            _logger.info("No se encontro tipo !!");
             self.env['ventas.log'].sudo().create({
                 'account_move_id': self.id,
                 'fecha_declaracion': fields.Datetime.now(),
@@ -173,18 +169,19 @@ class AccountMove(models.Model):
             return;
     
 
-        url = self.env['ir.config_parameter'].sudo().get_param('shopping_webservices.url_declaracion_ventas')
+        url = self.journal_id.url
         
         client = self.get_zeep_client(url)
-        _logger.info("Cliente Zeep creado exitosamente")
 
         if not url:
             raise UserError("Falta URL de declaración de ventas en la configuración")
 
-        rut = self.env['ir.config_parameter'].sudo().get_param('shopping_webservices.rut')
+        rut = self.env['res.company'].browse(self.journal_id.company_id.id).vat;
+
+        _logger.info(f"EL RUT DE LA EMPRESA ES {rut}");
 
         if not rut:
-            raise UserError("Falta RUT en la configuración")
+            raise UserError("Falta el RUT de la empresa")
 
         codigoShopping = self.journal_id.codigoShopping
         numeroContrato = self.journal_id.nroContrato
@@ -210,8 +207,6 @@ class AccountMove(models.Model):
         pagoTotalConIva = 0.0
 
         for linea in lineas:
-            _logger.info("Línea: %s - Cantidad: %s - Precio Unitario: %s", linea.name, linea.quantity, linea.price_unit)
-            
             subtotal = linea.quantity * linea.price_unit
             
             # Calcular impuestos
@@ -221,14 +216,11 @@ class AccountMove(models.Model):
             else:
                 subtotal_con_iva = subtotal
             
-            _logger.info("Subtotal sin IVA: %s - Subtotal con IVA: %s", subtotal, subtotal_con_iva)
 
             pagoTotalSinIva += subtotal
             pagoTotalConIva += subtotal_con_iva
 
-        _logger.info("=== TOTALES CALCULADOS ===")
-        _logger.info("Total sin IVA: %s", pagoTotalSinIva)
-        _logger.info("Total con IVA: %s", pagoTotalConIva)
+        
 
         # Determinar el monto según el tipo de pago
         monto_contado = str(pagoTotalSinIva) if esContado else '0'
@@ -246,7 +238,6 @@ class AccountMove(models.Model):
             numeroCFE = str(random.randint(1, 1000))  # Usar el número de factura de prueba
             
         
-        _logger.info(f"{codigoCFE} - {serieCFE} - {numeroCFE}");
         try:
             request_data = {
                 'wsDeclaVtas': {
@@ -413,7 +404,7 @@ class AccountMove(models.Model):
         Distribuye el monto según el JSON de payment_distribution (que incluye IVA) 
         pero convierte a SIN IVA para el envío al servicio
         """
-        url = self.env['ir.config_parameter'].sudo().get_param('shopping_webservices.url_declaracion_ventas')
+        url = self.journal_id.url;
         
         client = self.get_zeep_client(url)
         _logger.info("Cliente Zeep creado exitosamente para múltiples métodos")
@@ -421,7 +412,7 @@ class AccountMove(models.Model):
         if not url:
             raise UserError("Falta URL de declaración de ventas en la configuración")
 
-        rut = self.env['ir.config_parameter'].sudo().get_param('shopping_webservices.rut')
+        rut = self.env['res.company'].browse(self.journal_id.company_id.id).vat;
 
         if not rut:
             raise UserError("Falta RUT en la configuración")

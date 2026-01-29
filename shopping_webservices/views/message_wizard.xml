@@ -12,6 +12,10 @@
                         <field name="message"/>
                     </group>
                 </sheet>
+
+                <footer>
+                <button string="Cerrar" class="btn-primary" special="cancel"/>
+                 </footer>
                
             </form>
         </field>
