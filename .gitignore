@@ -1,0 +1,5 @@
+# Ignore all markdown files
+*.md
+
+# Except README.md
+!README.md
