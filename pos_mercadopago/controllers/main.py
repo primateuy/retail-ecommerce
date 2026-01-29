@@ -228,9 +228,13 @@ class MercadoPagoController(http.Controller):
                     "payment_method_id": payment["payment_method_id"],
                 }))
 
+            # Generamos la referencia de la orden una sola vez
+            order_reference = request.env['ir.sequence'].sudo().next_by_code('pos.order.line')
+            
             # Creamos la orden en odoo
             order = request.env["pos.order"].create({
-                "name": request.env['ir.sequence'].sudo().next_by_code('pos.order.line'),
+                "name": order_reference,
+                "pos_reference": order_reference,
                 "session_id": kwards["session_id"],
                 "user_id": kwards["user_id"],
                 "amount_tax": amount_tax,
