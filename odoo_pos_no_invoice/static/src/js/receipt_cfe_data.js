@@ -51,6 +51,7 @@ patch(OrderReceipt.prototype, {
             receiptData?.order_name ||
             ''
         );
+        const orderServerId = order?.server_id || null;
         if (!order) {
             console.log('No hay orden disponible en el POS, se usará referencia del recibo');
         }
@@ -78,20 +79,25 @@ patch(OrderReceipt.prototype, {
         }
         
         // Obtener datos completos del recibo desde la factura y hacer fallback a la orden.
-        try {
-            const receiptServerData = await this.orm.call(
-                'pos.order',
-                'get_receipt_data_from_invoice_or_order',
-                [[], accountMoveId, orderReference]
-            );
-            if (receiptServerData) {
-                this.state.receiptData = receiptServerData;
-                if (!accountMoveId && receiptServerData.account_move_id) {
-                    accountMoveId = receiptServerData.account_move_id;
+            try {
+                const receiptServerData = await this.orm.call(
+                    'pos.order',
+                    'get_receipt_data_from_invoice_or_order',
+                    [[], accountMoveId, orderReference, orderServerId]
+                );
+                if (receiptServerData) {
+                    // Solo actualizar el estado si la factura trae líneas completas.
+                    if (receiptServerData.source === 'invoice' && receiptServerData.orderlines?.length) {
+                        this.state.receiptData = receiptServerData;
+                        if (!accountMoveId && receiptServerData.account_move_id) {
+                            accountMoveId = receiptServerData.account_move_id;
+                        }
+                        console.log('Datos del recibo (factura) aplicados:', receiptServerData);
+                    } else {
+                        console.log('Datos del recibo incompletos, se mantiene el POS:', receiptServerData);
+                    }
                 }
-                console.log('Datos del recibo obtenidos desde servidor:', receiptServerData);
-            }
-        } catch (e) {
+            } catch (e) {
             console.error('Error al obtener datos del recibo desde servidor:', e);
         }
         
@@ -156,6 +162,7 @@ patch(OrderReceipt.prototype, {
                 || this.props.data?.paymentlines?.[0]?.name
                 || '',
             ticket_number: receiptData.legal_data?.ticket_number
+                || cfeData?.cfe_serie_num
                 || this.props.data?.name
                 || '',
             date: receiptData.legal_data?.date
@@ -212,6 +219,11 @@ patch(OrderReceipt.prototype, {
             ? receiptData.orderlines
             : this.props.data.orderlines;
 
+        // Definir líneas de pago priorizando datos del servidor.
+        const receiptPaymentlines = (receiptData && receiptData.paymentlines)
+            ? receiptData.paymentlines
+            : this.props.data.paymentlines;
+
         // Construir objeto final de props para el template del recibo.
         const props = {
             pos: this.pos,
@@ -228,7 +240,7 @@ patch(OrderReceipt.prototype, {
             order: order,
             receipt: this.props.data,
             orderlines: receiptOrderlines,
-            paymentlines: this.props.data.paymentlines,
+            paymentlines: receiptPaymentlines,
             partner: partner,
         };
         

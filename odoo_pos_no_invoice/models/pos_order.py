@@ -1,5 +1,6 @@
 from datetime import date as py_date
 from datetime import datetime
+import time
 
 from odoo import _, models, api, fields
 from odoo.tools import is_html_empty
@@ -234,10 +235,12 @@ class PosOrder(models.Model):
             serie = ''
             numero = ''
             tipo = ''
+            cfe_serie_num = ''
             
             # Intentar desde cfe_serie_num primero
             if hasattr(invoice, 'cfe_serie_num') and invoice.cfe_serie_num and str(invoice.cfe_serie_num).strip() not in [False, '/', '']:
                 _logger.info('Parseando cfe_serie_num: %s', invoice.cfe_serie_num)
+                cfe_serie_num = str(invoice.cfe_serie_num).strip()
                 parts = str(invoice.cfe_serie_num).split('-')
                 if len(parts) >= 3:
                     tipo = parts[0].strip()
@@ -254,6 +257,7 @@ class PosOrder(models.Model):
                         tipo = parts[0].strip()
                         serie = parts[1].strip()
                         numero = parts[2].strip()
+                        cfe_serie_num = invoice.name.strip()
                         _logger.info('Parseado desde name: tipo=%s, serie=%s, numero=%s', tipo, serie, numero)
             
             # Si no hay tipo, intentar desde cfe_type
@@ -330,8 +334,10 @@ class PosOrder(models.Model):
             # Construir objeto con datos del CFE
             cfe_data = {
                 'tipo': tipo_nombre,
+                'tipo_codigo': tipo,
                 'serie': serie,
                 'numero': numero,
+                'cfe_serie_num': cfe_serie_num or f'{tipo}-{serie}-{numero}' if (tipo and serie and numero) else '',
                 'ruc_emisor': ruc_emisor,
                 'codigo_seguridad': codigo_seguridad,
                 'url_verificacion': url_verificacion,
@@ -351,7 +357,7 @@ class PosOrder(models.Model):
         return cfe_data
 
     @api.model
-    def get_receipt_data_from_invoice_or_order(self, ids, account_move_id, order_reference):
+    def get_receipt_data_from_invoice_or_order(self, ids, account_move_id, order_reference, order_id=None):
         """
         Retorna los datos del recibo tomando como prioridad la factura generada
         y, si no existe, la orden del POS.
@@ -389,10 +395,17 @@ class PosOrder(models.Model):
         # Normalizar parámetros de entrada para evitar errores en búsquedas.
         normalized_reference = (order_reference or '').strip()
         normalized_account_move_id = int(account_move_id) if account_move_id else False
+        normalized_order_id = int(order_id) if order_id else False
 
-        # Buscar la orden del POS por referencia para usar como respaldo.
+        # Buscar la orden del POS por ID si está disponible (más confiable que la referencia).
         pos_order = self.env['pos.order']
-        if normalized_reference:
+        if normalized_order_id:
+            pos_order = self.browse(normalized_order_id).sudo()
+            if not pos_order.exists():
+                pos_order = self.env['pos.order']
+
+        # Si no se encontró por ID, buscar la orden por referencia para usar como respaldo.
+        if not pos_order and normalized_reference:
             pos_order = self.search(
                 ['|', ('pos_reference', '=', normalized_reference), ('name', '=', normalized_reference)],
                 limit=1,
@@ -404,9 +417,14 @@ class PosOrder(models.Model):
             receipt_data['order_id'] = pos_order.id
 
         # Usar la factura de la orden si no se recibió account_move_id explícito.
-        if not normalized_account_move_id and pos_order and pos_order.account_move:
-            normalized_account_move_id = pos_order.account_move.id
-
+        if not normalized_account_move_id and pos_order:
+            for _attempt in range(20):
+                pos_order.invalidate_recordset(['account_move'])
+                pos_order = self.browse(pos_order.id).sudo()
+                if pos_order.account_move:
+                    normalized_account_move_id = pos_order.account_move.id
+                    break
+                time.sleep(1)
         # Preparar la factura en caso de existir para construir el recibo.
         invoice = self.env['account.move']
         if normalized_account_move_id:
@@ -414,6 +432,7 @@ class PosOrder(models.Model):
             if not invoice.exists():
                 invoice = self.env['account.move']
                 normalized_account_move_id = False
+        invoice = invoice.sudo() if invoice else invoice
 
         # Determinar la condición de compra priorizando la factura.
         purchase_condition = ''
@@ -505,14 +524,33 @@ class PosOrder(models.Model):
         if invoice:
             receipt_data['source'] = 'invoice'
             receipt_data['account_move_id'] = invoice.id
+            # Esperar a que la factura tenga líneas disponibles (incluye descuentos).
+            expected_line_count = 0
+            if pos_order:
+                expected_line_count = len(pos_order.lines)
+
+            invoice_lines = invoice.invoice_line_ids
+            for _attempt in range(20):
+                if invoice_lines and (not expected_line_count or len(invoice_lines) >= expected_line_count):
+                    break
+                time.sleep(1)
+                invoice.invalidate_recordset(['invoice_line_ids', 'amount_total', 'amount_tax', 'amount_untaxed'])
+                invoice = self.env['account.move'].browse(invoice.id).sudo()
+                invoice_lines = invoice.invoice_line_ids
+
+            if not invoice_lines:
+                fallback_lines = invoice.line_ids.filtered(
+                    lambda l: not l.display_type and not l.exclude_from_invoice_tab
+                )
+                if fallback_lines:
+                    invoice_lines = fallback_lines
+
             receipt_data['amount_total'] = invoice.amount_total
             receipt_data['amount_tax'] = invoice.amount_tax
             receipt_data['total_without_tax'] = invoice.amount_untaxed
 
             # Construir líneas del recibo a partir de las líneas de factura.
-            for line in invoice.invoice_line_ids:
-                if line.display_type:
-                    continue
+            for line in invoice_lines:
                 receipt_data['orderlines'].append({
                     'productName': line.name or (line.product_id.display_name if line.product_id else ''),
                     'qty': line.quantity,
@@ -521,6 +559,17 @@ class PosOrder(models.Model):
                     'discount': line.discount or 0.0,
                     'customerNote': '',
                 })
+
+            # Construir líneas de pago desde la factura para reflejar el total final.
+            payment_name = ''
+            if pos_order and pos_order.payment_ids:
+                payment_name = pos_order.payment_ids[0].payment_method_id.name or ''
+            if not payment_name:
+                payment_name = purchase_condition or 'Contado'
+            receipt_data['paymentlines'] = [{
+                'name': payment_name,
+                'amount': invoice.amount_total,
+            }]
 
             # Construir detalle de impuestos desde tax_totals si está disponible.
             tax_totals = invoice.tax_totals or {}
