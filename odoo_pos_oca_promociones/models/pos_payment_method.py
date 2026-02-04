@@ -397,6 +397,16 @@ class PosPaymentMethod(models.Model):
             promotion_processed = False  # Flag para evitar procesar múltiples veces
             saved_promotion_info = None  # Variable para preservar promotion_info
 
+            def _get_quota_value():
+                """Obtener cuotas desde la respuesta del pinpad."""
+                raw_quota = result.get('Quota') or result.get('Quotas')
+                if raw_quota is None:
+                    raw_quota = data.get('Installments', 1)
+                try:
+                    return int(raw_quota)
+                except (TypeError, ValueError):
+                    return 1
+
             query_data = {
                 "PosID": data['PosID'],
                 "SystemId": data['SystemId'],
@@ -454,6 +464,7 @@ class PosPaymentMethod(models.Model):
                                     _logger.info('No se encontró promoción aplicable para esta transacción (BIN no coincide o no hay promociones configuradas)')
                                     _logger.info('Procesando pago normalmente sin aplicar descuento ni promoción')
                                     # Confirmar sin promoción (valores originales)
+                                    quota_value = _get_quota_value()
                                     confirm_data = {
                                         "PosID": data['PosID'],
                                         "SystemId": data['SystemId'],
@@ -463,7 +474,7 @@ class PosPaymentMethod(models.Model):
                                         "TransactionDateTimeyyyyMMddHHmmssSSS": payment_method.get_formatted_timestamp(),
                                         "TransactionId": str(transaction_id),  # String según documentación
                                         "Amount": data.get('Amount', '0'),
-                                        "Quotas": int(data.get('Installments', 1)),  # Número según documentación
+                                        "Quotas": quota_value,  # Número según respuesta del pinpad
                                         "Plan": 0,  # Número según documentación
                                         "Currency": data.get('Currency', '858'),
                                         "TaxRefund": int(data.get('TaxRefund', 1)),  # Número según documentación
@@ -519,6 +530,7 @@ class PosPaymentMethod(models.Model):
                                     # El TransactionId debe ser el mismo que se recibió en la respuesta inicial
                                     # Según documentación, algunos campos deben ser números (Quotas, Plan, TaxRefund)
                                     # y otros deben ser strings (Amount, TaxableAmount, InvoiceAmount, etc.)
+                                    quota_value = _get_quota_value()
                                     confirm_data = {
                                         "PosID": data['PosID'],
                                         "SystemId": data['SystemId'],
@@ -528,7 +540,7 @@ class PosPaymentMethod(models.Model):
                                         "TransactionDateTimeyyyyMMddHHmmssSSS": payment_method.get_formatted_timestamp(),
                                         "TransactionId": str(transaction_id),  # MISMO TransactionId de la transacción original (como string según documentación)
                                         "Amount": str(new_amount_cents),  # Monto con descuento aplicado (string)
-                                        "Quotas": int(data.get('Installments', 1)),  # Número según documentación
+                                        "Quotas": quota_value,  # Número según respuesta del pinpad
                                         "Plan": 0,  # Número según documentación
                                         "Currency": data.get('Currency', '858'),
                                         "TaxRefund": int(data.get('TaxRefund', 1)),  # Número según documentación (1 = con IVA, 99 = sin IVA)
@@ -582,6 +594,7 @@ class PosPaymentMethod(models.Model):
                                 else:
                                     _logger.warning('No se encontró producto de descuento en la promoción %s, confirmando sin promoción', promotion.name)
                                     # Confirmar sin promoción (valores originales)
+                                    quota_value = _get_quota_value()
                                     confirm_data = {
                                         "PosID": data['PosID'],
                                         "SystemId": data['SystemId'],
@@ -591,7 +604,7 @@ class PosPaymentMethod(models.Model):
                                         "TransactionDateTimeyyyyMMddHHmmssSSS": payment_method.get_formatted_timestamp(),
                                         "TransactionId": str(transaction_id),  # String según documentación
                                         "Amount": data.get('Amount', '0'),
-                                        "Quotas": int(data.get('Installments', 1)),  # Número según documentación
+                                        "Quotas": quota_value,  # Número según respuesta del pinpad
                                         "Plan": 0,  # Número según documentación
                                         "Currency": data.get('Currency', '858'),
                                         "TaxRefund": int(data.get('TaxRefund', 1)),  # Número según documentación
@@ -617,6 +630,7 @@ class PosPaymentMethod(models.Model):
                                 # Continuar sin promoción - procesar pago normalmente
                                 try:
                                     payment_method = env['pos.payment.method'].browse(payment_method_id)
+                                    quota_value = _get_quota_value()
                                     confirm_data = {
                                         "PosID": data['PosID'],
                                         "SystemId": data['SystemId'],
@@ -626,7 +640,7 @@ class PosPaymentMethod(models.Model):
                                         "TransactionDateTimeyyyyMMddHHmmssSSS": payment_method.get_formatted_timestamp(),
                                         "TransactionId": str(transaction_id),  # String según documentación
                                         "Amount": data.get('Amount', '0'),
-                                        "Quotas": int(data.get('Installments', 1)),  # Número según documentación
+                                        "Quotas": quota_value,  # Número según respuesta del pinpad
                                         "Plan": 0,  # Número según documentación
                                         "Currency": data.get('Currency', '858'),
                                         "TaxRefund": int(data.get('TaxRefund', 1)),  # Número según documentación
