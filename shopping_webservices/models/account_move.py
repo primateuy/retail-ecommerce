@@ -1,4 +1,5 @@
 import random
+from datetime import datetime
 
 from psycopg2 import Date
 from odoo import api, fields, models
@@ -19,7 +20,9 @@ class AccountMove(models.Model):
 
     payment_distribution = fields.Text(
         string='Distribución de Pagos',
-        help='JSON con la distribución de pagos por método'
+        help='JSON con la distribución de pagos por método',
+        store=True,
+        copy=False
     )
     
     # Campos opcionales para validación
@@ -44,7 +47,7 @@ class AccountMove(models.Model):
         for record in self:
             record.mostrar_botones_declaracion = (
                 record.journal_id.tecnologia and 
-                record.journal_id.shopping_payment_method_ids
+                record.journal_id.shopping_payment_method_ids and not record.ventaEnviada
             )
     
     @api.depends('payment_distribution', 'amount_total')
@@ -100,22 +103,201 @@ class AccountMove(models.Model):
 
         return str(rut), str(password)
 
+    def _obtener_incluir_promo(self):
+        try:
+
+            
+            for linea in self.invoice_line_ids:
+                if linea.price_subtotal < 0:
+                    return "S"
+            
+        except Exception as e:
+            _logger.error(f"Error al verificar promoción de shopping en factura {self.id}: {str(e)}")
+        return 'N'
+
+    
+
+    def _verificar_promocion_shopping_en_linea(self, linea):
+        """
+        Verifica si una línea de descuento tiene asociada una promoción de shopping.
+        
+        Args:
+            linea: línea de factura (account.move.line)
+        
+        Returns:
+            bool: True si tiene promocionShopping=True, False si no
+        """
+        # Opción 1: Si la línea tiene reward_id directamente
+        if hasattr(linea, 'reward_id') and linea.reward_id:
+            reward = linea.reward_id
+            if hasattr(reward, 'program_id') and reward.program_id:
+                if hasattr(reward.program_id, 'promocionShopping') and reward.program_id.promocionShopping:
+                    return True
+        
+        # Opción 2: Buscar en el programa de lealtad del cupón aplicado
+        if hasattr(linea, 'coupon_id') and linea.coupon_id:
+            coupon = linea.coupon_id
+            if coupon.program_id and hasattr(coupon.program_id, 'promocionShopping') and coupon.program_id.promocionShopping:
+                return True
+        
+        # Opción 3: Buscar a través del producto si tiene relación con programa de lealtad
+        if linea.product_id and hasattr(linea.product_id, 'loyalty_program_id'):
+            program = linea.product_id.loyalty_program_id
+            if program and hasattr(program, 'promocionShopping') and program.promocionShopping:
+                return True
+        
+        return False
+
+    def evaluarVentas(self):
+        """
+        Evalúa y declara todas las ventas que:
+        - No han sido enviadas (ventaEnviada = False)
+        - Pertenecen a un diario con integración Shopping (integracionShopping = True)
+        """
+        ventas = self.env['account.move'].search([
+            ('ventaEnviada', '=', False), 
+            ('journal_id.integracionShopping', '=', True),
+            ('state', '=', 'posted')  # Solo facturas confirmadas
+        ])
+
+        _logger.info(f"Encontradas {len(ventas)} ventas por declarar")
+
+        for venta in ventas:
+            try:
+                metodos_pago = venta.journal_id.shopping_payment_method_ids
+                
+                if not metodos_pago:
+                    _logger.warning(f"Venta ID {venta.id}: Sin métodos de pago configurados en el diario")
+                    continue
+                
+                # Si hay un único método, declara con ese
+                if len(metodos_pago) == 1:
+                    _logger.info(f"Declarando venta ID {venta.id} con método único")
+                    venta.declararVentaUnicoMetodo()
+                else:
+                    # Si hay múltiples métodos
+                    _logger.info(f"Declarando venta ID {venta.id} con múltiples métodos")
+                    venta.declararVentaVariosMetodos()
+                    
+            except Exception as e:
+                _logger.error(f"Error al declarar venta ID {venta.id}: {str(e)}", exc_info=True)
+                continue
+
+
+    def _format_fecha_emision_cfe(self):
+        """
+        Formatea la fecha de emisión del CFE al formato YYYY-MM-DD HH:MM
+        Si existe cfe_fecha_hora_firma, la usa. Si no, usa la fecha/hora actual.
+        
+        Convierte formatos como: 2026-02-06T15:14:16.0000000-03:00 → 2026-02-06 15:14
+        """
+        try:
+            if self.cfe_fecha_hora_firma:
+                # Parsear el formato ISO 8601 con timezone
+                dt = datetime.fromisoformat(self.cfe_fecha_hora_firma)
+                return dt.strftime('%Y-%m-%d %H:%M')
+        except (ValueError, AttributeError):
+            pass
+        
+        # Fallback: usar la fecha/hora actual
+        return fields.Datetime.now().strftime('%Y-%m-%d %H:%M')
+
     
     def get_zeep_client(self, wsdl_url):
-        rut, password = self.get_credentials()
+        # Ensure the URL ends with ?wsdl for proper WSDL loading
+        if not wsdl_url.endswith('?wsdl'):
+            # Remove any existing query parameters and add ?wsdl
+            if '?' in wsdl_url:
+                wsdl_url = wsdl_url.split('?')[0] + '?wsdl'
+            else:
+                wsdl_url = wsdl_url + '?wsdl'
+        
+        _logger.info("WSDL URL after validation: %s", wsdl_url)
 
-        session = Session()
-        session.verify = True
-        session.auth = HTTPBasicAuth(rut, password)
+        if self.journal_id.tecnologia == 'lecueder':
 
-        transport = Transport(session=session, timeout=20)
+            rut, password = self.get_credentials()
 
-        client = Client(wsdl=wsdl_url, transport=transport)
+            session = Session()
+            session.verify = True
+            session.auth = HTTPBasicAuth(rut, password)
 
-        if client is None:
-            raise ValueError("No se pudo crear el cliente Zeep")
+            transport = Transport(session=session, timeout=20)
+
+            client = Client(wsdl=wsdl_url, transport=transport)
+
+            if client is None:
+                _logger.info("No se pudo crear el cliente Zeep para Lecueder")
+                return;
+
+        elif self.journal_id.tecnologia == 'costa_urbana':
+
+            usuario = self.journal_id.usuario
+            password = self.journal_id.password
+            
+            if not password or not usuario:
+                _logger.info("Faltan credenciales del shopping Costa Urbana")
+                return;
+    
+            session = Session()
+            session.verify = True
+            session.auth = HTTPBasicAuth(usuario, password)
+            transport = Transport(session=session, timeout=20)
+
+            client = Client(wsdl=wsdl_url, transport=transport)
+
+            if client is None:
+                _logger.info("No se pudo crear el cliente Zeep para Costa Urbana")
+                return;
+
+        else:
+            _logger.info("Tecnología no soportada para creación de cliente Zeep")
+            return;
+
 
         return client;
+
+    def declararVentaVariosMetodosManual(self):
+        tipo = self.env['account.journal'].browse(self.journal_id.id).tecnologia;
+
+        if not tipo or tipo == '':
+            self.env['ventas.log'].sudo().create({
+                'account_move_id': self.id,
+                'fecha_declaracion': fields.Datetime.now(),
+                'estado': 'error',
+                'texto': 'Falta definir la tecnología del punto de venta en el diario asociado.'
+            })
+            return
+
+        if tipo == 'lecueder':
+            self.declararVentaVariosMetodosLecueder()
+            message_id = self.env['message.wizard'].create({'message': "Venta declarada correctamente en Lecueder. ID: %s" % self.id})
+            return {
+                'name': 'Resultado Declaración Venta',
+                'type': 'ir.actions.act_window',
+                'view_mode': 'form',
+                'res_model': 'message.wizard',
+                'res_id': message_id.id,
+                'target': 'new'
+            }
+        elif tipo == 'costa_urbana':
+            self.declararVentaVariosMetodosCostaUrbana()
+            message_id = self.env['message.wizard'].create({'message': "Venta declarada correctamente en Costa Urbana. ID: %s" % self.id})
+            return {
+                'name': 'Resultado Declaración Venta',
+                'type': 'ir.actions.act_window',
+                'view_mode': 'form',
+                'res_model': 'message.wizard',
+                'res_id': message_id.id,
+                'target': 'new'
+            }
+        else:
+            self.env['ventas.log'].sudo().create({
+                'account_move_id': self.id,
+                'fecha_declaracion': fields.Datetime.now(),
+                'estado': 'error',
+                'texto': f'Tecnología {tipo} no implementada aún.'
+            })
 
     def declararVentaVariosMetodos(self):
         tipo = self.env['account.journal'].browse(self.journal_id.id).tecnologia;
@@ -127,277 +309,21 @@ class AccountMove(models.Model):
                 'estado': 'error',
                 'texto': 'Falta definir la tecnología del punto de venta en el diario asociado.'
             })
+            return
 
         if tipo == 'lecueder':
-            self.declararVentaVariosMetodosLecueder();
+            self.declararVentaVariosMetodosLecueder()
         elif tipo == 'costa_urbana':
-
+            self.declararVentaVariosMetodosCostaUrbana()
+        else:
             self.env['ventas.log'].sudo().create({
                 'account_move_id': self.id,
                 'fecha_declaracion': fields.Datetime.now(),
                 'estado': 'error',
-                'texto': 'No implementado para Costa Urbana aún.'
+                'texto': f'Tecnología {tipo} no implementada aún.'
             })
-            _logger.info("No implementado para Costa Urbana aún");
-            pass;
+            _logger.info(f"Tecnología {tipo} no implementada aún")
     
-    
-        
-
-
-    def declararVentaUnicoMetodo(self):
-        tipo = self.env['account.journal'].browse(self.journal_id.id).tecnologia;
-
-        if not tipo or tipo == '':
-            self.env['ventas.log'].sudo().create({
-                'account_move_id': self.id,
-                'fecha_declaracion': fields.Datetime.now(),
-                'estado': 'error',
-                'texto': 'Falta definir la tecnología del punto de venta en el diario asociado.'
-            })
-            return;
-    
-
-        if tipo == 'costa_urbana':
-            self.env['ventas.log'].sudo().create({
-                'account_move_id': self.id,
-                'fecha_declaracion': fields.Datetime.now(),
-                'estado': 'error',
-                'texto': 'No implementado para Costa Urbana aún.'
-            })
-
-            return;
-    
-
-        url = self.journal_id.url
-        
-        client = self.get_zeep_client(url)
-
-        if not url:
-            raise UserError("Falta URL de declaración de ventas en la configuración")
-
-        rut = self.env['res.company'].browse(self.journal_id.company_id.id).vat;
-
-        _logger.info(f"EL RUT DE LA EMPRESA ES {rut}");
-
-        if not rut:
-            raise UserError("Falta el RUT de la empresa")
-
-        codigoShopping = self.journal_id.codigoShopping
-        numeroContrato = self.journal_id.nroContrato
-        codigoCanal = self.journal_id.codigoCanal
-        codigoRubro = self.journal_id.codigoRubro
-
-        if not codigoShopping or not numeroContrato or not codigoCanal or not codigoRubro:
-            raise UserError("Faltan datos del punto de venta del shopping en el diario asociado")
-
-        # Obtener el método de pago UNA VEZ
-        metodoPago = self.journal_id.shopping_payment_method_ids
-        if not metodoPago or len(metodoPago) != 1:
-            raise UserError("Debe haber exactamente un método de pago configurado en el diario")
-        
-        metodoPago = metodoPago[0]  # Obtener el primer (y único) método
-        esContado = metodoPago.esContado()
-        esCredito = metodoPago.esCredito()
-        esDebito = metodoPago.esDebito()
-
-        lineas = self.invoice_line_ids
-        
-        pagoTotalSinIva = 0.0
-        pagoTotalConIva = 0.0
-
-        for linea in lineas:
-            subtotal = linea.quantity * linea.price_unit
-            
-            # Calcular impuestos
-            if linea.tax_ids:
-                tasa_impuesto = sum(tax.amount for tax in linea.tax_ids)
-                subtotal_con_iva = subtotal * (1 + (tasa_impuesto / 100.0))
-            else:
-                subtotal_con_iva = subtotal
-            
-
-            pagoTotalSinIva += subtotal
-            pagoTotalConIva += subtotal_con_iva
-
-        
-
-        # Determinar el monto según el tipo de pago
-        monto_contado = str(pagoTotalSinIva) if esContado else '0'
-        monto_credito = str(pagoTotalSinIva) if esCredito else '0'
-        monto_debito = str(pagoTotalSinIva) if esDebito else '0'
-        
-        codigoCFE, serieCFE, numeroCFE = '', '', '';
-
-        if self.cfe_serie_num:
-            codigoCFE, serieCFE, numeroCFE = self.cfe_serie_num.split('-');
-
-        if self.journal_id.homologacion:
-            codigoCFE = "101"
-            serieCFE = "PRU"
-            numeroCFE = str(random.randint(1, 1000))  # Usar el número de factura de prueba
-            
-        
-        try:
-            request_data = {
-                'wsDeclaVtas': {
-                    'General': {
-                        'Cab': {
-                            'NumeroRUT': rut,
-                            'CodigoShopping': codigoShopping,
-                            'NumeroContrato': numeroContrato,
-                            'CodigoCanal': codigoCanal,
-                            'CodigoCFE': codigoCFE,
-                            'NumeroCFE': numeroCFE,  # Usar el número de factura
-                            'SerieCFE': serieCFE,
-                            'MonedaCFE': 'UYU',
-                            'FechaEmisionCFE': fields.Date.today().strftime('%Y-%m-%d'),
-                            'TotalMOCIVA': str(pagoTotalConIva),  # ← CORREGIDO: Usar calculado
-                            'TotalMNSIVA': str(pagoTotalSinIva),  # ← CORREGIDO: Usar calculado
-                            'TipodeCambio': '1'
-                        },
-                        'Det': {
-                            'CodRubro': codigoRubro,
-                            'ContadoMNSIVA': monto_contado,    # ← CORREGIDO: Usar calculado
-                            'CreditoMNSIVA': monto_credito,    # ← CORREGIDO: Usar calculado
-                            'DebitoMNSIVA': monto_debito,      # ← CORREGIDO: Usar calculado
-                            'IncluirenPromo': 'S'
-                        }
-                    }
-                }
-            }
-            
-            _logger.info(f"REQUEST ENVIADA => {request_data}");
-
-            response = client.service.procesarAlta(**request_data)
-
-            _logger.info("=== RESPUESTA RECIBIDA ===")
-            _logger.info("Tipo: %s", type(response))
-            response_dict = serialize_object(response)
-            _logger.info("Datos: %s", response_dict)
-
-            
-
-
-            if isinstance(response_dict, list) and len(response_dict) > 0:
-                primer_resultado = response_dict[0]
-                estado = primer_resultado.get('estado')
-                mensaje = primer_resultado.get('mensaje', '')
-                identificador = primer_resultado.get('identificador')
-
-                if estado == 0:
-                    _logger.info("=== DECLARACIÓN EXITOSA ===")
-                    _logger.info(f"Identificador: {identificador}")
-                    
-                    # Guardar que la venta fue enviada
-                    self.write({'ventaEnviada': True})
-                    
-
-                    self.env['ventas.log'].sudo().create({
-                        'account_move_id': self.id,
-                        'fecha_declaracion': fields.Datetime.now(),
-                        'estado': 'exito',
-                        'texto': f'Venta declarada correctamente. ID: {identificador}'
-                    })
-
-                    self.env.cr.commit();
-
-                    message_id = self.env['message.wizard'].create({'message': "Venta declarada correctamente. ID: %s" % identificador})
-                    return {
-                        'name': 'Resultado Declaración Venta',
-                        'type': 'ir.actions.act_window',
-                        'view_mode': 'form',
-                        'res_model': 'message.wizard',
-                        # pass the id
-                        'res_id': message_id.id,
-                        'target': 'new'
-                    }
-
-                    
-                
-                if estado == 1:
-                    _logger.info("=== DECLARACIÓN EXITOSA ===")
-                    _logger.info(f"Identificador: {identificador}")
-                    
-                    self.env['ventas.log'].create({
-                        'account_move_id': self.id,
-                        'fecha_declaracion': fields.Datetime.now(),
-                        'estado': 'warning',
-                        'texto': f'Venta pre-grabada. ID: {identificador}'
-                    })
-
-                    self.env.cr.commit();
-                    
-                    return {
-                        'type': 'ir.actions.client',
-                        'tag': 'display_notification',
-                        'params': {
-                            'title': 'Éxito',
-                            'message': f'Venta pre-grabada correctamente. ID: {identificador}',
-                            'type': 'warning',
-                            'sticky': False,
-                        }
-                    }
-                
-                if estado == 2:
-                    
-                    try:
-
-                        log = self.env['ventas.log'].sudo().create({
-                            'account_move_id': self.id,
-                            'fecha_declaracion': fields.Datetime.now(),
-                            'estado': 'error',
-                            'texto': f'Error al grabar: {mensaje}'
-                        })
-
-                        self.env.cr.commit();
-
-                        _logger.info(f"Log creado con ID: {log.id}");
-                    except Exception as e:
-                        _logger.info(f"{e}");
-
-
-
-                    
-                    raise UserError(f"Error al procesar el archivo (Estado {estado}): {mensaje}")
-                
-                if estado == 3:
-                    _logger.error("=== ERROR AL PROCESAR ===")
-                    _logger.error(f"Mensaje: {mensaje}")
-
-                    self.env['ventas.log'].create({
-                        'account_move_id': self.id,
-                        'fecha_declaracion': fields.Datetime.now(),
-                        'estado': 'error',
-                        'texto': f'Error al procesar: {mensaje}'
-                    })
-
-                    self.env.cr.commit();
-                    
-                    raise UserError(f"Error al procesar la venta (Estado {estado}): {mensaje}")
-
-                else:
-                    _logger.error("=== DECLARACIÓN FALLIDA ===")
-                    _logger.error(f"Estado: {estado}")
-                    _logger.error(f"Mensaje: {mensaje}")
-
-                    self.env['ventas.log'].create({
-                        'account_move_id': self.id,
-                        'fecha_declaracion': fields.Datetime.now(),
-                        'estado': 'error',
-                        'texto': f'Error al declarar la venta: {mensaje}'
-                    })
-
-                    self.env.cr.commit();
-                    
-                    raise UserError(f"Error al declarar la venta (Estado {estado}): {mensaje}")
-            else:
-                raise UserError("Respuesta del servicio web no válida")
-
-        except Exception as e:
-            _logger.error("Error completo: %s", str(e), exc_info=True)
-            raise
-
     def declararVentaVariosMetodosLecueder(self):
         """
         Declara una venta con múltiples métodos de pago (crédito, débito, contado)
@@ -518,6 +444,12 @@ class AccountMove(models.Model):
                 
                 _logger.info(f"Método único {pago.name}: {monto_asignado} (SIN IVA)")
             else:
+                self.env['ventas.log'].sudo().create({
+                    'account_move_id': self.id,
+                    'fecha_declaracion': fields.Datetime.now(),
+                    'estado': 'error',
+                    'texto': f'Debe definir la distribución de pagos cuando hay múltiples métodos de pago'
+                })
                 raise UserError("Debe definir la distribución de pagos cuando hay múltiples métodos de pago")
 
         
@@ -548,7 +480,7 @@ class AccountMove(models.Model):
                             'NumeroCFE': numeroCFE,
                             'SerieCFE': serieCFE,
                             'MonedaCFE': 'UYU',
-                            'FechaEmisionCFE': fields.Date.today().strftime('%Y-%m-%d'),
+                            'FechaEmisionCFE': self._format_fecha_emision_cfe(),
                             'TotalMOCIVA': str(pagoTotalConIva),
                             'TotalMNSIVA': str(pagoTotalSinIva),
                             'TipodeCambio': '1'
@@ -558,7 +490,7 @@ class AccountMove(models.Model):
                             'ContadoMNSIVA': str(round(monto_contado, 2)),
                             'CreditoMNSIVA': str(round(monto_credito, 2)),
                             'DebitoMNSIVA': str(round(monto_debito, 2)),
-                            'IncluirenPromo': 'S'
+                            'IncluirenPromo': self._obtener_incluir_promo()
                         }
                     }
                 }
@@ -595,15 +527,17 @@ class AccountMove(models.Model):
 
                     self.env.cr.commit()
 
-                    message_id = self.env['message.wizard'].create({'message': "Venta declarada correctamente. ID: %s" % identificador})
-                    return {
-                        'name': 'Resultado Declaración Venta',
-                        'type': 'ir.actions.act_window',
-                        'view_mode': 'form',
-                        'res_model': 'message.wizard',
-                        'res_id': message_id.id,
-                        'target': 'new'
-                    }
+                    # message_id = self.env['message.wizard'].create({'message': "Venta declarada correctamente. ID: %s" % identificador})
+                    # return {
+                    #     'name': 'Resultado Declaración Venta',
+                    #     'type': 'ir.actions.act_window',
+                    #     'view_mode': 'form',
+                    #     'res_model': 'message.wizard',
+                    #     'res_id': message_id.id,
+                    #     'target': 'new'
+                    # }
+
+                    return;
                 
                 if estado == 1:
                     _logger.info("=== DECLARACIÓN PRE-GRABADA ===")
@@ -682,6 +616,1182 @@ class AccountMove(models.Model):
         except Exception as e:
             _logger.error("Error completo: %s", str(e), exc_info=True)
             raise
+        
+    def declararVentaUnicoMetodoCostaUrbana(self):
+        """
+        Declara una venta con un único método de pago en Costa Urbana
+        """
+        url = 'http://ventas.costaurbana.com.uy/soap/NodumLocales/services/forms/v1.3/wsDeclaVtas?wsdl'
+        
+        client = self.get_zeep_client(url)
+        _logger.info("Cliente Zeep creado exitosamente para Costa Urbana - Método único")
+
+        rut = self.env['res.company'].browse(self.journal_id.company_id.id).vat
+        if not rut:
+            raise UserError("Falta RUT en la configuración")
+
+        codigoShopping = self.journal_id.codigoShopping
+        numeroContrato = self.journal_id.nroContrato
+        codigoCanal = self.journal_id.codigoCanal
+        codigoRubro = self.journal_id.codigoRubro
+
+        if not codigoShopping or not numeroContrato or not codigoCanal or not codigoRubro:
+            raise UserError("Faltan datos del punto de venta de Costa Urbana en el diario asociado")
+
+        # Obtener el método de pago único
+        metodoPago = self.journal_id.shopping_payment_method_ids
+        if not metodoPago or len(metodoPago) != 1:
+            raise UserError("Debe haber exactamente un método de pago configurado en el diario")
+        
+        metodoPago = metodoPago[0]
+        
+        # Determinar código de forma de pago según el tipo
+        if metodoPago.esContado():
+            codigoFormaPago = '00'  # Contado
+        elif metodoPago.esCredito():
+            codigoFormaPago = '17'  # Otros Créditos (no tarjetas)
+        elif metodoPago.esDebito():
+            codigoFormaPago = '91'  # Tarjetas de débito
+        else:
+            raise UserError("Tipo de método de pago no reconocido")
+
+        # Calcular totales
+        pagoTotalSinIva = 0.0
+        pagoTotalConIva = 0.0
+
+        for linea in self.invoice_line_ids:
+            subtotal = linea.quantity * linea.price_unit
+            
+            if linea.tax_ids:
+                tasa_impuesto = sum(tax.amount for tax in linea.tax_ids)
+                subtotal_con_iva = subtotal * (1 + (tasa_impuesto / 100.0))
+            else:
+                subtotal_con_iva = subtotal
+            
+            pagoTotalSinIva += subtotal
+            pagoTotalConIva += subtotal_con_iva
+
+        # Montos por tipo de pago
+        monto_contado = str(round(pagoTotalSinIva, 2)) if metodoPago.esContado() else '0'
+        monto_credito = str(round(pagoTotalSinIva, 2)) if metodoPago.esCredito() else '0'
+        monto_debito = str(round(pagoTotalSinIva, 2)) if metodoPago.esDebito() else '0'
+
+        # Datos CFE
+        codigoCFE, serieCFE, numeroCFE = '', '', ''
+        if self.cfe_serie_num:
+            codigoCFE, serieCFE, numeroCFE = self.cfe_serie_num.split('-')
+
+        if self.journal_id.homologacion:
+            codigoCFE = "101"
+            serieCFE = "PRU"
+            numeroCFE = str(random.randint(1, 1000))
+
+        # Obtener secuencial (se incrementará después de envío exitoso)
+        secuencial = self.journal_id.secuencial_ventas or 1
+        caja = self.journal_id.caja or 1
+
+        try:
+            fecha_emision = self._format_fecha_emision_cfe()
+            fecha_transferencia = fields.Date.today().isoformat() 
+            
+            if self.cfe_fecha_hora_firma:
+                try:
+                    dt = datetime.fromisoformat(self.cfe_fecha_hora_firma)
+                    hora_transferencia = dt.strftime('%H:%M')
+                except (ValueError, AttributeError):
+                    hora_transferencia = fields.Datetime.now().strftime('%H:%M')
+            else:
+                hora_transferencia = fields.Datetime.now().strftime('%H:%M')        
+
+            request_data = {
+                'wsDeclaVtas': {
+                    'General': {
+                        'Cab': {
+                            'NumeroRUT': rut,
+                            'CodigoShopping': codigoShopping,
+                            'NumeroContrato': numeroContrato,
+                            'CodigoCanal': codigoCanal,
+                            'Secuencial': str(secuencial + 1),
+                            'Caja': str(caja),
+                            'CodigoCFE': codigoCFE,
+                            'NumeroCFE': numeroCFE,
+                            'SerieCFE': serieCFE,
+                            'MonedaCFE': 'UYU',
+                            'FechaEmisionCFE': fecha_emision,
+                            'TotalMOCIVA': str(round(pagoTotalConIva, 2)),
+                            'TotalMNSIVA': str(round(pagoTotalSinIva, 2)),
+                            'CodigoFormaPago': codigoFormaPago,
+                            'FechaTransferencia': fecha_transferencia,
+                            'Horatransferencia': hora_transferencia,
+                            'CantidadCuotas': '1'
+                        },
+                        'Det': {
+                            'CodRubro': codigoRubro,
+                            'ContadoMNSIVA': monto_contado,
+                            'CreditoMNSIVA': monto_credito,
+                            'DebitoMNSIVA': monto_debito,
+                            'IncluirenPromo': self._obtener_incluir_promo()
+                        }
+                    }
+                }
+            }
+
+
+            response = client.service.procesarAlta(**request_data)
+
+            response_dict = serialize_object(response)
+
+            if isinstance(response_dict, list) and len(response_dict) > 0:
+                primer_resultado = response_dict[0]
+                estado = primer_resultado.get('estado')
+                mensaje = primer_resultado.get('mensaje', '')
+                identificador = primer_resultado.get('identificador')
+
+                if estado == 0:
+                    
+                    self.write({'ventaEnviada': True})
+                    
+                    # Incrementar secuencial en el diario
+                    self.journal_id.write({'secuencial_ventas': secuencial + 1})
+
+                    self.env['ventas.log'].sudo().create({
+                        'account_move_id': self.id,
+                        'fecha_declaracion': fields.Datetime.now(),
+                        'estado': 'exito',
+                        'texto': f'Venta declarada correctamente en Costa Urbana. ID: {identificador}'
+                    })
+
+                    self.env.cr.commit()
+
+                    return;
+                
+                if estado == 1:
+                    _logger.info("=== DECLARACIÓN PRE-GRABADA COSTA URBANA ===")
+                    _logger.info(f"Identificador: {identificador}")
+                    
+                    self.journal_id.write({'secuencial_ventas': secuencial + 1})
+                    
+                    self.env['ventas.log'].create({
+                        'account_move_id': self.id,
+                        'fecha_declaracion': fields.Datetime.now(),
+                        'estado': 'warning',
+                        'texto': f'Venta pre-grabada en Costa Urbana. ID: {identificador}'
+                    })
+
+                    self.env.cr.commit()
+                    
+                    return {
+                        'type': 'ir.actions.client',
+                        'tag': 'display_notification',
+                        'params': {
+                            'title': 'Éxito',
+                            'message': f'Venta pre-grabada correctamente en Costa Urbana. ID: {identificador}',
+                            'type': 'warning',
+                            'sticky': False,
+                        }
+                    }
+                
+                if estado == 2 or estado == 3:
+                    _logger.error("=== ERROR COSTA URBANA ===")
+                    _logger.error(f"Estado: {estado}")
+                    _logger.error(f"Mensaje: {mensaje}")
+
+                    self.env['ventas.log'].create({
+                        'account_move_id': self.id,
+                        'fecha_declaracion': fields.Datetime.now(),
+                        'estado': 'error',
+                        'texto': f'Error en Costa Urbana (Estado {estado}): {mensaje}'
+                    })
+
+                    self.env.cr.commit()
+                    
+                    raise UserError(f"Error al declarar la venta en Costa Urbana (Estado {estado}): {mensaje}")
+                
+                else:
+                    _logger.error("=== DECLARACIÓN FALLIDA COSTA URBANA ===")
+                    _logger.error(f"Estado: {estado}")
+                    _logger.error(f"Mensaje: {mensaje}")
+
+                    self.env['ventas.log'].create({
+                        'account_move_id': self.id,
+                        'fecha_declaracion': fields.Datetime.now(),
+                        'estado': 'error',
+                        'texto': f'Error al declarar venta en Costa Urbana: {mensaje}'
+                    })
+
+                    self.env.cr.commit()
+                    
+                    raise UserError(f"Error al declarar venta en Costa Urbana: {mensaje}")
+            else:
+                raise UserError("Respuesta del servicio web de Costa Urbana no válida")
+
+        except Exception as e:
+            _logger.error("Error completo Costa Urbana: %s", str(e), exc_info=True)
+            raise
+
+
+
+    def declararVentaUnicoMetodoLecueder(self):
+        url = self.journal_id.url
+        
+        client = self.get_zeep_client(url)
+
+        if not url:
+            raise UserError("Falta URL de declaración de ventas en la configuración")
+
+        rut = self.env['res.company'].browse(self.journal_id.company_id.id).vat;
+
+        _logger.info(f"EL RUT DE LA EMPRESA ES {rut}");
+
+        if not rut:
+            raise UserError("Falta el RUT de la empresa")
+
+        codigoShopping = self.journal_id.codigoShopping
+        numeroContrato = self.journal_id.nroContrato
+        codigoCanal = self.journal_id.codigoCanal
+        codigoRubro = self.journal_id.codigoRubro
+
+        if not codigoShopping or not numeroContrato or not codigoCanal or not codigoRubro:
+            raise UserError("Faltan datos del punto de venta del shopping en el diario asociado")
+
+        # Obtener el método de pago UNA VEZ
+        metodoPago = self.journal_id.shopping_payment_method_ids
+        if not metodoPago or len(metodoPago) != 1:
+            raise UserError("Debe haber exactamente un método de pago configurado en el diario")
+        
+        metodoPago = metodoPago[0]  # Obtener el primer (y único) método
+        esContado = metodoPago.esContado()
+        esCredito = metodoPago.esCredito()
+        esDebito = metodoPago.esDebito()
+
+        lineas = self.invoice_line_ids
+        
+        pagoTotalSinIva = 0.0
+        pagoTotalConIva = 0.0
+
+        for linea in lineas:
+            subtotal = linea.quantity * linea.price_unit
+            
+            # Calcular impuestos
+            if linea.tax_ids:
+                tasa_impuesto = sum(tax.amount for tax in linea.tax_ids)
+                subtotal_con_iva = subtotal * (1 + (tasa_impuesto / 100.0))
+            else:
+                subtotal_con_iva = subtotal
+            
+
+            pagoTotalSinIva += subtotal
+            pagoTotalConIva += subtotal_con_iva
+
+        
+
+        # Determinar el monto según el tipo de pago
+        monto_contado = str(pagoTotalSinIva) if esContado else '0'
+        monto_credito = str(pagoTotalSinIva) if esCredito else '0'
+        monto_debito = str(pagoTotalSinIva) if esDebito else '0'
+        
+        codigoCFE, serieCFE, numeroCFE = '', '', '';
+
+        if self.cfe_serie_num:
+            codigoCFE, serieCFE, numeroCFE = self.cfe_serie_num.split('-');
+
+        if self.journal_id.homologacion:
+            codigoCFE = "101"
+            serieCFE = "PRU"
+            numeroCFE = str(random.randint(1, 1000))  # Usar el número de factura de prueba
+            
+        
+        try:
+            request_data = {
+                'wsDeclaVtas': {
+                    'General': {
+                        'Cab': {
+                            'NumeroRUT': rut,
+                            'CodigoShopping': codigoShopping,
+                            'NumeroContrato': numeroContrato,
+                            'CodigoCanal': codigoCanal,
+                            'CodigoCFE': codigoCFE,
+                            'NumeroCFE': numeroCFE,  # Usar el número de factura
+                            'SerieCFE': serieCFE,
+                            'MonedaCFE': 'UYU',
+                            'FechaEmisionCFE': self._format_fecha_emision_cfe(),
+                            'TotalMOCIVA': str(pagoTotalConIva),  # ← CORREGIDO: Usar calculado
+                            'TotalMNSIVA': str(pagoTotalSinIva),  # ← CORREGIDO: Usar calculado
+                            'TipodeCambio': '1'
+                        },
+                        'Det': {
+                            'CodRubro': codigoRubro,
+                            'ContadoMNSIVA': monto_contado,    # ← CORREGIDO: Usar calculado
+                            'CreditoMNSIVA': monto_credito,    # ← CORREGIDO: Usar calculado
+                            'DebitoMNSIVA': monto_debito,      # ← CORREGIDO: Usar calculado
+                            'IncluirenPromo': self._obtener_incluir_promo()
+                        }
+                    }
+                }
+            }
+            
+            _logger.info(f"REQUEST ENVIADA => {request_data}");
+
+            response = client.service.procesarAlta(**request_data)
+
+            _logger.info("=== RESPUESTA RECIBIDA ===")
+            _logger.info("Tipo: %s", type(response))
+            response_dict = serialize_object(response)
+            _logger.info("Datos: %s", response_dict)
+
+            
+
+
+            if isinstance(response_dict, list) and len(response_dict) > 0:
+                primer_resultado = response_dict[0]
+                estado = primer_resultado.get('estado')
+                mensaje = primer_resultado.get('mensaje', '')
+                identificador = primer_resultado.get('identificador')
+
+                if estado == 0:
+                    _logger.info("=== DECLARACIÓN EXITOSA ===")
+                    _logger.info(f"Identificador: {identificador}")
+                    
+                    # Guardar que la venta fue enviada
+                    self.write({'ventaEnviada': True})
+                    
+
+                    self.env['ventas.log'].sudo().create({
+                        'account_move_id': self.id,
+                        'fecha_declaracion': fields.Datetime.now(),
+                        'estado': 'exito',
+                        'texto': f'Venta declarada correctamente. ID: {identificador}'
+                    })
+
+                    self.env.cr.commit();
+
+                    return;
+
+                    
+                
+                if estado == 1:
+                    _logger.info("=== DECLARACIÓN EXITOSA ===")
+                    _logger.info(f"Identificador: {identificador}")
+                    
+                    self.env['ventas.log'].create({
+                        'account_move_id': self.id,
+                        'fecha_declaracion': fields.Datetime.now(),
+                        'estado': 'warning',
+                        'texto': f'Venta pre-grabada. ID: {identificador}'
+                    })
+
+                    self.env.cr.commit();
+                    
+                    return {
+                        'type': 'ir.actions.client',
+                        'tag': 'display_notification',
+                        'params': {
+                            'title': 'Éxito',
+                            'message': f'Venta pre-grabada correctamente. ID: {identificador}',
+                            'type': 'warning',
+                            'sticky': False,
+                        }
+                    }
+                
+                if estado == 2:
+                    
+                    try:
+
+                        log = self.env['ventas.log'].sudo().create({
+                            'account_move_id': self.id,
+                            'fecha_declaracion': fields.Datetime.now(),
+                            'estado': 'error',
+                            'texto': f'Error al grabar: {mensaje}'
+                        })
+
+                        self.env.cr.commit();
+
+                        _logger.info(f"Log creado con ID: {log.id}");
+                    except Exception as e:
+                        _logger.info(f"{e}");
+
+
+
+                    
+                    raise UserError(f"Error al procesar el archivo (Estado {estado}): {mensaje}")
+                
+                if estado == 3:
+                    _logger.error("=== ERROR AL PROCESAR ===")
+                    _logger.error(f"Mensaje: {mensaje}")
+
+                    self.env['ventas.log'].create({
+                        'account_move_id': self.id,
+                        'fecha_declaracion': fields.Datetime.now(),
+                        'estado': 'error',
+                        'texto': f'Error al procesar: {mensaje}'
+                    })
+
+                    self.env.cr.commit();
+                    
+                    raise UserError(f"Error al procesar la venta (Estado {estado}): {mensaje}")
+
+                else:
+                    _logger.error("=== DECLARACIÓN FALLIDA ===")
+                    _logger.error(f"Estado: {estado}")
+                    _logger.error(f"Mensaje: {mensaje}")
+
+                    self.env['ventas.log'].create({
+                        'account_move_id': self.id,
+                        'fecha_declaracion': fields.Datetime.now(),
+                        'estado': 'error',
+                        'texto': f'Error al declarar la venta: {mensaje}'
+                    })
+
+                    self.env.cr.commit();
+                    
+                    raise UserError(f"Error al declarar la venta (Estado {estado}): {mensaje}")
+            else:
+                raise UserError("Respuesta del servicio web no válida")
+
+        except Exception as e:
+            _logger.error("Error completo: %s", str(e), exc_info=True)
+            raise
+
+    def declararVentaUnicoMetodo(self):
+        tipo = self.env['account.journal'].browse(self.journal_id.id).tecnologia;
+
+        if not tipo or tipo == '':
+            self.env['ventas.log'].sudo().create({
+                'account_move_id': self.id,
+                'fecha_declaracion': fields.Datetime.now(),
+                'estado': 'error',
+                'texto': 'Falta definir la tecnología del punto de venta en el diario asociado.'
+            })
+            return
+
+        if tipo == 'costa_urbana':
+            self.declararVentaUnicoMetodoCostaUrbana()
+
+            return;
+
+        if tipo != 'lecueder':
+            self.env['ventas.log'].sudo().create({
+                'account_move_id': self.id,
+                'fecha_declaracion': fields.Datetime.now(),
+                'estado': 'error',
+                'texto': f'Tecnología {tipo} no implementada aún.'
+            })
+            return
+
+        self.declararVentaUnicoMetodoLecueder();
+        return;
+
+    def declararVentaUnicoMetodoManual(self):
+        tipo = self.env['account.journal'].browse(self.journal_id.id).tecnologia;
+
+        if not tipo or tipo == '':
+            self.env['ventas.log'].sudo().create({
+                'account_move_id': self.id,
+                'fecha_declaracion': fields.Datetime.now(),
+                'estado': 'error',
+                'texto': 'Falta definir la tecnología del punto de venta en el diario asociado.'
+            })
+            return
+
+        if tipo == 'costa_urbana':
+            self.declararVentaUnicoMetodoCostaUrbana()
+
+            message_id = self.env['message.wizard'].create({
+                        'message': "Venta declarada correctamente en Costa Urbana. ID: %s" % self.id
+                    })
+            return {
+                'name': 'Resultado Declaración Venta',
+                'type': 'ir.actions.act_window',
+                'view_mode': 'form',
+                'res_model': 'message.wizard',
+                'res_id': message_id.id,
+                'target': 'new'
+            }
+
+        if tipo != 'lecueder':
+            self.env['ventas.log'].sudo().create({
+                'account_move_id': self.id,
+                'fecha_declaracion': fields.Datetime.now(),
+                'estado': 'error',
+                'texto': f'Tecnología {tipo} no implementada aún.'
+            })
+            return
+
+        self.declararVentaUnicoMetodoLecueder();
+        message_id = self.env['message.wizard'].create({'message': "Venta declarada correctamente en Lecueder. ID: %s" % self.id})
+        return {
+            'name': 'Resultado Declaración Venta',
+            'type': 'ir.actions.act_window',
+            'view_mode': 'form',
+            'res_model': 'message.wizard',
+            # pass the id
+            'res_id': message_id.id,
+            'target': 'new'
+        }
+
+        
+
+    def declararVentaVariosMetodosCostaUrbana(self):
+        """
+        Declara una venta con múltiples métodos de pago en Costa Urbana usando wsDeclaVtas2
+        """
+        url = 'http://ventas.costaurbana.com.uy/soap/NodumLocales/services/forms/v1.3/wsDeclaVtas2?wsdl'
+        
+        client = self.get_zeep_client(url)
+        _logger.info("Cliente Zeep creado exitosamente para Costa Urbana - Múltiples métodos")
+
+        rut = self.env['res.company'].browse(self.journal_id.company_id.id).vat
+        if not rut:
+            raise UserError("Falta RUT en la configuración")
+
+        codigoShopping = self.journal_id.codigoShopping
+        numeroContrato = self.journal_id.nroContrato
+        codigoCanal = self.journal_id.codigoCanal
+        codigoRubro = self.journal_id.codigoRubro
+
+        if not codigoShopping or not numeroContrato or not codigoCanal or not codigoRubro:
+            raise UserError("Faltan datos del punto de venta de Costa Urbana en el diario asociado")
+
+        # Obtener métodos de pago
+        metodosPago = self.journal_id.shopping_payment_method_ids
+        if not metodosPago or len(metodosPago) == 0:
+            raise UserError("Debe haber al menos un método de pago configurado")
+        
+        # Calcular totales (sin IVA y con IVA)
+        pagoTotalSinIva = 0.0
+        pagoTotalConIva = 0.0
+
+        for linea in self.invoice_line_ids:
+            # En Odoo, price_unit está sin impuestos
+            subtotal_sin_iva = linea.quantity * linea.price_unit
+            
+            # Calcular impuesto
+            monto_impuesto = 0.0
+            if linea.tax_ids:
+                # Calcular el impuesto sobre la base (sin IVA)
+                for tax in linea.tax_ids:
+                    monto_impuesto += subtotal_sin_iva * (tax.amount / 100.0)
+            
+            subtotal_con_iva = subtotal_sin_iva + monto_impuesto
+            
+            _logger.info(f"Línea {linea.name}: Base={subtotal_sin_iva}, Impuesto={monto_impuesto}, Con IVA={subtotal_con_iva}")
+            
+            pagoTotalSinIva += subtotal_sin_iva
+            pagoTotalConIva += subtotal_con_iva
+
+        _logger.info("=== TOTALES CALCULADOS COSTA URBANA ===")
+        _logger.info("Total sin IVA: %s", pagoTotalSinIva)
+        _logger.info("Total con IVA: %s", pagoTotalConIva)
+
+        # Inicializar montos por tipo de pago
+        monto_contado = 0.0
+        monto_credito = 0.0
+        monto_debito = 0.0
+
+        # Obtener distribución de pagos
+        try:
+            distribuido = json.loads(self.payment_distribution) if self.payment_distribution else []
+        except:
+            distribuido = []
+
+        _logger.info("Distribución de pagos (CON IVA): %s", distribuido)
+
+        # Procesar distribución
+        if distribuido:
+            total_distribuido = sum(d.get('amount', 0.0) for d in distribuido)
+            _logger.info("Total distribuido (CON IVA): %s vs Total factura (CON IVA): %s", 
+                        total_distribuido, pagoTotalConIva)
+            
+            # Si la distribución no coincide con el total, usamos la distribución como porcentajes
+            # y recalculamos los montos sobre el total real
+            if abs(total_distribuido - pagoTotalConIva) > 5.0:
+                _logger.warning("La distribución no coincide con el total. Recalculando proporcionalmente")
+                _logger.warning("Distribución suma: %s, Total factura: %s", total_distribuido, pagoTotalConIva)
+                
+                # Recalcular distribución usando porcentajes originales sobre el total real
+                distribuido_recalculado = []
+                for distribucion in distribuido:
+                    if total_distribuido > 0:
+                        porcentaje = distribucion.get('amount', 0.0) / total_distribuido
+                        nuevo_monto = pagoTotalConIva * porcentaje
+                    else:
+                        nuevo_monto = 0.0
+                    
+                    distribuido_recalculado.append({
+                        'payment_method_id': distribucion.get('payment_method_id'),
+                        'amount': nuevo_monto
+                    })
+                    _logger.info(f"Método {distribucion.get('payment_method_id')}: {distribucion.get('amount')} → {nuevo_monto} (CON IVA)")
+                
+                distribuido = distribuido_recalculado
+            
+            # Convertir distribución CON IVA a SIN IVA proporcionalmente
+            if pagoTotalConIva > 0:
+                factor_sin_iva = pagoTotalSinIva / pagoTotalConIva
+                
+                for pago in metodosPago:
+                    asignado_con_iva = 0.0
+                    
+                    for distribucion in distribuido:
+                        if distribucion.get('payment_method_id') == pago.id:
+                            asignado_con_iva = float(distribucion.get('amount', 0.0))
+                            break
+                    
+                    asignado_sin_iva = asignado_con_iva * factor_sin_iva
+                    
+                    if pago.esContado():
+                        monto_contado += asignado_sin_iva
+                    elif pago.esCredito():
+                        monto_credito += asignado_sin_iva
+                    elif pago.esDebito():
+                        monto_debito += asignado_sin_iva
+        else:
+            if len(metodosPago) == 1:
+                pago = metodosPago[0]
+                
+                if pago.esContado():
+                    monto_contado = pagoTotalSinIva
+                elif pago.esCredito():
+                    monto_credito = pagoTotalSinIva
+                elif pago.esDebito():
+                    monto_debito = pagoTotalSinIva
+                
+                _logger.info(f"Método único {pago.name}: {pagoTotalSinIva} (SIN IVA)")
+            else:
+                self.env['ventas.log'].sudo().create({
+                    'account_move_id': self.id,
+                    'fecha_declaracion': fields.Datetime.now(),
+                    'estado': 'error',
+                    'texto': f'Debe definir la distribución de pagos cuando hay múltiples métodos de pago'
+                })
+                raise UserError("Debe definir la distribución de pagos cuando hay múltiples métodos")
+
+        # Datos CFE
+        codigoCFE, serieCFE, numeroCFE = '', '', ''
+        if self.cfe_serie_num:
+            codigoCFE, serieCFE, numeroCFE = self.cfe_serie_num.split('-')
+
+        if self.journal_id.homologacion:
+            _logger.info("Modo homologación activo - Costa Urbana")
+            codigoCFE = "101"
+            serieCFE = "PRU"
+            numeroCFE = str(random.randint(1, 1000))
+
+        # Obtener secuencial y caja
+        secuencial = self.journal_id.secuencial_ventas or 1
+        caja = self.journal_id.caja or 1
+
+        try:
+            # Preparar datos de fecha/hora
+            fecha_emision = self._format_fecha_emision_cfe()
+            fecha_transferencia = fields.Date.today().isoformat()  # Formato: 2026-01-30
+            
+            # Extraer hora para el campo Horatransferencia
+            if self.cfe_fecha_hora_firma:
+                try:
+                    dt = datetime.fromisoformat(self.cfe_fecha_hora_firma)
+                    hora_transferencia = dt.strftime('%H:%M')
+                except (ValueError, AttributeError):
+                    hora_transferencia = fields.Datetime.now().strftime('%H:%M')
+            else:
+                hora_transferencia = fields.Datetime.now().strftime('%H:%M')
+
+            # Construir diccionario de cabecera
+            cab_data = {
+                'NumeroRUT': rut,
+                'CodigoShopping': codigoShopping,
+                'NumeroContrato': numeroContrato,
+                'CodigoCanal': codigoCanal,
+                'Secuencial': str(secuencial + 1),
+                'Caja': str(caja),
+                'CodigoCFE': codigoCFE,
+                'NumeroCFE': numeroCFE,
+                'SerieCFE': serieCFE,
+                'MonedaCFE': 'UYU',
+                'FechaEmisionCFE': self._format_fecha_emision_cfe(),
+                'TotalMOCIVA': str(round(pagoTotalConIva, 2)),
+                'TotalMNSIVA': str(round(pagoTotalSinIva, 2)),
+                'FechaTransferencia': fecha_transferencia,
+                'Horatransferencia': hora_transferencia,
+                'CantidadCuotas': '1'
+            }
+            
+            monto_contado = 0.0
+            monto_credito = 0.0
+            monto_debito = 0.0
+            
+            metodos_con_monto = []
+            for pago in metodosPago:
+                asignado_sin_iva = 0.0
+                
+                if distribuido:
+                    # Buscar en la distribución (ya recalculada si era necesario)
+                    for distribucion in distribuido:
+                        if distribucion.get('payment_method_id') == pago.id:
+                            asignado_con_iva = float(distribucion.get('amount', 0.0))
+                            asignado_sin_iva = asignado_con_iva * (pagoTotalSinIva / pagoTotalConIva) if pagoTotalConIva > 0 else 0.0
+                            break
+                else:
+                    # Sin distribución: usar primer método con todo
+                    if pago == metodosPago[0]:
+                        asignado_sin_iva = pagoTotalSinIva
+                
+                if asignado_sin_iva > 0:
+                    # Determinar código de forma de pago
+                    if pago.esContado():
+                        codigo_forma = '00'
+                        monto_contado += asignado_sin_iva
+                    elif pago.esCredito():
+                        codigo_forma = '17'
+                        monto_credito += asignado_sin_iva
+                    elif pago.esDebito():
+                        codigo_forma = '91'
+                        monto_debito += asignado_sin_iva
+                    else:
+                        continue
+                    
+                    metodos_con_monto.append({
+                        'codigo': codigo_forma,
+                        'monto': str(round(asignado_sin_iva, 2))
+                    })
+            
+            # Ajustar discrepancia por redondeos
+            suma_actual = monto_contado + monto_credito + monto_debito
+            discrepancia = pagoTotalSinIva - suma_actual
+            
+            if abs(discrepancia) > 0.01:
+                _logger.warning(f"Discrepancia detectada: {pagoTotalSinIva} vs {suma_actual}, diferencia: {discrepancia}")
+                
+                # Ajustar al último monto que sea > 0
+                for item in reversed(metodos_con_monto):
+                    if float(item['monto']) > 0:
+                        if item['codigo'] == '00':
+                            monto_contado += discrepancia
+                        elif item['codigo'] == '17':
+                            monto_credito += discrepancia
+                        elif item['codigo'] == '91':
+                            monto_debito += discrepancia
+                        _logger.info(f"Ajuste ({discrepancia}) aplicado a código {item['codigo']}")
+                        break
+            
+            # Agregar campos de métodos de pago dinámicamente
+            if len(metodos_con_monto) >= 1:
+                cab_data['CodigoFormaPago'] = metodos_con_monto[0]['codigo']
+                cab_data['Total1'] = metodos_con_monto[0]['monto']
+            
+            if len(metodos_con_monto) >= 2:
+                cab_data['CodigoFormaPago2'] = metodos_con_monto[1]['codigo']
+                cab_data['Total2'] = metodos_con_monto[1]['monto']
+            
+            if len(metodos_con_monto) >= 3:
+                cab_data['CodigoFormaPago3'] = metodos_con_monto[2]['codigo']
+                cab_data['Total3'] = metodos_con_monto[2]['monto']
+            
+            request_data = {
+                'wsDeclaVtas2': {
+                    'General': {
+                        'Cab': cab_data,
+                        'Det': [{
+                            'CodRubro': codigoRubro,
+                            'ContadoMNSIVA': str(round(monto_contado, 2)),
+                            'CreditoMNSIVA': str(round(monto_credito, 2)),
+                            'DebitoMNSIVA': str(round(monto_debito, 2)),
+                            'IncluirenPromo': self._obtener_incluir_promo()
+                        }]
+                    }
+                }
+            }
+
+            _logger.info("REQUEST COSTA URBANA (MÚLTIPLES MÉTODOS) => %s", request_data)
+
+            response = client.service.procesarAlta(**request_data)
+
+            _logger.info("=== RESPUESTA RECIBIDA COSTA URBANA ===")
+            _logger.info("Tipo: %s", type(response))
+            response_dict = serialize_object(response)
+            _logger.info("Datos: %s", response_dict)
+
+            if isinstance(response_dict, list) and len(response_dict) > 0:
+                primer_resultado = response_dict[0]
+                estado = primer_resultado.get('estado')
+                mensaje = primer_resultado.get('mensaje', '')
+                identificador = primer_resultado.get('identificador')
+
+                if estado == 0:
+                    _logger.info("=== DECLARACIÓN EXITOSA COSTA URBANA ===")
+                    _logger.info(f"Identificador: {identificador}")
+                    
+                    self.write({'ventaEnviada': True})
+                    
+                    self.journal_id.write({'secuencial_ventas': secuencial + 1})
+
+                    self.env['ventas.log'].sudo().create({
+                        'account_move_id': self.id,
+                        'fecha_declaracion': fields.Datetime.now(),
+                        'estado': 'exito',
+                        'texto': f'Venta declarada correctamente en Costa Urbana. ID: {identificador}'
+                    })
+
+                    self.env.cr.commit()
+
+                    message_id = self.env['message.wizard'].create({
+                        'message': "Venta declarada correctamente en Costa Urbana. ID: %s" % identificador
+                    })
+                    return {
+                        'name': 'Resultado Declaración Venta',
+                        'type': 'ir.actions.act_window',
+                        'view_mode': 'form',
+                        'res_model': 'message.wizard',
+                        'res_id': message_id.id,
+                        'target': 'new'
+                    }
+                
+                if estado == 1:
+                    _logger.info("=== DECLARACIÓN PRE-GRABADA COSTA URBANA ===")
+                    _logger.info(f"Identificador: {identificador}")
+                    
+                    self.journal_id.write({'secuencial_ventas': secuencial + 1})
+                    
+                    self.env['ventas.log'].create({
+                        'account_move_id': self.id,
+                        'fecha_declaracion': fields.Datetime.now(),
+                        'estado': 'warning',
+                        'texto': f'Venta pre-grabada en Costa Urbana. ID: {identificador}'
+                    })
+
+                    self.env.cr.commit()
+                    
+                    return {
+                        'type': 'ir.actions.client',
+                        'tag': 'display_notification',
+                        'params': {
+                            'title': 'Éxito',
+                            'message': f'Venta pre-grabada correctamente en Costa Urbana. ID: {identificador}',
+                            'type': 'warning',
+                            'sticky': False,
+                        }
+                    }
+                
+                if estado == 2 or estado == 3:
+                    _logger.error("=== ERROR COSTA URBANA ===")
+                    _logger.error(f"Estado: {estado}")
+                    _logger.error(f"Mensaje: {mensaje}")
+
+                    self.env['ventas.log'].create({
+                        'account_move_id': self.id,
+                        'fecha_declaracion': fields.Datetime.now(),
+                        'estado': 'error',
+                        'texto': f'Error en Costa Urbana (Estado {estado}): {mensaje}'
+                    })
+
+                    self.env.cr.commit()
+                    
+                    raise UserError(f"Error al declarar venta en Costa Urbana (Estado {estado}): {mensaje}")
+                
+                else:
+                    _logger.error("=== DECLARACIÓN FALLIDA COSTA URBANA ===")
+                    _logger.error(f"Estado: {estado}")
+                    _logger.error(f"Mensaje: {mensaje}")
+
+                    self.env['ventas.log'].create({
+                        'account_move_id': self.id,
+                        'fecha_declaracion': fields.Datetime.now(),
+                        'estado': 'error',
+                        'texto': f'Error al declarar venta en Costa Urbana: {mensaje}'
+                    })
+
+                    self.env.cr.commit()
+                    
+                    raise UserError(f"Error al declarar venta en Costa Urbana: {mensaje}")
+            else:
+                raise UserError("Respuesta del servicio web de Costa Urbana no válida")
+
+        except Exception as e:
+            _logger.error("Error completo Costa Urbana: %s", str(e), exc_info=True)
+            raise
+            # """
+            # Declara una venta con múltiples métodos de pago (crédito, débito, contado)
+            # Distribuye el monto según el JSON de payment_distribution (que incluye IVA) 
+            # pero convierte a SIN IVA para el envío al servicio
+            # """
+            # url = self.journal_id.url;
+            
+            # client = self.get_zeep_client(url)
+            # _logger.info("Cliente Zeep creado exitosamente para múltiples métodos")
+
+            # if not url:
+            #     raise UserError("Falta URL de declaración de ventas en la configuración")
+
+            # rut = self.env['res.company'].browse(self.journal_id.company_id.id).vat;
+
+            # if not rut:
+            #     raise UserError("Falta RUT en la configuración")
+
+            # codigoShopping = self.journal_id.codigoShopping
+            # numeroContrato = self.journal_id.nroContrato
+            # codigoCanal = self.journal_id.codigoCanal
+            # codigoRubro = self.journal_id.codigoRubro
+
+            # if not codigoShopping or not numeroContrato or not codigoCanal or not codigoRubro:
+            #     raise UserError("Faltan datos del punto de venta del shopping en el diario asociado")
+
+            # # Obtener los métodos de pago configurados
+            # metodosPago = self.journal_id.shopping_payment_method_ids
+            # if not metodosPago or len(metodosPago) == 0:
+            #     raise UserError("Debe haber al menos un método de pago configurado en el diario")
+            
+            # # Calcular TOTALES REALES (sin IVA y con IVA) PRIMERO
+            # pagoTotalSinIva = 0.0
+            # pagoTotalConIva = 0.0
+            # distribucion_sin_iva = {}  # Para guardar montos sin IVA por método
+
+            # for linea in self.invoice_line_ids:
+            #     _logger.info("Línea: %s - Cantidad: %s - Precio Unitario: %s", linea.name, linea.quantity, linea.price_unit)
+                
+            #     subtotal = linea.quantity * linea.price_unit
+                
+            #     # Calcular impuestos
+            #     if linea.tax_ids:
+            #         tasa_impuesto = sum(tax.amount for tax in linea.tax_ids)
+            #         subtotal_con_iva = subtotal * (1 + (tasa_impuesto / 100.0))
+            #     else:
+            #         subtotal_con_iva = subtotal
+                
+            #     _logger.info("Subtotal sin IVA: %s - Subtotal con IVA: %s", subtotal, subtotal_con_iva)
+
+            #     pagoTotalSinIva += subtotal
+            #     pagoTotalConIva += subtotal_con_iva
+
+            # _logger.info("=== TOTALES CALCULADOS ===")
+            # _logger.info("Total sin IVA: %s", pagoTotalSinIva)
+            # _logger.info("Total con IVA: %s", pagoTotalConIva)
+
+            # # Inicializar montos por tipo de pago
+            # monto_contado = 0.0
+            # monto_credito = 0.0
+            # monto_debito = 0.0
+
+            # # Obtener distribución de pagos
+            # try:
+            #     distribuido = json.loads(self.payment_distribution) if self.payment_distribution else []
+            # except:
+            #     distribuido = []
+
+            # _logger.info("Distribución de pagos (CON IVA): %s", distribuido)
+
+            # # Procesar distribución
+            # if distribuido:
+            #     # Validar que la distribución suma aproximadamente el total con IVA
+            #     total_distribuido = sum(d.get('amount', 0.0) for d in distribuido)
+            #     _logger.info("Total distribuido (CON IVA): %s vs Total factura (CON IVA): %s", total_distribuido, pagoTotalConIva)
+                
+            #     if abs(total_distribuido - pagoTotalConIva) > 25.0:
+            #         _logger.warning("La distribución no coincide con el total de la factura. Diferencia: %s", 
+            #                     total_distribuido - pagoTotalConIva)
+                
+            #     # Convertir distribución CON IVA a SIN IVA proporcionalmente
+            #     if pagoTotalConIva > 0:
+            #         factor_sin_iva = pagoTotalSinIva / pagoTotalConIva
+                    
+            #         for pago in metodosPago:
+            #             asignado_con_iva = 0.0
+                        
+            #             # Buscar el monto asignado a este método en el JSON (CON IVA)
+            #             for distribucion in distribuido:
+            #                 if distribucion.get('payment_method_id') == pago.id:
+            #                     asignado_con_iva = float(distribucion.get('amount', 0.0))
+            #                     break
+                        
+            #             # Convertir a SIN IVA
+            #             asignado_sin_iva = asignado_con_iva * factor_sin_iva
+                        
+            #             _logger.info(f"Método {pago.name}: {asignado_con_iva} (CON IVA) → {asignado_sin_iva} (SIN IVA)")
+
+            #             if pago.esContado():
+            #                 monto_contado += asignado_sin_iva
+            #             elif pago.esCredito():
+            #                 monto_credito += asignado_sin_iva
+            #             elif pago.esDebito():
+            #                 monto_debito += asignado_sin_iva
+            # else:
+            #     # Si no hay distribución específica, usar el total si es un único método
+            #     if len(metodosPago) == 1:
+            #         monto_asignado = pagoTotalSinIva
+            #         pago = metodosPago[0]
+                    
+            #         if pago.esContado():
+            #             monto_contado = monto_asignado
+            #         elif pago.esCredito():
+            #             monto_credito = monto_asignado
+            #         elif pago.esDebito():
+            #             monto_debito = monto_asignado
+                    
+            #         _logger.info(f"Método único {pago.name}: {monto_asignado} (SIN IVA)")
+            #     else:
+            #         raise UserError("Debe definir la distribución de pagos cuando hay múltiples métodos de pago")
+
+            
+            # codigoCFE, serieCFE, numeroCFE = '', '', '';
+
+            # if self.cfe_serie_num:
+            #     codigoCFE, serieCFE, numeroCFE = self.cfe_serie_num.split('-');
+
+            # if self.journal_id.homologacion:
+            #     _logger.info("Modo homologación activo");
+            #     codigoCFE = "101"
+            #     serieCFE = "PRU"
+            #     numeroCFE = str(random.randint(1, 1000))  # Usar el número de factura de prueba
+
+            
+            # _logger.info(f"{codigoCFE} - {serieCFE} - {numeroCFE}");
+
+            # try:
+            #     request_data = {
+            #         'wsDeclaVtas': {
+            #             'General': {
+            #                 'Cab': {
+            #                     'NumeroRUT': rut,
+            #                     'CodigoShopping': codigoShopping,
+            #                     'NumeroContrato': numeroContrato,
+            #                     'CodigoCanal': codigoCanal,
+            #                     'CodigoCFE': codigoCFE,
+            #                     'NumeroCFE': numeroCFE,
+            #                     'SerieCFE': serieCFE,
+            #                     'MonedaCFE': 'UYU',
+            #                     'FechaEmisionCFE': fields.Date.today().strftime('%Y-%m-%d'),
+            #                     'TotalMOCIVA': str(pagoTotalConIva),
+            #                     'TotalMNSIVA': str(pagoTotalSinIva),
+            #                     'TipodeCambio': '1'
+            #                 },
+            #                 'Det': {
+            #                     'CodRubro': codigoRubro,
+            #                     'ContadoMNSIVA': str(round(monto_contado, 2)),
+            #                     'CreditoMNSIVA': str(round(monto_credito, 2)),
+            #                     'DebitoMNSIVA': str(round(monto_debito, 2)),
+            #                     'IncluirenPromo': 'S'
+            #                 }
+            #             }
+            #         }
+            #     }
+
+            #     _logger.info("Preparando para enviar request: %s", request_data)
+
+            #     response = client.service.procesarAlta(**request_data)
+
+            #     _logger.info("=== RESPUESTA RECIBIDA ===")
+            #     _logger.info("Tipo: %s", type(response))
+            #     response_dict = serialize_object(response)
+            #     _logger.info("Datos: %s", response_dict)
+
+            #     if isinstance(response_dict, list) and len(response_dict) > 0:
+            #         primer_resultado = response_dict[0]
+            #         estado = primer_resultado.get('estado')
+            #         mensaje = primer_resultado.get('mensaje', '')
+            #         identificador = primer_resultado.get('identificador')
+
+            #         if estado == 0:
+            #             _logger.info("=== DECLARACIÓN EXITOSA ===")
+            #             _logger.info(f"Identificador: {identificador}")
+                        
+            #             # Guardar que la venta fue enviada
+            #             self.write({'ventaEnviada': True})
+                        
+            #             self.env['ventas.log'].sudo().create({
+            #                 'account_move_id': self.id,
+            #                 'fecha_declaracion': fields.Datetime.now(),
+            #                 'estado': 'exito',
+            #                 'texto': f'Venta declarada correctamente. ID: {identificador}'
+            #             })
+
+            #             self.env.cr.commit()
+
+            #             message_id = self.env['message.wizard'].create({'message': "Venta declarada correctamente. ID: %s" % identificador})
+            #             return {
+            #                 'name': 'Resultado Declaración Venta',
+            #                 'type': 'ir.actions.act_window',
+            #                 'view_mode': 'form',
+            #                 'res_model': 'message.wizard',
+            #                 'res_id': message_id.id,
+            #                 'target': 'new'
+            #             }
+                    
+            #         if estado == 1:
+            #             _logger.info("=== DECLARACIÓN PRE-GRABADA ===")
+            #             _logger.info(f"Identificador: {identificador}")
+                        
+            #             self.env['ventas.log'].create({
+            #                 'account_move_id': self.id,
+            #                 'fecha_declaracion': fields.Datetime.now(),
+            #                 'estado': 'warning',
+            #                 'texto': f'Venta pre-grabada. ID: {identificador}'
+            #             })
+
+            #             self.env.cr.commit()
+                        
+            #             return {
+            #                 'type': 'ir.actions.client',
+            #                 'tag': 'display_notification',
+            #                 'params': {
+            #                     'title': 'Éxito',
+            #                     'message': f'Venta pre-grabada correctamente. ID: {identificador}',
+            #                     'type': 'warning',
+            #                     'sticky': False,
+            #                 }
+            #             }
+                    
+            #         if estado == 2:
+            #             try:
+            #                 log = self.env['ventas.log'].sudo().create({
+            #                     'account_move_id': self.id,
+            #                     'fecha_declaracion': fields.Datetime.now(),
+            #                     'estado': 'error',
+            #                     'texto': f'Error al grabar: {mensaje}'
+            #                 })
+
+            #                 self.env.cr.commit()
+
+            #                 _logger.info(f"Log creado con ID: {log.id}")
+            #             except Exception as e:
+            #                 _logger.info(f"{e}")
+
+            #             raise UserError(f"Error al procesar el archivo (Estado {estado}): {mensaje}")
+                    
+            #         if estado == 3:
+            #             _logger.error("=== ERROR AL PROCESAR ===")
+            #             _logger.error(f"Mensaje: {mensaje}")
+
+            #             self.env['ventas.log'].create({
+            #                 'account_move_id': self.id,
+            #                 'fecha_declaracion': fields.Datetime.now(),
+            #                 'estado': 'error',
+            #                 'texto': f'Error al procesar: {mensaje}'
+            #             })
+
+            #             self.env.cr.commit()
+                        
+            #             raise UserError(f"Error al procesar la venta (Estado {estado}): {mensaje}")
+
+            #         else:
+            #             _logger.error("=== DECLARACIÓN FALLIDA ===")
+            #             _logger.error(f"Estado: {estado}")
+            #             _logger.error(f"Mensaje: {mensaje}")
+
+            #             self.env['ventas.log'].create({
+            #                 'account_move_id': self.id,
+            #                 'fecha_declaracion': fields.Datetime.now(),
+            #                 'estado': 'error',
+            #                 'texto': f'Error al declarar la venta: {mensaje}'
+            #             })
+
+            #             self.env.cr.commit()
+                        
+            #             raise UserError(f"Error al declarar la venta (Estado {estado}): {mensaje}")
+            #     else:
+            #         raise UserError("Respuesta del servicio web no válida")
+
+            # except Exception as e:
+            #     _logger.error("Error completo: %s", str(e), exc_info=True)
+            #     raise
 
     def llamadoPruebaZeep3(self):
         # Declarar ventas
@@ -712,7 +1822,7 @@ class AccountMove(models.Model):
                             'ContadoMNSIVA': '1000',
                             'CreditoMNSIVA': '0',
                             'DebitoMNSIVA': '0',
-                            'IncluirenPromo': 'S'
+                            'IncluirenPromo': self._obtener_incluir_promo()
                         }
                     }
                 }
@@ -864,3 +1974,142 @@ class AccountMove(models.Model):
         _logger.debug("SOAP response:\n%s", response.text)
 
         return response
+
+    def llamadaPruebaConsultaRUTCostaUrbana(self):
+        """
+        Prueba de consulta por RUT en Costa Urbana
+        URL: http://ventas.costaurbana.com.uy/soap/NodumLocales/services/sim/v1.3/wsConsxRUT?wsdl
+        """
+        url = 'http://ventas.costaurbana.com.uy/soap/NodumLocales/services/sim/v1.3/wsConsxRUT?wsdl'
+        client = self.get_zeep_client(url)
+        
+        rut = self.env['res.company'].browse(self.journal_id.company_id.id).vat
+        
+        try:
+            request_data = {
+                'wsConsxRUT': {
+                    'General': {
+                        'Cab': {
+                            'NumeroRUT': rut
+                        }
+                    }
+                }
+            }
+            
+            _logger.info("Enviando consulta RUT Costa Urbana: %s", request_data)
+            
+            response = client.service.simular(**request_data)
+            
+            _logger.info("=== RESPUESTA CONSULTA RUT COSTA URBANA ===")
+            _logger.info("Tipo: %s", type(response))
+            
+            response_dict = serialize_object(response)
+            _logger.info("Datos: %s", response_dict)
+            
+            return response_dict
+            
+        except Exception as e:
+            _logger.error("Error en consulta RUT Costa Urbana: %s", str(e), exc_info=True)
+            raise
+
+    def llamadaPruebaConsultaContratoCostaUrbana(self):
+        """
+        Prueba de consulta por Contrato en Costa Urbana
+        URL: http://ventas.costaurbana.com.uy/soap/NodumLocales/services/sim/v1.3/wsConsxCont?wsdl
+        """
+        url = 'http://ventas.costaurbana.com.uy/soap/NodumLocales/services/sim/v1.3/wsConsxCont?wsdl'
+        client = self.get_zeep_client(url)
+        
+        rut = self.env['res.company'].browse(self.journal_id.company_id.id).vat
+        codigoShopping = self.journal_id.codigoShopping
+        numeroContrato = self.journal_id.nroContrato
+        
+        try:
+            request_data = {
+                'wsConsxCont': {
+                    'General': {
+                        'Cab': {
+                            'NumeroRUT': rut,
+                            'CodigoShopping': codigoShopping,
+                            'NumeroContrato': numeroContrato
+                        }
+                    }
+                }
+            }
+            
+            _logger.info("Enviando consulta Contrato Costa Urbana: %s", request_data)
+            
+            response = client.service.simular(**request_data)
+            
+            _logger.info("=== RESPUESTA CONSULTA CONTRATO COSTA URBANA ===")
+            _logger.info("Tipo: %s", type(response))
+            
+            response_dict = serialize_object(response)
+            _logger.info("Datos: %s", response_dict)
+            
+            return response_dict
+            
+        except Exception as e:
+            _logger.error("Error en consulta Contrato Costa Urbana: %s", str(e), exc_info=True)
+            raise
+
+    def llamadaPruebaDeclaracionCostaUrbana(self):
+        """
+        Prueba de declaración de venta en Costa Urbana
+        """
+        url = 'http://ventas.costaurbana.com.uy/soap/NodumLocales/services/forms/v1.3/wsDeclaVtas?wsdl'
+        client = self.get_zeep_client(url)
+
+        rut = self.env['res.company'].browse(self.journal_id.company_id.id).vat
+        
+        try:
+            fecha_emision = fields.Datetime.now()
+            fecha_str = fecha_emision.isoformat()  # Formato: 2026-01-30T15:30:45.123456
+            fecha_transferencia = fields.Date.today().isoformat()  # Formato: 2026-01-30
+            hora_transferencia = fecha_emision.strftime('%H:%M')
+
+            request_data = {
+                'wsDeclaVtas': {
+                    'General': {
+                        'Cab': {
+                            'NumeroRUT': rut,
+                            'CodigoShopping': '02',
+                            'NumeroContrato': '101292',
+                            'CodigoCanal': '1',
+                            'Secuencial': '4872221',
+                            'Caja': '1',
+                            'CodigoCFE': '101',
+                            'NumeroCFE': '100',
+                            'SerieCFE': 'PRU',
+                            'MonedaCFE': 'UYU',
+                            'FechaEmisionCFE': self._format_fecha_emision_cfe(),
+                            'TotalMOCIVA': '1000',
+                            'TotalMNSIVA': '820',
+                            'CodigoFormaPago': '00',
+                            'FechaTransferencia': fecha_transferencia,
+                            'Horatransferencia': hora_transferencia,
+                            'CantidadCuotas': '1'
+                        },
+                        'Det': {
+                            'CodRubro': '67',
+                            'ContadoMNSIVA': '820',
+                            'CreditoMNSIVA': '0',
+                            'DebitoMNSIVA': '0',
+                            'IncluirenPromo': self._obtener_incluir_promo()
+                        }
+                    }
+                }
+            }
+
+            _logger.info("Preparando prueba declaración Costa Urbana: %s", request_data)
+
+            response = client.service.procesarAlta(**request_data)
+
+            _logger.info("=== RESPUESTA PRUEBA DECLARACIÓN COSTA URBANA ===")
+            _logger.info("Tipo: %s", type(response))
+            response_dict = serialize_object(response)
+            _logger.info("Datos: %s", response_dict)
+
+        except Exception as e:
+            _logger.error("Error en prueba declaración Costa Urbana: %s", str(e), exc_info=True)
+            raise

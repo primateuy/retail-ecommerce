@@ -17,7 +17,8 @@ export class AccountMoveWidget extends Component {
             inputType: 'percentage', // 'amount' o 'percentage'
             totalAmount: 0,
             remainingAmount: 0,
-            remainingPercentage: 100
+            remainingPercentage: 100,
+            hasChanges: false
         });
 
         this.orm = useService("orm");
@@ -56,6 +57,7 @@ export class AccountMoveWidget extends Component {
 
     async loadPaymentMethods(methodIds) {
         try {
+            console.log("📦 Leyendo métodos de pago...");
             const methods = await this.orm.read(
                 "shopping.payment.method",
                 methodIds,
@@ -63,38 +65,74 @@ export class AccountMoveWidget extends Component {
             );
             
             this.state.paymentMethods = methods;
+            console.log(`   ✓ ${methods.length} métodos cargados`);
             
             // Cargar distribución guardada si existe
             const savedDistribution = this.props.record.data.payment_distribution;
             
-            if (savedDistribution) {
+            console.log("🔍 Verificando si existe distribución guardada...");
+            console.log("   Raw value:", savedDistribution);
+            console.log("   Type:", typeof savedDistribution);
+            console.log("   Is empty:", !savedDistribution || savedDistribution.trim() === '');
+            
+            if (savedDistribution && savedDistribution.trim() !== '') {
+                console.log("✅ Distribución encontrada, parseando...");
                 try {
                     const distributionData = JSON.parse(savedDistribution);
+                    console.log("   Cantidad de métodos en JSON:", distributionData.length);
+                    console.log("   Datos completos:", distributionData);
+                    
                     this.state.payments = methods.map(method => {
                         const saved = distributionData.find(d => d.payment_method_id === method.id);
-                        return {
-                            id: method.id,
-                            name: method.name,
-                            shopping_code: method.shopping_code,
-                            payment_code: method.payment_code,
-                            amount: saved?.amount || 0,
-                            percentage: saved?.percentage || 0
-                        };
+                        
+                        if (saved) {
+                            const amount = parseFloat(saved.amount) || 0;
+                            const percentage = parseFloat(saved.percentage) || 0;
+                            
+                            console.log(`   → ${method.name}: $${amount.toFixed(2)} (${percentage.toFixed(2)}%)`);
+                            
+                            return {
+                                id: method.id,
+                                name: method.name,
+                                shopping_code: method.shopping_code,
+                                payment_code: method.payment_code,
+                                amount: amount,
+                                percentage: percentage
+                            };
+                        } else {
+                            console.log(`   → ${method.name}: Sin datos guardados`);
+                            return {
+                                id: method.id,
+                                name: method.name,
+                                shopping_code: method.shopping_code,
+                                payment_code: method.payment_code,
+                                amount: 0,
+                                percentage: 0
+                            };
+                        }
                     });
+                    
+                    // Recalcular después de cargar
                     this.calculateRemaining();
+                    this.state.hasChanges = false;
+                    console.log("✓ Distribución cargada y validada correctamente");
+                    
                 } catch (e) {
-                    console.error("Error parsing saved distribution:", e);
+                    console.error("❌ Error parseando JSON:", e);
+                    console.error("   JSON inválido:", savedDistribution);
                     this.initializePayments(methods);
                 }
             } else {
+                console.log("ℹ No hay distribución guardada, inicializando nueva");
                 this.initializePayments(methods);
             }
         } catch (error) {
-            console.error("Error cargando métodos de pago:", error);
+            console.error("❌ Error cargando métodos de pago:", error);
         }
     }
 
     initializePayments(methods) {
+        console.log("🆕 Inicializando distribución nueva (sin datos guardados)");
         this.state.payments = methods.map(method => ({
             id: method.id,
             name: method.name,
@@ -103,6 +141,29 @@ export class AccountMoveWidget extends Component {
             amount: 0,
             percentage: 0
         }));
+        console.log(`   ✓ ${this.state.payments.length} métodos inicializados con 0`);
+        this.state.hasChanges = false;
+    }
+
+    verifyStoredData() {
+        const stored = this.props.record.data.payment_distribution;
+        console.log("\n🔎 === VERIFICACIÓN DE DATOS GUARDADOS ===");
+        console.log("Valor almacenado en BD:", stored);
+        console.log("Largo del string:", stored ? stored.length : 0);
+        
+        if (stored) {
+            try {
+                const parsed = JSON.parse(stored);
+                console.log("✓ JSON válido");
+                console.log("Cantidad de métodos:", parsed.length);
+                console.log("Detalle:", JSON.stringify(parsed, null, 2));
+            } catch (e) {
+                console.error("❌ JSON inválido:", e.message);
+            }
+        } else {
+            console.log("⚠ Campo VACIO");
+        }
+        console.log("========================================\n");
     }
 
     onInputTypeChange(ev) {
@@ -113,49 +174,75 @@ export class AccountMoveWidget extends Component {
     onPaymentChange(paymentId, value) {
         const payment = this.state.payments.find(p => p.id === paymentId);
         
+        if (!payment) {
+            console.error("Payment not found:", paymentId);
+            return;
+        }
+        
+        const numValue = parseFloat(value) || 0;
+        
+        console.log(`Cambio en ${payment.name}: ${value} (tipo: ${this.state.inputType})`);
+        
         if (this.state.inputType === 'amount') {
-            payment.amount = parseFloat(value) || 0;
+            payment.amount = numValue;
             payment.percentage = this.state.totalAmount > 0 
                 ? (payment.amount / this.state.totalAmount) * 100 
                 : 0;
         } else {
-            payment.percentage = parseFloat(value) || 0;
+            payment.percentage = numValue;
             payment.amount = (payment.percentage / 100) * this.state.totalAmount;
         }
         
+        console.log(`Resultado - amount: ${payment.amount}, percentage: ${payment.percentage}`);
+        
         this.calculateRemaining();
+        this.state.hasChanges = true;
         this.savePaymentDistribution();
     }
 
     savePaymentDistribution() {
-        // Preparar datos para guardar
+        // Preparar datos para guardar con precisión
         const distributionData = this.state.payments.map(p => ({
             payment_method_id: p.id,
             payment_method_name: p.name,
             shopping_code: p.shopping_code,
             payment_code: p.payment_code,
-            amount: p.amount,
-            percentage: p.percentage
+            amount: parseFloat(p.amount.toFixed(2)),
+            percentage: parseFloat(p.percentage.toFixed(2))
         }));
+
+        const jsonString = JSON.stringify(distributionData);
+        
 
         // Guardar en el campo del modelo
         this.props.record.update({
-            payment_distribution: JSON.stringify(distributionData)
+            payment_distribution: jsonString
+        }).then(() => {
+            console.log("✓ Distribución guardada exitosamente en BD");
+            this.state.hasChanges = false;
+        }).catch((error) => {
+            console.error("❌ Error guardando distribución:", error);
         });
+    }
+
+    forceManualSave() {
+        this.savePaymentDistribution();
     }
 
     calculateRemaining() {
         if (this.state.inputType === 'amount') {
-            const totalAssigned = this.state.payments.reduce((sum, p) => sum + p.amount, 0);
+            const totalAssigned = this.state.payments.reduce((sum, p) => sum + (p.amount || 0), 0);
             this.state.remainingAmount = this.state.totalAmount - totalAssigned;
             this.state.remainingPercentage = this.state.totalAmount > 0
                 ? (this.state.remainingAmount / this.state.totalAmount) * 100
                 : 0;
         } else {
-            const totalPercentage = this.state.payments.reduce((sum, p) => sum + p.percentage, 0);
+            const totalPercentage = this.state.payments.reduce((sum, p) => sum + (p.percentage || 0), 0);
             this.state.remainingPercentage = 100 - totalPercentage;
             this.state.remainingAmount = (this.state.remainingPercentage / 100) * this.state.totalAmount;
         }
+        
+        console.log("Remaining calculado - amount:", this.state.remainingAmount, "percentage:", this.state.remainingPercentage);
     }
 
     getRemainingColor() {
@@ -168,11 +255,28 @@ export class AccountMoveWidget extends Component {
         return 'text-warning';
     }
 
+    getStatusMessage() {
+        const total = this.state.totalAmount;
+        const assigned = this.state.payments.reduce((sum, p) => sum + (p.amount || 0), 0);
+        
+        if (Math.abs(total - assigned) < 0.01) {
+            return '✓ Distribución completa';
+        } else if (assigned > total) {
+            return '⚠ Excede el total';
+        } else if (assigned > 0) {
+            return '⚠ Distribución incompleta';
+        } else {
+            return 'Sin asignar';
+        }
+    }
+
     formatCurrency(amount) {
         return new Intl.NumberFormat('es-UY', {
             style: 'currency',
-            currency: 'UYU'
-        }).format(amount);
+            currency: 'UYU',
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        }).format(amount || 0);
     }
 }
 

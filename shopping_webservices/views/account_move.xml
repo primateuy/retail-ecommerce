@@ -13,6 +13,7 @@
                     
                     <group>
                         <field name="ventaEnviada" readonly="1"/>
+                        <field name="payment_distribution" invisible="1"/>
                         <!-- <field name="homologacion"/> -->
                         
                     </group>
@@ -21,7 +22,7 @@
                         <widget name="account_move_widget"/>
                     
                     <group>
-                         <field name="payment_distribution_complete" readonly="1"/>
+                         <field name="payment_distribution_complete" readonly="1" invisible="metodoUnico"/>
                     </group>
 
                 </page>
@@ -31,11 +32,11 @@
                 <field name="mostrar_botones_declaracion" invisible="1"/>
                 <div invisible="not mostrar_botones_declaracion">
                     <field name="metodoUnico" invisible="1"/>
-                    <button name="declararVentaUnicoMetodo" type="object" 
-                            string="Declarar Venta" 
+                    <button name="declararVentaUnicoMetodoManual" type="object" 
+                            string="Declarar venta" 
                             invisible="not metodoUnico"/>
-                    <button name="declararVentaVariosMetodos" type="object" 
-                            string="Declarar Venta Varios Métodos" 
+                    <button name="declararVentaVariosMetodosManual" type="object" 
+                            string="Declarar venta varios metodos" 
                             invisible="metodoUnico"/>
                 </div>
             </xpath>

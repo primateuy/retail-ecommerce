@@ -15,6 +15,8 @@ class AccountJournal(models.Model):
         ('lecueder', 'Lecueder'),
         ('costa_urbana', 'Costa Urbana'),
     ], string="Tecnología", default='lecueder');
+    secuencial_ventas = fields.Integer(string="Secuencial Ventas", default=0, help="Secuencial para las ventas realizadas a través del shopping.")
+    usuario = fields.Char(string="Usuario", help="Usuario para autenticar en el servicio web del shopping.")
     url = fields.Char(string="URL", help="URL del servicio web proporcionado por el shopping para la integración.")
     password = fields.Char(string="Password", help="Contraseña para autenticar en el servicio web del shopping.")
 

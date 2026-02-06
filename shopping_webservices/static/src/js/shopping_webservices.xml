@@ -4,7 +4,18 @@
         <div class="account_move_widget">
             <t t-if="state.multiplesPagos">
                 <div class="card p-3">
-                    <h5 class="mb-3">Distribución de Pagos</h5>
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <div>
+                            <h5 class="mb-1">Distribución de Pagos</h5>
+                            <small class="text-muted" t-esc="getStatusMessage()"/>
+                        </div>
+                        <t t-if="state.hasChanges">
+                            <span class="badge bg-warning">Sin guardar</span>
+                        </t>
+                        <t t-else="">
+                            <span class="badge bg-success">Guardado</span>
+                        </t>
+                    </div>
                     
                     <!-- Selector de tipo de entrada -->
                     <div class="mb-3">
@@ -93,30 +104,52 @@
 
                     <!-- Resumen del restante -->
                     <div class="alert mt-3" t-att-class="'alert-' + (Math.abs(state.remainingAmount) &lt; 0.01 ? 'success' : state.remainingAmount &lt; 0 ? 'danger' : 'warning')">
-                        <div class="d-flex justify-content-between">
-                            <strong>Restante:</strong>
-                            <span t-att-class="getRemainingColor()">
-                                <t t-if="state.inputType === 'amount'">
-                                    <t t-esc="formatCurrency(state.remainingAmount)"/>
-                                    (<t t-esc="state.remainingPercentage.toFixed(2)"/>%)
+                        <div class="row g-2 align-items-center">
+                            <div class="col">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <strong>Restante:</strong>
+                                    <span t-att-class="getRemainingColor()">
+                                        <t t-if="state.inputType === 'amount'">
+                                            <t t-esc="formatCurrency(state.remainingAmount)"/>
+                                            (<t t-esc="state.remainingPercentage.toFixed(2)"/>%)
+                                        </t>
+                                        <t t-else="">
+                                            <t t-esc="state.remainingPercentage.toFixed(2)"/>%
+                                            (<t t-esc="formatCurrency(state.remainingAmount)"/>)
+                                        </t>
+                                    </span>
+                                </div>
+                                
+                                <t t-if="Math.abs(state.remainingAmount) &lt; 0.01">
+                                    <small class="text-success">✓ Total distribuido correctamente</small>
+                                </t>
+                                <t t-elif="state.remainingAmount &lt; 0">
+                                    <small class="text-danger">⚠ Excede el total por: <t t-esc="formatCurrency(Math.abs(state.remainingAmount))"/></small>
                                 </t>
                                 <t t-else="">
-                                    <t t-esc="state.remainingPercentage.toFixed(2)"/>%
-                                    (<t t-esc="formatCurrency(state.remainingAmount)"/>)
+                                    <small class="text-warning">⚠ Falta asignar: <t t-esc="formatCurrency(state.remainingAmount)"/></small>
                                 </t>
-                            </span>
+                            </div>
                         </div>
-                        
-                        <t t-if="Math.abs(state.remainingAmount) &lt; 0.01">
-                            <small class="text-success">✓ Total distribuido correctamente</small>
-                        </t>
-                        <t t-elif="state.remainingAmount &lt; 0">
-                            <small class="text-danger">⚠ Excede el total</small>
-                        </t>
-                        <t t-else="">
-                            <small class="text-warning">⚠ Falta asignar</small>
-                        </t>
                     </div>
+
+                    <!-- Barra de progreso de distribución -->
+                    <div class="mb-3">
+                        <label class="form-label">Progreso de distribución:</label>
+                        <div class="progress" style="height: 25px;">
+                            <div 
+                                class="progress-bar progress-bar-striped" 
+                                role="progressbar"
+                                t-att-style="'width: ' + Math.min(100, Math.max(0, (state.totalAmount - Math.abs(state.remainingAmount)) / state.totalAmount * 100 || 0)) + '%'"
+                                t-att-aria-valuenow="Math.min(100, Math.max(0, (state.totalAmount - Math.abs(state.remainingAmount)) / state.totalAmount * 100 || 0))"
+                                aria-valuemin="0" 
+                                aria-valuemax="100">
+                                <t t-esc="(Math.min(100, Math.max(0, (state.totalAmount - Math.abs(state.remainingAmount)) / state.totalAmount * 100 || 0))).toFixed(1)"/>%
+                            </div>
+                        </div>
+                    </div>
+
+                    
                 </div>
             </t>
         </div>

@@ -16,6 +16,7 @@
                     <group>
                         <field name="tecnologia"/>
                         <field name="url"/>
+                        <field name="usuario" invisible="tecnologia != 'costa_urbana'"/>
                         <field name="password" password="True"/>
                         <field name="homologacion"/>
                         <field name="codigoShopping" />
@@ -23,6 +24,7 @@
                         <field name="codigoCanal" />
                         <field name="caja" invisible="1"/>
                         <field name="codigoRubro" />
+                        <field name="secuencial_ventas" invisible="tecnologia != 'costa_urbana'"/>
                     </group>
                 </page>
             </xpath>
