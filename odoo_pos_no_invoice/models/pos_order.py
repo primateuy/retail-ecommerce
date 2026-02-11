@@ -501,10 +501,25 @@ class PosOrder(models.Model):
         })
 
         # Construir datos de adenda desde la orden del POS.
+        # Vendedor: si la config del POS tiene "Allow Salesperson", usar el salesperson de la 1ª línea;
+        # si no, mantener el valor actual (employee_id o vacío).
         if pos_order:
+            seller = ''
+            config = pos_order.config_id
+            allow_salesperson = bool(config and getattr(config, 'allow_salesperson', False))
+            if allow_salesperson and pos_order.lines:
+                first_line = pos_order.lines[0]
+                if getattr(first_line, 'user_id', None) and first_line.user_id:
+                    seller = first_line.user_id.name or ''
+            if not seller:
+                seller = (
+                    pos_order.employee_id.name
+                    if hasattr(pos_order, 'employee_id') and pos_order.employee_id
+                    else ''
+                )
             receipt_data['adenda_data'].update({
                 'cashier': pos_order.user_id.name if pos_order.user_id else '',
-                'seller': pos_order.employee_id.name if hasattr(pos_order, 'employee_id') and pos_order.employee_id else '',
+                'seller': seller,
                 'points_policy': pos_order.config_id.pos_points_policy if pos_order.config_id else '',
             })
 
