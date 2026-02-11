@@ -398,12 +398,14 @@ class PosPaymentMethod(models.Model):
             saved_promotion_info = None  # Variable para preservar promotion_info
 
             def _get_quota_value():
-                """Obtener cuotas desde la respuesta del pinpad."""
-                raw_quota = result.get('Quota') or result.get('Quotas')
-                if raw_quota is None:
-                    raw_quota = data.get('Installments', 1)
+                """
+                Obtener cantidad de cuotas para enviar en processConfirmFinancialPurchase.
+                Se usa el valor recibido del POS (result) si está disponible; si no,
+                el del request inicial (data); fallback 1 para que la API no rechace.
+                """
+                raw_quota = result.get('Quota') or result.get('Quotas') or data.get('Quotas') or data.get('Installments')
                 try:
-                    return int(raw_quota)
+                    return int(raw_quota) if raw_quota is not None else 1
                 except (TypeError, ValueError):
                     return 1
 
@@ -463,7 +465,7 @@ class PosPaymentMethod(models.Model):
                                 if not promotion:
                                     _logger.info('No se encontró promoción aplicable para esta transacción (BIN no coincide o no hay promociones configuradas)')
                                     _logger.info('Procesando pago normalmente sin aplicar descuento ni promoción')
-                                    # Confirmar sin promoción (valores originales)
+                                    # Confirmar sin promoción (valores originales). Quotas = valor recibido del POS.
                                     quota_value = _get_quota_value()
                                     confirm_data = {
                                         "PosID": data['PosID'],
@@ -474,7 +476,7 @@ class PosPaymentMethod(models.Model):
                                         "TransactionDateTimeyyyyMMddHHmmssSSS": payment_method.get_formatted_timestamp(),
                                         "TransactionId": str(transaction_id),  # String según documentación
                                         "Amount": data.get('Amount', '0'),
-                                        "Quotas": quota_value,  # Número según respuesta del pinpad
+                                        "Quotas": quota_value,  # Valor recibido del POS (result) o request (data)
                                         "Plan": 0,  # Número según documentación
                                         "Currency": data.get('Currency', '858'),
                                         "TaxRefund": int(data.get('TaxRefund', 1)),  # Número según documentación
@@ -493,141 +495,116 @@ class PosPaymentMethod(models.Model):
                                     _logger.info('Confirmación sin promoción enviada: ResponseCode=%s', confirm_response.get('ResponseCode'))
                                     # NO hacer continue aquí - continuar con el flujo normal esperando a que la transacción se complete
                                     # El bucle seguirá consultando hasta que ResponseCode = '0' (transacción completada)
-                                
-                                # Promoción encontrada: calcular descuento
-                                original_amount = float(data.get('Amount', 0)) / 100.0  # Convertir de centavos a pesos
-                                discount_percent = promotion.discount_percent
-                                
-                                # Calcular base del descuento según tipo
-                                if promotion.discount_type == 'percentage_untaxed':
-                                    # Descuento sobre subtotal sin impuestos
-                                    base_amount = float(data.get('TaxableAmount', 0)) / 100.0
                                 else:
-                                    # Descuento sobre total (por defecto)
-                                    base_amount = original_amount
-                                
-                                discount_amount = base_amount * (discount_percent / 100.0)
-                                new_amount = original_amount - discount_amount
-                                
-                                _logger.info('Promoción aplicable encontrada: %s (ID: %s) - %s%% de descuento - Monto original: %s, Descuento: %s, Nuevo monto: %s', 
-                                           promotion.name, promotion.id, discount_percent, original_amount, discount_amount, new_amount)
-                                
-                                # Obtener producto de descuento de la promoción
-                                discount_product = promotion.discount_product_id
-                                
-                                if discount_product:
-                                    # Calcular nuevos montos en centavos
-                                    new_amount_cents = int(new_amount * 100)
-                                    # Aproximar el taxable amount proporcionalmente
-                                    original_taxable = float(data.get('TaxableAmount', 0)) / 100.0
-                                    new_taxable_amount = original_taxable * (new_amount / original_amount) if original_amount > 0 else 0
-                                    new_taxable_cents = int(new_taxable_amount * 100)
-                                    
-                                    # Preparar datos para processConfirmFinancialPurchase
-                                    # IMPORTANTE: Usar el mismo TransactionId de la transacción original
-                                    # Según documentación POSLink v135 sección 3.2, processConfirmFinancialPurchase
-                                    # confirma/modifica la transacción existente, NO crea una nueva
-                                    # El TransactionId debe ser el mismo que se recibió en la respuesta inicial
-                                    # Según documentación, algunos campos deben ser números (Quotas, Plan, TaxRefund)
-                                    # y otros deben ser strings (Amount, TaxableAmount, InvoiceAmount, etc.)
-                                    quota_value = _get_quota_value()
-                                    confirm_data = {
-                                        "PosID": data['PosID'],
-                                        "SystemId": data['SystemId'],
-                                        "Branch": data['Branch'],
-                                        "ClientAppId": data['ClientAppId'],
-                                        "UserId": data['UserId'],
-                                        "TransactionDateTimeyyyyMMddHHmmssSSS": payment_method.get_formatted_timestamp(),
-                                        "TransactionId": str(transaction_id),  # MISMO TransactionId de la transacción original (como string según documentación)
-                                        "Amount": str(new_amount_cents),  # Monto con descuento aplicado (string)
-                                        "Quotas": quota_value,  # Número según respuesta del pinpad
-                                        "Plan": 0,  # Número según documentación
-                                        "Currency": data.get('Currency', '858'),
-                                        "TaxRefund": int(data.get('TaxRefund', 1)),  # Número según documentación (1 = con IVA, 99 = sin IVA)
-                                        "TaxableAmount": str(new_taxable_cents),  # String según documentación
-                                        "InvoiceAmount": str(new_amount_cents),  # String según documentación
-                                        "InvoiceNumber": data.get('InvoiceNumber', '1'),
-                                        "TaxAmount": "0",  # Monto de impuestos (string, puede ser 0)
-                                        "TipAmount": "0",  # Monto de propina (string, puede ser 0)
-                                        "CardAccountType": "0",  # Tipo de cuenta de tarjeta (string, 0 = débito, 20 = crédito)
-                                    }
-                                    
-                                    # Llamar a processConfirmFinancialPurchase para confirmar/modificar la transacción existente
-                                    _logger.info('Confirmando transacción existente con monto modificado usando processConfirmFinancialPurchase: %s (original: %s, descuento: %s)', 
-                                               new_amount, original_amount, discount_amount)
-                                    _logger.info('TransactionId original que se está confirmando: %s', transaction_id)
-                                    confirm_response = payment_method.processConfirmFinancialPurchase(confirm_data, pos_session_id)
-                                    
-                                    _logger.info('Respuesta de processConfirmFinancialPurchase: %s', pprint.pformat(confirm_response))
-                                    
-                                    # Almacenar información de promoción independientemente del resultado
-                                    # porque el descuento se aplicará cuando se cree la orden
-                                    saved_promotion_info = {
-                                        'promotion_id': promotion.id,
-                                        'promotion_name': promotion.name,
-                                        'discount_percent': discount_percent,
-                                        'discount_type': promotion.discount_type,
-                                        'discount_amount': discount_amount,
-                                        'original_amount': original_amount,
-                                        'new_amount': new_amount,
-                                        'product_id': discount_product.id,
-                                        'description': f'{promotion.name} - {discount_percent}%',
-                                        'is_promotion': True
-                                    }
-                                    
-                                    # Incrementar contador de veces aplicada
-                                    try:
-                                        promotion.action_increment_times_applied()
-                                    except Exception as counter_error:
-                                        _logger.warning('Error al incrementar contador de promoción: %s', str(counter_error))
-                                    # También agregarlo al result actual para que esté disponible
-                                    result['promotion_info'] = saved_promotion_info
-                                    _logger.info('Información de promoción almacenada en resultado para transacción OCA: %s', transaction_id)
-                                    
-                                    if confirm_response.get('ResponseCode') in ['0', '10']:
-                                        _logger.info('Promoción procesada y processConfirmFinancialPurchase enviado exitosamente')
-                                        # NO actualizar transaction_id porque es la misma transacción
+                                    # Promoción encontrada: calcular descuento (solo si promotion es válido)
+                                    original_amount = float(data.get('Amount', 0)) / 100.0  # Convertir de centavos a pesos
+                                    discount_percent = promotion.discount_percent
+                                    # Calcular base del descuento según tipo
+                                    if promotion.discount_type == 'percentage_untaxed':
+                                        # Descuento sobre subtotal sin impuestos
+                                        base_amount = float(data.get('TaxableAmount', 0)) / 100.0
                                     else:
-                                        _logger.warning('processConfirmFinancialPurchase devolvió código %s: %s. Continuando con promoción almacenada.', 
-                                                      confirm_response.get('ResponseCode'), confirm_response.get('msg'))
-                                        # Continuar de todas formas porque la promoción se aplicará al crear la orden
-                                else:
-                                    _logger.warning('No se encontró producto de descuento en la promoción %s, confirmando sin promoción', promotion.name)
-                                    # Confirmar sin promoción (valores originales)
-                                    quota_value = _get_quota_value()
-                                    confirm_data = {
-                                        "PosID": data['PosID'],
-                                        "SystemId": data['SystemId'],
-                                        "Branch": data['Branch'],
-                                        "ClientAppId": data['ClientAppId'],
-                                        "UserId": data['UserId'],
-                                        "TransactionDateTimeyyyyMMddHHmmssSSS": payment_method.get_formatted_timestamp(),
-                                        "TransactionId": str(transaction_id),  # String según documentación
-                                        "Amount": data.get('Amount', '0'),
-                                        "Quotas": quota_value,  # Número según respuesta del pinpad
-                                        "Plan": 0,  # Número según documentación
-                                        "Currency": data.get('Currency', '858'),
-                                        "TaxRefund": int(data.get('TaxRefund', 1)),  # Número según documentación
-                                        "TaxableAmount": data.get('TaxableAmount', '0'),
-                                        "InvoiceAmount": data.get('InvoiceAmount', '0'),
-                                        "InvoiceNumber": data.get('InvoiceNumber', '1'),
-                                        "TaxAmount": "0",  # Monto de impuestos (string)
-                                        "TipAmount": "0",  # Monto de propina (string)
-                                        "CardAccountType": "0",  # Tipo de cuenta de tarjeta (string)
-                                        # Datos de la tarjeta que ya fueron leídos (requeridos por POSLink)
-                                        "Acquirer": result.get('Acquirer', ''),
-                                        "Issuer": result.get('Issuer', ''),
-                                        "CardNumber": result.get('CardNumber', ''),
-                                    }
-                                    confirm_response = payment_method.processConfirmFinancialPurchase(confirm_data, pos_session_id)
-                                    _logger.info('Confirmación sin promoción enviada: ResponseCode=%s', confirm_response.get('ResponseCode'))
-                                    # NO hacer continue aquí - continuar con el flujo normal esperando a que la transacción se complete
-                                    
+                                        # Descuento sobre total (por defecto)
+                                        base_amount = original_amount
+                                    discount_amount = base_amount * (discount_percent / 100.0)
+                                    new_amount = original_amount - discount_amount
+                                    _logger.info('Promoción aplicable encontrada: %s (ID: %s) - %s%% de descuento - Monto original: %s, Descuento: %s, Nuevo monto: %s', 
+                                               promotion.name, promotion.id, discount_percent, original_amount, discount_amount, new_amount)
+                                    # Obtener producto de descuento de la promoción
+                                    discount_product = promotion.discount_product_id
+                                    if discount_product:
+                                        # Calcular nuevos montos en centavos
+                                        new_amount_cents = int(new_amount * 100)
+                                        # Aproximar el taxable amount proporcionalmente
+                                        original_taxable = float(data.get('TaxableAmount', 0)) / 100.0
+                                        new_taxable_amount = original_taxable * (new_amount / original_amount) if original_amount > 0 else 0
+                                        new_taxable_cents = int(new_taxable_amount * 100)
+                                        # Preparar datos para processConfirmFinancialPurchase
+                                        # Quotas = valor recibido del POS (result) o request (data)
+                                        quota_value = _get_quota_value()
+                                        confirm_data = {
+                                            "PosID": data['PosID'],
+                                            "SystemId": data['SystemId'],
+                                            "Branch": data['Branch'],
+                                            "ClientAppId": data['ClientAppId'],
+                                            "UserId": data['UserId'],
+                                            "TransactionDateTimeyyyyMMddHHmmssSSS": payment_method.get_formatted_timestamp(),
+                                            "TransactionId": str(transaction_id),  # MISMO TransactionId de la transacción original (como string según documentación)
+                                            "Amount": str(new_amount_cents),  # Monto con descuento aplicado (string)
+                                            "Quotas": quota_value,  # Valor recibido del POS
+                                            "Plan": 0,  # Número según documentación
+                                            "Currency": data.get('Currency', '858'),
+                                            "TaxRefund": int(data.get('TaxRefund', 1)),  # Número según documentación (1 = con IVA, 99 = sin IVA)
+                                            "TaxableAmount": str(new_taxable_cents),  # String según documentación
+                                            "InvoiceAmount": str(new_amount_cents),  # String según documentación
+                                            "InvoiceNumber": data.get('InvoiceNumber', '1'),
+                                            "TaxAmount": "0",  # Monto de impuestos (string, puede ser 0)
+                                            "TipAmount": "0",  # Monto de propina (string, puede ser 0)
+                                            "CardAccountType": "0",  # Tipo de cuenta de tarjeta (string, 0 = débito, 20 = crédito)
+                                        }
+                                        # Llamar a processConfirmFinancialPurchase para confirmar/modificar la transacción existente
+                                        _logger.info('Confirmando transacción existente con monto modificado usando processConfirmFinancialPurchase: %s (original: %s, descuento: %s)', 
+                                                   new_amount, original_amount, discount_amount)
+                                        _logger.info('TransactionId original que se está confirmando: %s', transaction_id)
+                                        confirm_response = payment_method.processConfirmFinancialPurchase(confirm_data, pos_session_id)
+                                        _logger.info('Respuesta de processConfirmFinancialPurchase: %s', pprint.pformat(confirm_response))
+                                        # Almacenar información de promoción independientemente del resultado
+                                        saved_promotion_info = {
+                                            'promotion_id': promotion.id,
+                                            'promotion_name': promotion.name,
+                                            'discount_percent': discount_percent,
+                                            'discount_type': promotion.discount_type,
+                                            'discount_amount': discount_amount,
+                                            'original_amount': original_amount,
+                                            'new_amount': new_amount,
+                                            'product_id': discount_product.id,
+                                            'description': f'{promotion.name} - {discount_percent}%',
+                                            'is_promotion': True
+                                        }
+                                        try:
+                                            promotion.action_increment_times_applied()
+                                        except Exception as counter_error:
+                                            _logger.warning('Error al incrementar contador de promoción: %s', str(counter_error))
+                                        result['promotion_info'] = saved_promotion_info
+                                        _logger.info('Información de promoción almacenada en resultado para transacción OCA: %s', transaction_id)
+                                        if confirm_response.get('ResponseCode') in ['0', '10']:
+                                            _logger.info('Promoción procesada y processConfirmFinancialPurchase enviado exitosamente')
+                                        else:
+                                            _logger.warning('processConfirmFinancialPurchase devolvió código %s: %s. Continuando con promoción almacenada.', 
+                                                          confirm_response.get('ResponseCode'), confirm_response.get('msg'))
+                                    else:
+                                        _logger.warning('No se encontró producto de descuento en la promoción %s, confirmando sin promoción', promotion.name)
+                                        quota_value = _get_quota_value()
+                                        confirm_data = {
+                                            "PosID": data['PosID'],
+                                            "SystemId": data['SystemId'],
+                                            "Branch": data['Branch'],
+                                            "ClientAppId": data['ClientAppId'],
+                                            "UserId": data['UserId'],
+                                            "TransactionDateTimeyyyyMMddHHmmssSSS": payment_method.get_formatted_timestamp(),
+                                            "TransactionId": str(transaction_id),
+                                            "Amount": data.get('Amount', '0'),
+                                            "Quotas": quota_value,
+                                            "Plan": 0,
+                                            "Currency": data.get('Currency', '858'),
+                                            "TaxRefund": int(data.get('TaxRefund', 1)),
+                                            "TaxableAmount": data.get('TaxableAmount', '0'),
+                                            "InvoiceAmount": data.get('InvoiceAmount', '0'),
+                                            "InvoiceNumber": data.get('InvoiceNumber', '1'),
+                                            "TaxAmount": "0",
+                                            "TipAmount": "0",
+                                            "CardAccountType": "0",
+                                            "Acquirer": result.get('Acquirer', ''),
+                                            "Issuer": result.get('Issuer', ''),
+                                            "CardNumber": result.get('CardNumber', ''),
+                                        }
+                                        confirm_response = payment_method.processConfirmFinancialPurchase(confirm_data, pos_session_id)
+                                        _logger.info('Confirmación sin promoción enviada: ResponseCode=%s', confirm_response.get('ResponseCode'))
                             except Exception as promo_error:
                                 _logger.error('Error al procesar promoción automáticamente: %s', str(promo_error))
                                 import traceback
                                 _logger.error('Traceback: %s', traceback.format_exc())
-                                # Continuar sin promoción - procesar pago normalmente
+                                # Continuar sin promoción - procesar pago normalmente. Quotas = valor recibido del POS.
                                 try:
                                     payment_method = env['pos.payment.method'].browse(payment_method_id)
                                     quota_value = _get_quota_value()
@@ -640,7 +617,7 @@ class PosPaymentMethod(models.Model):
                                         "TransactionDateTimeyyyyMMddHHmmssSSS": payment_method.get_formatted_timestamp(),
                                         "TransactionId": str(transaction_id),  # String según documentación
                                         "Amount": data.get('Amount', '0'),
-                                        "Quotas": quota_value,  # Número según respuesta del pinpad
+                                        "Quotas": quota_value,  # Valor recibido del POS
                                         "Plan": 0,  # Número según documentación
                                         "Currency": data.get('Currency', '858'),
                                         "TaxRefund": int(data.get('TaxRefund', 1)),  # Número según documentación

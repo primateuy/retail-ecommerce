@@ -14,6 +14,24 @@ import {PaymentOCA} from "@odoo_pos_oca/app/payment_oca";
  */
 patch(PaymentOCA.prototype, {
     /**
+     * Obtiene el nro de cuotas desde la línea de pago del POS.
+     * Si la línea tiene installments definido y > 0 se usa; si no, 1.
+     * Así se respeta siempre el valor elegido por el usuario (ej. pagar en 3 cuotas).
+     *
+     * @param {Object} paymentLine - Línea de pago (order.selected_paymentline o similar)
+     * @returns {number} Número de cuotas (entero >= 1)
+     */
+    _getInstallmentsFromPaymentLine(paymentLine) {
+        if (!paymentLine) return 1;
+        const n = paymentLine.installments;
+        if (n !== undefined && n !== null) {
+            const parsed = parseInt(n, 10);
+            if (!isNaN(parsed) && parsed >= 1) return parsed;
+        }
+        return 1;
+    },
+
+    /**
      * Extiende send_payment_request para agregar flag NeedToReadCard
      * 
      * IMPORTANTE: NO llamamos a super.send_payment_request() porque el backend
@@ -70,16 +88,20 @@ patch(PaymentOCA.prototype, {
         var currency = this.pos.currency.name;
         var currency_code = currency === "USD" ? "840" : "858";
 
+        // Respetar siempre el nro de cuotas elegido en el POS (line.installments).
+        // Si no está definido o es inválido, usar 1 para compatibilidad con OCA.
+        var numCuotas = this._getInstallmentsFromPaymentLine(line);
+
         var data = this.get_base_data();
         data.Amount = `${amount_to_send_by_100}`;
-        data.Quotas = "0";
+        data.Quotas = String(numCuotas);
         data.Plan = "0";
         data.Currency = currency_code;
         data.TaxRefund = "99";
         data.TaxableAmount = `${total_order_amount_without_tax}`;
         data.InvoiceAmount = `${total_order_amount}`;
         data.InvoiceNumber = "1";
-        data.Installments = "1";
+        data.Installments = String(numCuotas);
         data.TicketNumber = "";
 
         // NO agregar NeedToReadCard aquí porque el backend ya lo agrega
@@ -312,7 +334,9 @@ patch(PaymentOCA.prototype, {
     },
 
     /**
-     * Prepara los datos para confirmar la transacción con valores finales
+     * Prepara los datos para confirmar la transacción con valores finales.
+     * NOTA: En promociones NO enviamos la cantidad de cuotas al POS;
+     * las cuotas se eligen y manejan en el pinpad físico.
      */
     prepareConfirmData(cardData, paymentLine, newTotal, newTaxableAmount, newInvoiceAmount) {
         const order = this.pos.get_order();
@@ -327,7 +351,6 @@ patch(PaymentOCA.prototype, {
         const data = this.get_base_data();
         data.TransactionId = paymentLine.transaction_id;
         data.Amount = `${amount_in_cents}`;
-        data.Quotas = "0";
         data.Plan = "0";
         data.Currency = currency_code;
         data.TaxableAmount = `${taxable_amount_in_cents}`;
@@ -352,7 +375,9 @@ patch(PaymentOCA.prototype, {
     },
 
     /**
-     * Confirma la transacción sin aplicar promoción (valores originales)
+     * Confirma la transacción sin aplicar promoción (valores originales).
+     * NOTA: En promociones NO enviamos la cantidad de cuotas al POS;
+     * las cuotas se eligen y manejan en el pinpad físico.
      */
     async confirmFinancialPurchaseWithoutPromotion(cardData, paymentLine) {
         const order = this.pos.get_order();
@@ -365,7 +390,6 @@ patch(PaymentOCA.prototype, {
         const data = this.get_base_data();
         data.TransactionId = paymentLine.transaction_id;
         data.Amount = `${total_order_amount}`;
-        data.Quotas = "0";
         data.Plan = "0";
         data.Currency = currency_code;
         data.TaxableAmount = `${total_order_amount_without_tax}`;
