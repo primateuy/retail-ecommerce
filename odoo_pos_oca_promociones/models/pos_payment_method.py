@@ -691,6 +691,9 @@ class PosPaymentMethod(models.Model):
                 result['promotion_info'] = saved_promotion_info
                 _logger.info('Restaurando promotion_info en resultado final antes de actualizar transacción')
             
+            # Mensaje legible según códigos POSLink v135 (Anexos 1 y 2) para usuario y transacción
+            result['msg'] = env['payment.transaction'].get_oca_display_message(result)
+            
             try:
                 env['pos.payment.method']._update_stored_transaction_with_session(transaction_id, result, pos_session_id)
             except Exception as e:

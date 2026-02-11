@@ -14,6 +14,114 @@ import json
 
 _logger = logging.getLogger(__name__)
 
+# Códigos de respuesta del POSLink (Anexo 1 - ResponseCode PLS). Documentación: Especificaciones POSLink v135.
+RESPONSE_CODE_MESSAGES = {
+    '0': 'OK',
+    '10': 'Esperando respuesta del pinpad',
+    '11': 'Tiempo excedido',
+    '12': 'Pinpad consultó datos',
+    '100': 'Pinpad inválido',
+    '101': 'Pinpad no existe',
+    '102': 'Pinpad no responde',
+    '103': 'Pinpad en uso',
+    '104': 'Monto no válido',
+    '105': 'Cuotas inválidas',
+    '106': 'Tipo de transacción inválido',
+    '107': 'Error en datos enviados',
+    '108': 'Error en comunicación',
+    '109': 'Error en pinpad',
+    '110': 'Error en sistema',
+    '111': 'Error en autorización',
+    '112': 'Error en reverso',
+    '113': 'Error en cierre',
+    '999': 'Error no determinado',
+    '-100': 'Formato en campo/s incorrecto; faltan campos obligatorios',
+}
+
+# Códigos aprobados del terminal (Anexo 2 - posResponseCode). Cualquier otro código = rechazo/error.
+POS_APPROVED_CODES = ('00', '08', '10', '11', '85', 'OF')
+
+# Mensajes del terminal (Anexo 2 - posResponseCode). Documentación: Especificaciones POSLink v135.
+POS_RESPONSE_CODE_MESSAGES = {
+    '00': 'Aprobado. APROBADA',
+    '01': 'Contacte al emisor, en caso de ser aprobada realizar operación offline. PEDIR AUTORIZACION',
+    '02': 'Idem al anterior. PEDIR AUTORIZACION',
+    '03': 'Comercio inválido. COMERCIO INVALIDO',
+    '04': 'Retener tarjeta. RETENER TARJETA',
+    '05': 'Transacción negada. DENEGADA',
+    '06': 'Error (utilizado en transferencia de archivos). N/A',
+    '07': 'Retenga y llame. RETENGA Y LLAME',
+    '08': 'Aprobado EMV (Mastercard). APROBADA EMV',
+    '10': 'Aprobado Parcialmente (CashBack). APROBADO SOLO VENTAS',
+    '11': 'Aprobado (igual que 00). APROBADA',
+    '12': 'Transacción inválida. TRANSAC. INVALIDA',
+    '13': 'Monto inválido. MONTO INVALIDO',
+    '14': 'Tarjeta inválida o cédula no corresponde con titular. TARJETA INVALIDA',
+    '15': 'Emisor no valido. EMISOR NO VALIDO',
+    '21': 'No se tomó acción (reversas y anulaciones). NO EXISTE ORIGINAL',
+    '25': 'No existe original, registro no encontrado en archivo de transacciones. NO EXISTE ORIGINAL',
+    '30': 'Error en formato del mensaje. ERROR EN FORMATO',
+    '31': 'Tarjeta no soportada. CARD NOT SUPPORTED',
+    '38': 'Denegada, excede cantidad de reintentos de PIN permitida. EXCEDE ING. DE PIN',
+    '39': 'Rechazada (código no especificado en documentación). RECHAZADA',
+    '41': 'Tarjeta perdida, retener. PERDIDA, RETENER',
+    '43': 'Tarjeta robada, retener. ROBADA, RETENER',
+    '45': 'Tarjeta inhabilitada para operar en cuotas. NO OPERA EN CUOTAS',
+    '46': 'Tarjeta no vigente. TARJETA NO VIGENTE',
+    '47': 'PIN requerido. PIN REQUERIDO',
+    '48': 'Excede cantidad máxima de cuotas permitidas. EXCEDE MAX. CUOTAS',
+    '49': 'Error en formato de fecha de expiración. ERROR FECHA VENCIM',
+    '50': 'Monto ingresado en entrega supera limite. ENTREGA SUPERA LIM',
+    '51': 'Sin disponible. SALDO INSUFICIENTE',
+    '53': 'Cuenta inexistente. CTA. INEXISTENTE',
+    '54': 'Tarjeta vencida. TARJETA VENCIDA',
+    '55': 'PIN incorrecto. PIN INCORRECTO',
+    '56': 'Emisor no habilitado en el sistema. TARJ.NO HABILITADA',
+    '57': 'Transacción no permitida a esta tarjeta. TRANS.NO PERMITIDA',
+    '58': 'Servicio inválido. Transacción no permitida a la terminal. SERVICIO INVALIDO',
+    '59': 'Sospecha de fraude. SOSPECHA DE FRAUDE',
+    '61': 'Excede monto límite de actividad - Contacte al emisor. EXCEDE MONTO LIMIT',
+    '62': 'Tarjeta restringida para dicha terminal u operacion. TARJETA RESTRINGIDA',
+    '65': 'Límite de actividad excedido – Contacte al emisor. EXCEDE LIM.TARJETA',
+    '76': 'Solicitar autorización telefónica. LLAMAR AL EMISOR',
+    '77': 'Error en plan/cuotas. ERROR PLAN/CUOTAS',
+    '78': 'Debe cambiar Pin. DEBE CAMBIAR PIN',
+    '81': 'Error criptográfico en manejo de pin online. ERROR CRIPTOGRAFICO',
+    '82': 'Error en validación de CVV. CVV INVALIDO',
+    '83': 'Imposible verificar PIN en manejo de pin online. IMPOSIBLE VERIFICAR PIN',
+    '84': 'Moneda Invalida. MONEDA INVALIDA',
+    '85': 'Aprobado. APROBADA',
+    '89': 'Terminal inválida. TERMINAL INVALIDA',
+    '91': 'Emisor no responde. EMISOR NO RESPONDE',
+    '94': 'Número de secuencia duplicado. NRO. SEC.DUPLICADO',
+    '95': 'Diferencia en el cierre de transacciones. RE-TRANSMITIENDO',
+    '96': 'Error de sistema. ERROR EN SISTEMA',
+    '98': 'Mensajes Especiales. MENSAJES ESPECIALES',
+    'CE': 'Error en conexión al Host.',
+    'CF': 'Consulta Caja Fallido.',
+    'CT': 'Cancelar Transacción.',
+    'EA': 'Error en código de comercio.',
+    'EB': 'Error en Batch (Lote).',
+    'EC': 'Error en Cierre de lote.',
+    'EE': 'Error Rutinas EMV.',
+    'EI': 'Error en Información enviada al PinPad.',
+    'ER': 'Error enviando Reverso al Autorizador.',
+    'ET': 'Error en Ingreso Inicial de Datos.',
+    'LL': 'Lote Lleno.',
+    'LV': 'Lote Vacío.',
+    'MK': 'MasterKey Ausente.',
+    'N7': 'CVV2 no válido. CVV2 NO VALIDO',
+    'NC': 'No responde Caja a Mensaje Inicial.',
+    'NP': 'Operación NO Permitida.',
+    'NR': 'No responde Autorizador.',
+    'OF': 'Aprobación Offline. APROBADA OFFLINE',
+    'TI': 'Tarjeta incorrecta.',
+    'TN': 'Tarjeta Incorrecta en Offline.',
+    'TP': 'Transacción Pendiente (usado por billeteras). TRANS. PENDIENTE',
+    'TO': 'TimeOut Ingreso Tarjeta.',
+    'XX': 'Cualquier otro código no especificado, denegada. RECHAZADA',
+}
+
 
 class PaymentTransaction(models.Model):
     """
@@ -269,6 +377,58 @@ class PaymentTransaction(models.Model):
         else:
             return 'error'
     
+    @api.model
+    def get_oca_display_message(self, oca_response):
+        """
+        Obtiene el mensaje legible para el usuario según ResponseCode y posResponseCode
+        (Anexos 1 y 2 POSLink v135). Prioriza el código del terminal cuando indica rechazo.
+        
+        Args:
+            oca_response (dict): Respuesta del POS (ResponseCode, PosResponseCode/posResponseCode, msg)
+            
+        Returns:
+            str: Mensaje en español para mostrar al usuario
+        """
+        if not oca_response:
+            return 'Error desconocido'
+        # Código del terminal (puede venir como PosResponseCode o posResponseCode)
+        pos_code = oca_response.get('PosResponseCode') or oca_response.get('posResponseCode')
+        pos_response_code = str(pos_code).strip() if pos_code is not None and pos_code != '' else None
+        response_code = str(oca_response.get('ResponseCode', '')).strip()
+        
+        # Si el terminal devolvió un código de rechazo, usar mensaje del Anexo 2
+        if pos_response_code and pos_response_code not in POS_APPROVED_CODES:
+            return POS_RESPONSE_CODE_MESSAGES.get(
+                pos_response_code,
+                f'Rechazada por el terminal (código {pos_response_code})',
+            )
+        # Si ResponseCode del PLS no es éxito, usar mensaje del Anexo 1
+        if response_code and response_code not in ('0',):
+            return RESPONSE_CODE_MESSAGES.get(
+                response_code,
+                f'Error del sistema POSLink (código {response_code})',
+            )
+        # Aprobado: usar mensaje que venga en la respuesta o genérico
+        return oca_response.get('msg', '') or 'Aprobado'
+    
+    def _get_transaction_state_with_pos_response(self, response_code, oca_response):
+        """
+        Determina el estado considerando ResponseCode y posResponseCode.
+        Si el terminal rechazó (posResponseCode no aprobado), estado = error.
+        
+        Args:
+            response_code (str): ResponseCode del PLS
+            oca_response (dict): Respuesta completa
+            
+        Returns:
+            str: 'done', 'pending' o 'error'
+        """
+        pos_code = oca_response.get('PosResponseCode') or oca_response.get('posResponseCode')
+        pos_response_code = str(pos_code).strip() if pos_code is not None and pos_code != '' else None
+        if response_code == '0' and pos_response_code and pos_response_code not in POS_APPROVED_CODES:
+            return 'error'
+        return self._get_transaction_state_from_response(response_code)
+    
     def _get_oca_provider_id(self):
         """
         Obtiene el ID del proveedor OCA existente
@@ -366,19 +526,20 @@ class PaymentTransaction(models.Model):
     
     def update_oca_transaction(self, oca_response):
         """
-        Actualiza una transacción OCA existente con nueva información
+        Actualiza una transacción OCA existente con nueva información.
+        Usa mensaje parseado según POSLink v135 y considera posResponseCode para estado error.
         
         Args:
             oca_response (dict): Nueva respuesta del POS
         """
-        response_code = oca_response.get('ResponseCode', '999')
-        new_state = self._get_transaction_state_from_response(response_code)
-        
+        response_code = str(oca_response.get('ResponseCode', '999')).strip()
+        new_state = self._get_transaction_state_with_pos_response(response_code, oca_response)
+        state_message = self.get_oca_display_message(oca_response)
         update_vals = {
             'state': new_state,
-            'state_message': oca_response.get('msg', ''),
+            'state_message': state_message,
             'oca_response_code': response_code,
-            'oca_response_message': oca_response.get('msg', ''),
+            'oca_response_message': state_message,
             'oca_complete_response': json.dumps(oca_response, indent=2, ensure_ascii=False),
         }
         
@@ -427,9 +588,10 @@ class PaymentTransaction(models.Model):
         Returns:
             payment.transaction: Transacción creada
         """
-        # Determinar el estado de la transacción basado en la respuesta
-        response_code = oca_response.get('ResponseCode', '999')
-        state = self._get_transaction_state_from_response(response_code)
+        # Determinar el estado considerando ResponseCode y posResponseCode (rechazo = error)
+        response_code = str(oca_response.get('ResponseCode', '999')).strip()
+        state = self._get_transaction_state_with_pos_response(response_code, oca_response)
+        state_message = self.get_oca_display_message(oca_response)
         
         # Obtener el monto desde la respuesta del POS
         total_amount = oca_response.get('TotalAmount', '0')
@@ -461,7 +623,7 @@ class PaymentTransaction(models.Model):
             'amount': corrected_amount,
             'currency_id': self._get_currency_id_from_response(oca_response),
             'state': state,
-            'state_message': oca_response.get('msg', ''),
+            'state_message': state_message,
             'partner_id': self._get_partner_id(pos_order, pos_payment),
             'company_id': self._get_company_id(pos_order, pos_payment),
             
@@ -480,7 +642,7 @@ class PaymentTransaction(models.Model):
             'invoice_number': invoice_number,
             'oca_transaction_id': transaction_id or oca_response.get('TransactionId', ''),
             'oca_response_code': response_code,
-            'oca_response_message': oca_response.get('msg', ''),
+            'oca_response_message': state_message,
             'oca_complete_response': json.dumps(oca_response, indent=2, ensure_ascii=False),
             
             # Campos de relación
