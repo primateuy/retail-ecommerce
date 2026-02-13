@@ -27,6 +27,7 @@
         'views/account_move.xml',
         'views/message_wizard.xml',
         'views/ventas_log.xml',
+        'data/ir_cron.xml',
     ],
 
     'assets': {
