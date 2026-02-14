@@ -76,17 +76,14 @@ class PaymentMethodPromotion(models.Model):
         help='Base sobre la cual se calcula el porcentaje de descuento'
     )
     
-    # Configuración de proveedor y método de pago
+    # Configuración por proveedor de pago: aplica a todos los métodos de pago que usen ese proveedor
     payment_provider_id = fields.Many2one(
         'payment.provider',
-        string='Proveedor de Pago (Web)',
-        help='Proveedor de pago en el que aplica esta promoción (para ventas web/eCommerce)'
-    )
-    
-    payment_method_id = fields.Many2one(
-        'pos.payment.method',
-        string='Método de Pago (POS)',
-        help='Método de pago POS en el que aplica esta promoción'
+        string='Proveedor de Pago',
+        required=True,
+        domain=[('state', 'in', ['enabled', 'test'])],
+        help='Proveedor de pago en el que aplica esta promoción. '
+             'Se aplicará en todos los métodos de pago (POS y web) que usen este proveedor.'
     )
     
     # Validación de BINs
@@ -105,15 +102,15 @@ class PaymentMethodPromotion(models.Model):
              'Si está desactivado, aplica a todas las tarjetas del proveedor.'
     )
     
-    # Promociones incompatibles
+    # Promociones estándar de Odoo (Descuento y lealtad) incompatibles con esta promoción
     incompatible_promotion_ids = fields.Many2many(
-        'payment.method.promotion',
-        'promotion_incompatible_rel',
+        'loyalty.program',
+        'payment_method_promotion_loyalty_incompatible_rel',
         'promotion_id',
-        'incompatible_id',
+        'loyalty_program_id',
         string='Promociones Incompatibles',
-        help='Lista de promociones que no pueden combinarse con esta. '
-             'Si el pedido ya tiene una promoción incompatible aplicada, esta no se aplicará.'
+        help='Promociones de Odoo (Descuento y lealtad) que no pueden combinarse con esta. '
+             'Si el pedido ya tiene una de estas promociones aplicada, esta no se aplicará.'
     )
     
     # Vigencia
@@ -169,14 +166,14 @@ class PaymentMethodPromotion(models.Model):
                 if record.date_from > record.date_to:
                     raise ValidationError(_('La fecha de inicio debe ser anterior a la fecha de fin'))
     
-    @api.constrains('payment_provider_id', 'payment_method_id')
+    @api.constrains('payment_provider_id')
     def _check_payment_config(self):
         """
-        Valida que se configure al menos un proveedor o método de pago
+        Valida que se configure el proveedor de pago (aplica a todos los métodos con ese proveedor)
         """
         for record in self:
-            if not record.payment_provider_id and not record.payment_method_id:
-                raise ValidationError(_('Debe configurar al menos un Proveedor de Pago (Web) o Método de Pago (POS)'))
+            if not record.payment_provider_id:
+                raise ValidationError(_('Debe configurar el Proveedor de Pago'))
     
     def _is_valid_date(self):
         """
@@ -239,32 +236,25 @@ class PaymentMethodPromotion(models.Model):
     
     def _matches_payment_provider(self, provider_code=None, payment_method_id=None):
         """
-        Verifica si la promoción aplica para el proveedor/método de pago dado
+        Verifica si la promoción aplica para el proveedor de pago dado.
+        La promoción se configura solo por proveedor; aplica a todos los métodos con ese proveedor.
         
         Args:
             provider_code (str): Código del proveedor de pago (ej: 'oca', 'stripe')
-            payment_method_id (int): ID del método de pago POS
+            payment_method_id (int): No usado; se mantiene por compatibilidad de firma
             
         Returns:
-            bool: True si coincide, False en caso contrario
+            bool: True si el proveedor coincide, False en caso contrario
         """
         self.ensure_one()
-        
-        # Verificar proveedor de pago web
         if provider_code and self.payment_provider_id:
-            if self.payment_provider_id.code == provider_code:
-                return True
-        
-        # Verificar método de pago POS
-        if payment_method_id and self.payment_method_id:
-            if self.payment_method_id.id == payment_method_id:
-                return True
-        
+            return self.payment_provider_id.code == provider_code
         return False
     
     def _check_incompatibilities(self, order):
         """
-        Verifica si hay promociones incompatibles ya aplicadas en la orden
+        Verifica si en la orden ya está aplicada alguna promoción estándar de Odoo
+        (Descuento y lealtad) marcada como incompatible con esta promoción.
         
         Args:
             order: Registro de pos.order o sale.order
@@ -273,49 +263,33 @@ class PaymentMethodPromotion(models.Model):
             tuple: (is_incompatible: bool, incompatible_promotions: list, message: str)
         """
         self.ensure_one()
-        
         incompatible_promotions = []
-        
-        # Si no hay promociones incompatibles configuradas, no hay conflicto
+
         if not self.incompatible_promotion_ids:
             return False, incompatible_promotions, ''
-        
-        # Buscar promociones aplicadas en esta orden a través de las transacciones de pago
-        # Las transacciones OCA con promoción almacenan el promotion_id en oca_complete_response
-        if hasattr(order, 'payment_ids'):
-            # Orden POS
-            for payment in order.payment_ids:
-                if payment.payment_transaction_id and payment.payment_transaction_id.is_promotion:
-                    transaction = payment.payment_transaction_id
-                    try:
-                        import json
-                        complete_response = json.loads(transaction.oca_complete_response or '{}')
-                        promotion_info = complete_response.get('promotion_info', {})
-                        applied_promotion_id = promotion_info.get('promotion_id', False)
-                        
-                        if applied_promotion_id:
-                            applied_promotion = self.browse(applied_promotion_id)
-                            if applied_promotion.exists() and applied_promotion in self.incompatible_promotion_ids:
-                                incompatible_promotions.append(applied_promotion)
-                    except Exception as e:
-                        _logger.warning('Error al verificar incompatibilidades en transacción %s: %s', 
-                                      transaction.id, str(e))
-        
-        # También buscar en las líneas de descuento de la orden
-        # Si hay líneas de descuento con el producto de alguna promoción incompatible, considerar incompatibilidad
+
+        # Recoger programas de lealtad aplicados en la orden (POS: líneas con reward_id; Sale: cupones)
+        applied_programs = self.env['loyalty.program']
         if hasattr(order, 'lines'):
             for line in order.lines:
-                if line.product_id and line.price_unit < 0:  # Línea de descuento
-                    # Buscar promociones que usen este producto de descuento y sean incompatibles
-                    for incompatible_promotion in self.incompatible_promotion_ids:
-                        if incompatible_promotion.discount_product_id.id == line.product_id.id:
-                            if incompatible_promotion not in incompatible_promotions:
-                                incompatible_promotions.append(incompatible_promotion)
-        
-        if incompatible_promotions:
-            message = _('Esta promoción no puede combinarse con: %s') % ', '.join([p.name for p in incompatible_promotions])
-            return True, incompatible_promotions, message
-        
+                reward = getattr(line, 'reward_id', None)
+                if reward and getattr(reward, 'program_id', None):
+                    if reward.program_id in self.incompatible_promotion_ids:
+                        applied_programs |= reward.program_id
+        if hasattr(order, 'coupon_point_ids'):
+            for cp in order.coupon_point_ids:
+                card = getattr(cp, 'coupon_id', None) or getattr(cp, 'card_id', None)
+                if card and getattr(card, 'program_id', None) and card.program_id in self.incompatible_promotion_ids:
+                    applied_programs |= card.program_id
+        if hasattr(order, 'applied_coupon_ids'):
+            for coupon in order.applied_coupon_ids:
+                if getattr(coupon, 'program_id', None) and coupon.program_id in self.incompatible_promotion_ids:
+                    applied_programs |= coupon.program_id
+
+        if applied_programs:
+            message = _('Esta promoción no puede combinarse con: %s') % ', '.join(applied_programs.mapped('name'))
+            return True, list(applied_programs), message
+
         return False, incompatible_promotions, ''
     
     @api.model

@@ -12,7 +12,6 @@
                 <field name="active"/>
                 <field name="discount_percent" string="Descuento %"/>
                 <field name="payment_provider_id"/>
-                <field name="payment_method_id"/>
                 <field name="date_from"/>
                 <field name="date_to"/>
                 <field name="company_id" groups="base.group_multi_company"/>
@@ -64,18 +63,12 @@
                             </group>
                         </page>
                         
-                        <page string="Proveedor y Método de Pago" name="payment_config">
+                        <page string="Proveedor de Pago" name="payment_config">
                             <group>
-                                <group string="Proveedor de Pago (Web)">
+                                <group>
                                     <field name="payment_provider_id" 
-                                           domain="[('state', '=', 'enabled')]"
                                            options="{'no_create': True, 'no_create_edit': True}"
-                                           help="Proveedor de pago en el que aplica esta promoción (para ventas web/eCommerce)"/>
-                                </group>
-                                <group string="Método de Pago (POS)">
-                                    <field name="payment_method_id" 
-                                           options="{'no_create': True, 'no_create_edit': True}"
-                                           help="Método de pago POS en el que aplica esta promoción"/>
+                                           help="Proveedor de pago en el que aplica esta promoción. Se aplicará en todos los métodos de pago (POS y web) que usen este proveedor."/>
                                 </group>
                             </group>
                         </page>
@@ -158,9 +151,8 @@
                                 <group>
                                     <field name="incompatible_promotion_ids" 
                                            widget="many2many_tags" 
-                                           domain="[('id', '!=', id)]"
                                            options="{'no_create': True, 'no_create_edit': True}"
-                                           help="Lista de promociones que no pueden combinarse con esta. Si el pedido ya tiene una promoción incompatible aplicada, esta no se aplicará."/>
+                                           help="Promociones de Odoo (Descuento y lealtad) que no pueden combinarse con esta. Si el pedido ya tiene una de estas promociones aplicada, esta no se aplicará."/>
                                 </group>
                             </group>
                         </page>
@@ -178,7 +170,6 @@
             <search string="Promociones por Método de Pago">
                 <field name="name" string="Nombre"/>
                 <field name="payment_provider_id" string="Proveedor"/>
-                <field name="payment_method_id" string="Método de Pago"/>
                 <field name="discount_product_id" string="Producto"/>
                 <field name="company_id" groups="base.group_multi_company"/>
                 <filter string="Activas" name="active" domain="[('active', '=', True)]"/>
@@ -189,7 +180,6 @@
                 <filter string="Mi Compañía" name="my_company" domain="[('company_id', '=', company_id)]" groups="base.group_multi_company"/>
                 <group expand="0" string="Agrupar por">
                     <filter string="Proveedor" name="group_provider" context="{'group_by': 'payment_provider_id'}"/>
-                    <filter string="Método de Pago" name="group_method" context="{'group_by': 'payment_method_id'}"/>
                     <filter string="Compañía" name="group_company" context="{'group_by': 'company_id'}" groups="base.group_multi_company"/>
                 </group>
             </search>

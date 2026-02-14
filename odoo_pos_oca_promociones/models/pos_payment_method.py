@@ -58,29 +58,16 @@ class PosPaymentMethod(models.Model):
             # Verificar si hay promociones configuradas para este método de pago o para OCA en general
             provider_code = 'oca' if self.use_payment_terminal == 'oca' else None
             
-            # Buscar promociones activas que puedan aplicarse
-            # No necesitamos datos de tarjeta aún, solo verificar si hay promociones configuradas
-            domain = [
-                ('active', '=', True),
-                '|',
-                ('company_id', '=', False),
-                ('company_id', '=', self.env.company.id),
-            ]
-            
-            # Si hay método de pago configurado, buscar por método de pago
-            if self.id:
-                domain_payment_method = domain + [('payment_method_id', '=', self.id)]
-                promotions = self.env['payment.method.promotion'].search(domain_payment_method, limit=1)
-                if promotions:
-                    has_active_promotions = True
-                    _logger.info('Promociones activas encontradas para método de pago %s (ID: %s)', self.name, self.id)
-            
-            # Si no se encontró por método de pago, buscar por proveedor
-            if not has_active_promotions and provider_code:
-                # Buscar promociones que puedan aplicarse a este proveedor
-                # (sin validar BIN aún, solo verificar si hay promociones configuradas)
-                domain_provider = domain + [('payment_provider_id.code', '=', provider_code)]
-                promotions = self.env['payment.method.promotion'].search(domain_provider, limit=1)
+            # Buscar promociones activas solo por proveedor (aplica a todos los métodos con ese proveedor)
+            if provider_code:
+                domain = [
+                    ('active', '=', True),
+                    ('payment_provider_id.code', '=', provider_code),
+                    '|',
+                    ('company_id', '=', False),
+                    ('company_id', '=', self.env.company.id),
+                ]
+                promotions = self.env['payment.method.promotion'].search(domain, limit=1)
                 if promotions:
                     has_active_promotions = True
                     _logger.info('Promociones activas encontradas para proveedor %s', provider_code)
