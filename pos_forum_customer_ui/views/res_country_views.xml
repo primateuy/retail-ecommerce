@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="res_country_view_form_pos_phone" model="ir.ui.view">
+        <field name="name">res.country.form.pos.phone</field>
+        <field name="model">res.country</field>
+        <field name="inherit_id" ref="base.view_country_form" />
+        <field name="arch" type="xml">
+            <xpath expr="//group" position="inside">
+                <group string="POS Phone Validation">
+                    <field name="pos_phone_length" />
+                    <field name="pos_phone_format" />
+                </group>
+            </xpath>
+        </field>
+    </record>
+</odoo>

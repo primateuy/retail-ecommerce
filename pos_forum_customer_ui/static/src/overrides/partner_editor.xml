@@ -1,0 +1,176 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates id="template" xml:space="preserve">
+    <t t-name="pos_forum_customer_ui.PartnerDetailsEdit">
+        <section class="partner-details edit d-flex flex-column m-3">
+            <div class="container">
+                    <div class="partner-details-header d-flex pe-2 gap-2 align-items-center">
+                        <div class="partner-picture position-relative rounded text-center overflow-hidden">
+                            <t t-if="partnerImageUrl">
+                                <img class="rounded" t-att-src="partnerImageUrl" alt="Partner" style="width: 64px; height: 64px; object-fit: cover;" />
+                            </t>
+                            <t t-else="">
+                                <i class="fa fa-camera" role="img" aria-label="Picture" title="Picture"></i>
+                            </t>
+                            <input type="file" class="image-uploader" t-on-change="uploadImage" />
+                        </div>
+                        <img t-attf-class="fa {{changes.is_company ? 'fa-building' : 'fa-user'}} fa-3x partner_is_company"
+                            t-on-click="toggleIsCompany" />
+                        <input t-if="changes.is_company" class="detail partner-name form-control form-control-lg"
+                            t-model="changes.name" name="name" placeholder="Nombre" />
+                    </div>
+
+                    <!-- PERSONA -->
+                    <div class="partner-details-box row row-cols-1 row-cols-sm-2 gy-3 mt-3" t-if="!changes.is_company">
+                        <div class="partner-detail col">
+                            <label class="form-label label" for="doc_type_person">Tipo de documento</label>
+                            <select class="detail form-select" id="doc_type_person" name="l10n_latam_identification_type_id" t-model="changes.l10n_latam_identification_type_id" t-att="{'disabled': isFieldCommercialAndPartnerIsChild('l10n_latam_identification_type_id')}">
+                                <option value="">Seleccione</option>
+                                <t t-foreach="identificationTypes" t-as="doc" t-key="doc.id">
+                                    <option t-att-value="doc.id">
+                                        <t t-esc="doc.name" />
+                                    </option>
+                                </t>
+                            </select>
+                        </div>
+                        <div class="partner-detail col d-flex align-items-end gap-2">
+                            <div class="flex-grow-1">
+                                <label class="form-label label" for="vat_person">Numero de documento</label>
+                                <input class="detail form-control" id="vat_person" name="vat" t-model="changes.vat" placeholder="Numero de documento" t-att="{'disabled': isFieldCommercialAndPartnerIsChild('vat')}" t-on-change="onVatChange" />
+                            </div>
+                            <button class="btn btn-secondary" t-on-click="consultRut">Consultar RUT</button>
+                        </div>
+                        <div t-if="partnerFirstnameEnabled">
+                            <div class="partner-detail col">
+                                <label class="form-label label" for="firstname">Nombre de pila</label>
+                                <input class="detail form-control" id="firstname" name="firstname" t-model="changes.firstname" placeholder="Nombre de pila" />
+                            </div>
+                            <div class="partner-detail col">
+                                <label class="form-label label" for="lastname">Apellido</label>
+                                <input class="detail form-control" id="lastname" name="lastname" t-model="changes.lastname" placeholder="Apellido" />
+                            </div>
+                        </div>
+                        <div t-if="!partnerFirstnameEnabled">
+                            <div class="partner-detail col">
+                                <label class="form-label label" for="name_person">Nombre</label>
+                                <input class="detail form-control" id="name_person" name="name" t-model="changes.name" placeholder="Nombre" />
+                            </div>
+                        </div>
+                        <div class="partner-detail col">
+                            <label class="form-label label" for="birthdate_date">Fecha de nacimiento</label>
+                            <input class="detail form-control" id="birthdate_date" name="birthdate_date" t-model="changes.birthdate_date" type="date" />
+                        </div>
+                        <div class="partner-detail col">
+                            <label class="form-label label" for="email_person">Correo electronico</label>
+                            <input class="detail form-control" id="email_person" name="email" t-model="changes.email" placeholder="Correo electronico" t-att="{'disabled': isFieldCommercialAndPartnerIsChild('email')}" />
+                        </div>
+                        <div class="partner-detail col">
+                            <label class="form-label label" for="mobile_person"><t t-esc="mobileLabel" /></label>
+                            <input class="detail form-control" id="mobile_person" name="mobile" t-model="changes.mobile" t-att-placeholder="phonePlaceholder" t-att="{'disabled': isFieldCommercialAndPartnerIsChild('mobile')}" t-on-change="onMobileChange" />
+                        </div>
+                        <div class="partner-detail col">
+                            <label class="form-label label" for="phone_person"><t t-esc="phoneLabel" /></label>
+                            <input class="detail form-control" id="phone_person" name="phone" t-model="changes.phone" t-att-placeholder="phonePlaceholder" t-att="{'disabled': isFieldCommercialAndPartnerIsChild('phone')}" t-on-change="onPhoneChange" />
+                        </div>
+                        <div class="partner-detail col">
+                            <label class="form-label label" for="state_person">Departamento</label>
+                            <select class="detail form-select" id="state_person" name="state_id" t-model="changes.state_id" t-att="{'disabled': isFieldCommercialAndPartnerIsChild('state_id')}">
+                                <option value="">Seleccione</option>
+                                <t t-foreach="pos.states" t-as="state" t-key="state.id">
+                                    <option t-if="changes.country_id == state.country_id[0]" t-att-value="state.id">
+                                        <t t-esc="state.name" />
+                                    </option>
+                                </t>
+                            </select>
+                        </div>
+                        <div class="partner-detail col">
+                            <label class="form-label label" for="country_person">Pais</label>
+                            <select class="detail form-select" id="country_person" name="country_id" t-model="changes.country_id" t-att="{'disabled': isFieldCommercialAndPartnerIsChild('country_id')}">
+                                <option value="">Seleccione</option>
+                                <t t-foreach="pos.countries" t-as="country" t-key="country.id">
+                                    <option t-att-value="country.id">
+                                        <t t-esc="country.name" />
+                                    </option>
+                                </t>
+                            </select>
+                        </div>
+                        <div class="partner-detail col">
+                            <label class="form-label label" for="street_person">Calle</label>
+                            <input class="detail form-control" id="street_person" name="street" t-model="changes.street" placeholder="Calle" t-att="{'disabled': isFieldCommercialAndPartnerIsChild('street')}" />
+                        </div>
+                        <div class="partner-detail col">
+                            <label class="form-label label" for="city_person">Ciudad</label>
+                            <input class="detail form-control" id="city_person" name="city" t-model="changes.city" placeholder="Ciudad" t-att="{'disabled': isFieldCommercialAndPartnerIsChild('city')}" />
+                        </div>
+                    </div>
+
+                    <!-- EMPRESA -->
+                    <div class="partner-details-box row row-cols-1 row-cols-sm-2 gy-3 mt-3" t-if="changes.is_company">
+                        <div class="partner-detail col">
+                            <label class="form-label label" for="doc_type_company">Tipo de documento</label>
+                            <select class="detail form-select" id="doc_type_company" name="l10n_latam_identification_type_id" t-model="changes.l10n_latam_identification_type_id" t-att="{'disabled': isFieldCommercialAndPartnerIsChild('l10n_latam_identification_type_id')}">
+                                <option value="">Seleccione</option>
+                                <t t-foreach="identificationTypes" t-as="doc" t-key="doc.id">
+                                    <option t-att-value="doc.id">
+                                        <t t-esc="doc.name" />
+                                    </option>
+                                </t>
+                            </select>
+                        </div>
+                        <div class="partner-detail col d-flex align-items-end gap-2">
+                            <div class="flex-grow-1">
+                                <label class="form-label label" for="vat_company">Numero de documento</label>
+                                <input class="detail form-control" id="vat_company" name="vat" t-model="changes.vat" placeholder="Numero de documento" t-att="{'disabled': isFieldCommercialAndPartnerIsChild('vat')}" t-on-change="onVatChange" />
+                            </div>
+                            <button class="btn btn-secondary" t-on-click="consultRut">Consultar RUT</button>
+                        </div>
+                        <div class="partner-detail col">
+                            <label class="form-label label" for="social_reason">Razon social</label>
+                            <input class="detail form-control" id="social_reason" name="social_reason" t-model="changes.social_reason" placeholder="Razon social" t-att="{'disabled': isFieldCommercialAndPartnerIsChild('social_reason')}" />
+                        </div>
+                        <div class="partner-detail col">
+                            <label class="form-label label" for="email_company">Correo electronico</label>
+                            <input class="detail form-control" id="email_company" name="email" t-model="changes.email" placeholder="Correo electronico" t-att="{'disabled': isFieldCommercialAndPartnerIsChild('email')}" />
+                        </div>
+                        <div class="partner-detail col">
+                            <label class="form-label label" for="mobile_company"><t t-esc="mobileLabel" /></label>
+                            <input class="detail form-control" id="mobile_company" name="mobile" t-model="changes.mobile" t-att-placeholder="phonePlaceholder" t-att="{'disabled': isFieldCommercialAndPartnerIsChild('mobile')}" t-on-change="onMobileChange" />
+                        </div>
+                        <div class="partner-detail col">
+                            <label class="form-label label" for="phone_company"><t t-esc="phoneLabel" /></label>
+                            <input class="detail form-control" id="phone_company" name="phone" t-model="changes.phone" t-att-placeholder="phonePlaceholder" t-att="{'disabled': isFieldCommercialAndPartnerIsChild('phone')}" t-on-change="onPhoneChange" />
+                        </div>
+                        <div class="partner-detail col">
+                            <label class="form-label label" for="state_company">Departamento</label>
+                            <select class="detail form-select" id="state_company" name="state_id" t-model="changes.state_id" t-att="{'disabled': isFieldCommercialAndPartnerIsChild('state_id')}">
+                                <option value="">Seleccione</option>
+                                <t t-foreach="pos.states" t-as="state" t-key="state.id">
+                                    <option t-if="changes.country_id == state.country_id[0]" t-att-value="state.id">
+                                        <t t-esc="state.name" />
+                                    </option>
+                                </t>
+                            </select>
+                        </div>
+                        <div class="partner-detail col">
+                            <label class="form-label label" for="country_company">Pais</label>
+                            <select class="detail form-select" id="country_company" name="country_id" t-model="changes.country_id" t-att="{'disabled': isFieldCommercialAndPartnerIsChild('country_id')}">
+                                <option value="">Seleccione</option>
+                                <t t-foreach="pos.countries" t-as="country" t-key="country.id">
+                                    <option t-att-value="country.id">
+                                        <t t-esc="country.name" />
+                                    </option>
+                                </t>
+                            </select>
+                        </div>
+                        <div class="partner-detail col">
+                            <label class="form-label label" for="street_company">Calle</label>
+                            <input class="detail form-control" id="street_company" name="street" t-model="changes.street" placeholder="Calle" t-att="{'disabled': isFieldCommercialAndPartnerIsChild('street')}" />
+                        </div>
+                        <div class="partner-detail col">
+                            <label class="form-label label" for="city_company">Ciudad</label>
+                            <input class="detail form-control" id="city_company" name="city" t-model="changes.city" placeholder="Ciudad" t-att="{'disabled': isFieldCommercialAndPartnerIsChild('city')}" />
+                        </div>
+                    </div>
+            </div>
+        </section>
+    </t>
+</templates>
