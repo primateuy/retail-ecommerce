@@ -1,6 +1,5 @@
 <odoo>
     <data>
-        <!-- Vista form -->
         <record id="business_hours_view_form" model="ir.ui.view">
             <field name="name">business.hours.view.form</field>
             <field name="model">business.hours</field>
@@ -20,7 +19,6 @@
             </field>
         </record>
 
-        <!-- Vista tree -->
         <record id="business_hours_views_tree" model="ir.ui.view">
             <field name="name">business.hours.views.tree</field>
             <field name="model">business.hours</field>
@@ -34,7 +32,6 @@
             </field>
         </record>
 
-        <!-- Vista action -->
         <record id="business_hours_view_action" model="ir.actions.act_window">
             <field name="name">business.hours.view.action</field>
             <field name="res_model">business.hours</field>

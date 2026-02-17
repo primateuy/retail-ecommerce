@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+
+        <record id="mp_payment_transaction_view_form" model="ir.ui.view">
+            <field name="name">mp.payment.transaction.form</field>
+            <field name="model">mp.payment.transaction</field>
+            <field name="arch" type="xml">
+                <form string="Transaccion de Pago MP" create="false" edit="false">
+                    <sheet>
+                        <group>
+                            <group string="Informacion">
+                                <field name="name"/>
+                                <field name="amount"/>
+                                <field name="pos_order_id"/>
+                                <field name="company_id"/>
+                                <field name="create_date"/>
+                            </group>
+                            <group string="Pago">
+                                <field name="payment_id"/>
+                                <field name="payment_method_id"/>
+                                <field name="provider_id"/>
+                            </group>
+                        </group>
+                    </sheet>
+                </form>
+            </field>
+        </record>
+
+        <record id="mp_payment_transaction_view_tree" model="ir.ui.view">
+            <field name="name">mp.payment.transaction.tree</field>
+            <field name="model">mp.payment.transaction</field>
+            <field name="arch" type="xml">
+                <tree string="Transacciones de Pago MP" create="false">
+                    <field name="name"/>
+                    <field name="pos_order_id"/>
+                    <field name="amount"/>
+                    <field name="company_id"/>
+                    <field name="payment_method_id"/>
+                    <field name="create_date"/>
+                </tree>
+            </field>
+        </record>
+
+        <record id="mp_payment_transaction_action" model="ir.actions.act_window">
+            <field name="name">Transacciones</field>
+            <field name="res_model">mp.payment.transaction</field>
+            <field name="view_mode">tree,form</field>
+        </record>
+
+    </data>
+</odoo>

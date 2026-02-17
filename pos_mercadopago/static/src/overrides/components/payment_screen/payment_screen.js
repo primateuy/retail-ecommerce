@@ -92,16 +92,17 @@ export class PaymentMercadoPagoQR extends PaymentMercadoPago {
                 this.orderToPaid = JSON.parse(order);
                 
                 const foundImg = document.querySelector(".right-content img#qr_code_pos");
-                // Creamos el elemento de la imagen
-                const img = document.createElement("img");
-                const buttonAcept = document.createElement("button");
-                const buttonCancel = document.createElement("button");
                 const self = this;
+                const position = document.querySelector(".right-content");
+
+                // Reutilizar o crear elementos
+                let img = foundImg || document.createElement("img");
+                let buttonAcept = document.querySelector(".right-content button#validate-btn") || document.createElement("button");
+                let buttonCancel = document.querySelector(".right-content button#delete-order-btn") || document.createElement("button");
 
                 if (!foundImg) {
                     img.className = "m-5 d-flex";
                     img.id = "qr_code_pos";
-                    img.src = this.pos.qr_type == 'static' ? this.pos.store_till.qr_url : this.orderToPaid.data.qr_data;
                     img.width = "200";
                     img.height = "200";
 
@@ -111,89 +112,59 @@ export class PaymentMercadoPagoQR extends PaymentMercadoPago {
 
                     buttonCancel.className = "btn btn-danger mx-3 py-2 px-3";
                     buttonCancel.textContent = "Eliminar Orden";
-                    
+                    buttonCancel.id = "delete-order-btn";
 
-                    // Buscamos el lugar donde integrar el QR
-                    const position = document.querySelector(".right-content");
                     position.appendChild(img);
                     position.appendChild(buttonAcept);
                     position.appendChild(buttonCancel);
-
-                }else{
-                    img.src = this.pos.qr_type == 'static' ? this.pos.store_till.qr_url : this.orderToPaid.data.qr_data;
                 }
 
-                buttonAcept.onclick = async (e) => {
-                    e.target.disabled=true;
-                    const btnDelete = document.querySelector(".right-content button#delete-order-btn");
+                img.src = this.pos.qr_type == 'static' ? this.pos.store_till.qr_url : this.orderToPaid.data.qr_data;
 
-                    if (btnDelete) {
-                        btnDelete.disabled = true;
-                    }
-                    // Obtenemos informacion de la caja
+                buttonAcept.onclick = async (e) => {
+                    e.target.disabled = true;
+                    buttonCancel.disabled = true;
+
                     const result = await self.env.services.orm.searchRead(
                         "pos.order",
-                        [["id","=", self.orderToPaid["pos.order"]["id"]]]
+                        [["id", "=", self.orderToPaid["pos.order"]["id"]]]
                     );
 
-                    // Enviamos la alerta 
                     if (result[0].state == "draft") {
-                        if (btnDelete) {
-                            btnDelete.disabled = false;
-                        }
-                        e.target.disabled=false;
+                        buttonCancel.disabled = false;
+                        e.target.disabled = false;
                         return self._showMsg(
                             "La orden aun sigue sin recibir el pago",
                             "| Comprobacion del Pago"
                         )
                     }
-                    
-                    // Mostramos la siguiente pantalla
+
                     self.pos.showScreen("ReceiptScreen");
                 };
-                if (self.pos.qr_type == 'static') {
-                    
-                    let buttonCancel = document.querySelector(".right-content button#delete-order-btn");
 
-                    if (!buttonCancel) {
-                        buttonCancel = document.createElement("button");
-                        buttonCancel.className = "btn btn-danger mx-3 py-2 px-3";
-                        buttonCancel.textContent = "Eliminar Orden";
-                        buttonCancel.id="delete-order-btn";
-                    }
-                    
-                    buttonCancel.onclick = async (e) => {
-                        e.target.disabled=true;
-                        const btnValidate = document.querySelector(".right-content button#validate-btn");
-                        
-                        if (btnValidate) {
-                            btnValidate.disabled = true;
+                buttonCancel.onclick = async (e) => {
+                    e.target.disabled = true;
+                    buttonAcept.disabled = true;
+
+                    const result = await self.pos.orm.rpc(
+                        "/pos/delete-order",
+                        {
+                            external_id: self.pos.store_till.external_id,
+                            user_id: self.pos.store_till.user_id_mp,
+                            session_id: self.pos.pos_session.id,
+                            order_id: self.orderToPaid["pos.order"]["id"]
                         }
-                        
-                        // Obtenemos informacion de la caja
-                        const result = await self.pos.orm.rpc(
-                            "/pos/delete-order",
-                            { 
-                                external_id: this.pos.store_till.external_id,
-                                user_id: this.pos.store_till.user_id_mp,
-                                session_id: this.pos.pos_session.id,
-                                order_id: self.orderToPaid["pos.order"]["id"]
-                            }
-                        );
-                        
-                        // Enviamos la alerta 
-                        if (JSON.parse(result).error == false) {
-                            const position = document.querySelector(".right-content");
-                            position.removeChild(buttonCancel);
-                            position.removeChild(buttonAcept);
-                            position.removeChild(img);
-                        }
+                    );
+
+                    if (JSON.parse(result).error == false) {
+                        position.removeChild(buttonCancel);
+                        position.removeChild(buttonAcept);
+                        position.removeChild(img);
+                    } else {
+                        e.target.disabled = false;
+                        buttonAcept.disabled = false;
                     }
-                    if (!buttonCancel) {
-                        const position = document.querySelector(".right-content");
-                        position.appendChild(buttonCancel);
-                    }
-                }
+                };
 
             } catch (error) {
                 console.error("Hubo un error al buscar la configuracion");

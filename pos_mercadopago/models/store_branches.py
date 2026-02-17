@@ -21,28 +21,34 @@ class StoreBranches(models.Model):
     mp_store_branch_id = fields.Integer()
 
     # Location
-    street_number = fields.Char(required=True)
-    street_name = fields.Char(required=True)
-    city_name = fields.Char(required=True)
-    state_name = fields.Char(required=True)
-    latitude = fields.Char(required=True)
-    longitude = fields.Char(required=True)
-    reference = fields.Char(required=True)
+    street_number = fields.Char()
+    street_name = fields.Char()
+    city_name = fields.Char()
+    state_name = fields.Char()
+    latitude = fields.Char()
+    longitude = fields.Char()
+    reference = fields.Char()
+
+    # Application
+    application_id = fields.Many2one(
+        'mercado_pago.applications',
+        string='Application',
+    )
 
     # Store tills
     store_tills_ids = fields.One2many(
-        'store.tills', 
+        'store.tills',
         'store_branch_id',
         required=True
     )
 
-    # Sobrescribimos el metodo de creacion
     @api.model
     def create(self, values):
         result = super().create(values)
-        result.write({
-            "external_id": result.generate_external_id()
-        })
+        if not self.env.context.get('skip_external_id') and not values.get('external_id'):
+            result.write({
+                "external_id": result.generate_external_id()
+            })
         return result
 
     # Generamos el id externo
@@ -85,15 +91,21 @@ class StoreBranches(models.Model):
             _logger.info(str(e))
             raise ValidationError(_("Ha ocurrido un error al crear la sucursal"))
 
-    # Obtener la url para la creacion de la sucursal
     def get_endpoint_route(self):
-        return f"https://api.mercadopago.com/users/{self.env.ref('pos_mercadopago.user_id_mercado_pago_conf').sudo().value}/stores"
+        if self.application_id:
+            user_id = self.application_id.user_id
+        else:
+            user_id = self.env.ref('pos_mercadopago.user_id_mercado_pago_conf').sudo().value
+        return f"https://api.mercadopago.com/users/{user_id}/stores"
 
-    # Obtener los headers para la peticion de la creacion de la tienda
     def get_endpoint_headers(self):
+        if self.application_id:
+            token = self.application_id.access_token
+        else:
+            token = self.env.ref('pos_mercadopago.access_token_mercado_pago_conf').sudo().value
         return {
             "Content-Type": "application/json",
-            "Authorization": f"Bearer {self.env.ref('pos_mercadopago.access_token_mercado_pago_conf').sudo().value}",
+            "Authorization": f"Bearer {token}",
         }
 
     # Obtener el body que sera enviado en la peticion para crear la sucursal
