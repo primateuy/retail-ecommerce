@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="hr_employee_view_form_pos_permissions" model="ir.ui.view">
+        <field name="name">hr.employee.form.pos.permissions</field>
+        <field name="model">hr.employee</field>
+        <field name="inherit_id" ref="hr.view_employee_form" />
+        <field name="arch" type="xml">
+            <xpath expr="//notebook" position="inside">
+                <page string="POS Permissions">
+                    <group>
+                        <group string="Control Buttons">
+                            <field name="pos_allow_refund_button" />
+                            <field name="pos_allow_pricelist_button" />
+                            <field name="pos_allow_customer_note_button" />
+                            <field name="pos_allow_discount_button" />
+                            <field name="pos_allow_salesperson_button" />
+                            <field name="pos_allow_z_report_button" />
+                            <field name="pos_allow_quotation_button" />
+                        </group>
+                        <group string="Loyalty Buttons">
+                            <field name="pos_allow_ewallet_button" />
+                            <field name="pos_allow_promo_code_button" />
+                            <field name="pos_allow_reward_button" />
+                            <field name="pos_allow_reset_programs_button" />
+                        </group>
+                        <group string="Numpad Controls">
+                            <field name="pos_allow_numpad_discount" />
+                            <field name="pos_allow_numpad_price" />
+                        </group>
+                    </group>
+                </page>
+            </xpath>
+        </field>
+    </record>
+</odoo>
