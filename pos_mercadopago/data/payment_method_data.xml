@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo noupdate="1">
+    <record id="payment_method_mercado_pago" model="payment.method">
+        <field name="name">Mercado Pago</field>
+        <field name="code">mercado_pago</field>
+        <field name="sequence">1000</field>
+        <field name="active">True</field>
+        <field name="image" type="base64" file="pos_mercadopago/static/img/mercadopago.png"/>
+        <field name="support_tokenization">False</field>
+        <field name="support_express_checkout">False</field>
+        <field name="supported_country_ids"
+            eval="[Command.set([
+                ref('base.ar'),
+                ref('base.br'),
+                ref('base.cl'),
+                ref('base.co'),
+                ref('base.mx'),
+                ref('base.pe'),
+                ref('base.uy'),
+            ])]"
+        />
+        <field name="supported_currency_ids"
+            eval="[Command.set([
+                ref('base.ARS'),
+                ref('base.BRL'),
+                ref('base.CLP'),
+                ref('base.COP'),
+                ref('base.MXN'),
+                ref('base.PEN'),
+                ref('base.UYU'),
+            ])]"
+        />
+    </record>
+</odoo>
