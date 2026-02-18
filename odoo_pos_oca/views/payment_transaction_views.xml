@@ -41,7 +41,8 @@
                     </group>
                     <notebook string="Información Detallada OCA" name="oca_detailed_info" invisible="provider_code != 'oca'">
                         <page string="Respuesta Completa del POS" name="oca_complete_response">
-                            <field name="oca_complete_response" readonly="1" widget="ace" options="{'mode': 'json'}"/>
+                            <!-- mode 'js': CodeEditor en Odoo 17 solo acepta js|xml|qweb|scss|python; JSON se visualiza correctamente con js -->
+                            <field name="oca_complete_response" readonly="1" widget="ace" options="{'mode': 'js'}"/>
                         </page>
                     </notebook>
                 </xpath>

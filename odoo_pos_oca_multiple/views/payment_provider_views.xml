@@ -16,7 +16,7 @@
                 </group>
             </group>
             <xpath expr="//notebook" position="inside">
-                <page string="Configuracion Multiple POS" name="multiple_pos_config" groups="base.group_no_one" invisible="is_multiple != True">
+                <page string="Configuracion Multiple POS" name="multiple_pos_config" invisible="is_multiple != True">
                     <group>
                         <group>
                             <field name="multiple_pos_ids" mode="tree">
