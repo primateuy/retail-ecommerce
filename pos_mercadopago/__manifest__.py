@@ -1,6 +1,6 @@
 {
     "name": "POS MercadoPago Integration",
-    "version": "17.0.1.0.12",
+    "version": "17.0.1.0.13",
     "author": "Tu Nombre / Empresa",
     "category": "Point of Sale",
     "depends": ["base","payment_mercado_pago","pos_mercado_pago"],
@@ -12,7 +12,7 @@
         "security/branch_manager/ir.model.access.csv",
         "data/ir_config_parameters.xml",
         "data/ir_cron.xml",
-        "data/account_payment_method_data.xml",
+        "data/payment_method_data.xml",
         "views/res_config_settings_views.xml",
         "views/ir_config_parameter_views.xml",
         "views/pos_mercado_pago_views.xml",
