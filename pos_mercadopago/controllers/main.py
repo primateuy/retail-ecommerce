@@ -31,7 +31,16 @@ class MercadoPagoController(http.Controller):
                         json.dumps({ "error": True, "message": "Hubo un error al buscar el pago" }),
                         status=200
                     )
-                
+
+                # Verificamos que el pago este aprobado
+                payment_status = payment.get("status")
+                if payment_status != "approved":
+                    _logger.info("Notificacion de pago recibida con status '%s', ignorando (payment_id: %s)", payment_status, merchant_order_id)
+                    return Response(
+                        json.dumps({ "error": False, "message": f"Pago con status '{payment_status}', no se procesa" }),
+                        status=200
+                    )
+
                 # Asignamos la referencia externa de la orden
                 external_reference = payment["external_reference"]
             
@@ -80,6 +89,21 @@ class MercadoPagoController(http.Controller):
                 # })]
             })
 
+            # Creamos la transaccion de pago de Mercado Pago
+            try:
+                mp_provider = request.env['payment.provider'].sudo().search([('code', '=', 'mercado_pago')], limit=1)
+                mp_payment_method = request.env.ref('pos_mercadopago.payment_method_mercado_pago', raise_if_not_found=False)
+                request.env['mp.payment.transaction'].sudo().create({
+                    'name': payment.get('external_reference', external_reference),
+                    'payment_method_id': mp_payment_method.id if mp_payment_method else False,
+                    'provider_id': mp_provider.id if mp_provider else False,
+                    'company_id': order.company_id.id,
+                    'amount': payment.get('transaction_amount', 0),
+                    'pos_order_id': order.id,
+                })
+            except Exception as e:
+                _logger.error("Error al crear mp.payment.transaction: %s", str(e))
+
             # Retornamos que todo bien
             return Response(
                 json.dumps({ "error": False, "message": f"Pago realizado correctamente, Factura pagada: {external_reference}" }),
@@ -91,11 +115,22 @@ class MercadoPagoController(http.Controller):
             status=200
         )
         
-    # Metodo para obtener los headers
-    def get_headers(self):
+    def _get_access_token(self, order=None):
+        if order:
+            till = order.session_id.config_id.mp_tills
+            if till and till.store_branch_id.application_id:
+                return till.store_branch_id.application_id.access_token
+        # Fallback: buscar la primera app disponible
+        app = request.env['mercado_pago.applications'].sudo().search([], limit=1)
+        if app:
+            return app.access_token
+        # Ultimo fallback: config global
+        return request.env.ref('pos_mercadopago.access_token_mercado_pago_conf').sudo().value
+
+    def get_headers(self, order=None):
         return {
             "Content-Type": "application/json",
-            "Authorization": f"Bearer {request.env.ref('pos_mercadopago.access_token_mercado_pago_conf').sudo().value}",
+            "Authorization": f"Bearer {self._get_access_token(order)}",
         }
 
     # Metodo para verificar el pago de una factura
@@ -308,7 +343,7 @@ class MercadoPagoController(http.Controller):
             order = request.env['pos.order'].sudo().search([("id","=",kwards["order_id"])],limit=1)
             order.state = 'cancel'
             # Obtenemos los headers
-            headers = self.get_headers()
+            headers = self.get_headers(order=order)
             delete_url = f"https://api.mercadopago.com/instore/qr/seller/collectors/{kwards['user_id']}/pos/{kwards['external_id']}/orders"
             response = requests.delete(delete_url, headers=headers)
             return json.dumps({

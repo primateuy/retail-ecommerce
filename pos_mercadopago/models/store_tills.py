@@ -44,14 +44,13 @@ class StoreTills(models.Model):
 
     @api.model
     def create(self, values):
-        # Create the record
         result = super().create(values)
-        result.write({
-            "external_id": result.generate_external_id()
-        })
-        # Create pos in mercado pago
-        result.create_pos_mercado_pago()
-
+        if not self.env.context.get('skip_mp_create'):
+            if not values.get('external_id'):
+                result.write({
+                    "external_id": result.generate_external_id()
+                })
+            result.create_pos_mercado_pago()
         return result
     
     # Methods
@@ -95,11 +94,15 @@ class StoreTills(models.Model):
     def get_endpoint_url(self):
         return "https://api.mercadopago.com/pos"
 
-    # Get headers
     def get_endpoint_headers(self):
+        app = self.store_branch_id.application_id
+        if app:
+            token = app.access_token
+        else:
+            token = self.env.ref('pos_mercadopago.access_token_mercado_pago_conf').sudo().value
         return {
             "Content-Type": "application/json",
-            "Authorization": f"Bearer {self.env.ref('pos_mercadopago.access_token_mercado_pago_conf').sudo().value}",
+            "Authorization": f"Bearer {token}",
         }
 
     # Get data point of sale
@@ -199,11 +202,15 @@ class StoreTills(models.Model):
     def get_create_qr_tramma_mp_endpoint(self):
         return f"https://api.mercadopago.com/instore/orders/qr/seller/collectors/{self.user_id_mp}/pos/{self.external_id}/qrs"
     
-    # Get headers to create an order mercado pago endpoint
     def get_headers_create_order_mp(self):
+        app = self.store_branch_id.application_id
+        if app:
+            token = app.access_token
+        else:
+            token = self.env.ref('pos_mercadopago.access_token_mercado_pago_conf').sudo().value
         return {
             "Content-Type": "application/json",
-            "Authorization": f"Bearer {self.env.ref('pos_mercadopago.access_token_mercado_pago_conf').sudo().value}",
+            "Authorization": f"Bearer {token}",
             "X-Ttl-Store-Preference": "300"
         }
     

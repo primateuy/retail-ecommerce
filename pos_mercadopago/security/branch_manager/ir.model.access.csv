@@ -3,3 +3,5 @@ access_group_branch_manager_pos_mercado_pago_model,branch.manager.pos.mercado.pa
 access_group_branch_manager_store_branches,branch.manager.store.branches.group.user,model_store_branches,pos_mercadopago.branch_manager_mercado_pago,1,1,1,1
 access_group_branch_manager_business_hours,branch.manager.business.hours.group.user,model_business_hours,pos_mercadopago.branch_manager_mercado_pago,1,1,1,1
 access_group_branch_manager_store_tills,branch.manager.store.tills.group.user,model_store_tills,pos_mercadopago.branch_manager_mercado_pago,1,1,1,1
+access_group_branch_manager_mercado_pago_applications,branch.manager.mercado_pago.applications.group.user,model_mercado_pago_applications,pos_mercadopago.branch_manager_mercado_pago,1,1,1,1
+access_group_branch_manager_mp_payment_transaction,branch.manager.mp.payment.transaction.group.user,model_mp_payment_transaction,pos_mercadopago.branch_manager_mercado_pago,1,1,1,1

@@ -1,6 +1,5 @@
 <odoo>
     <data>
-        <!-- Vista form -->
         <record id="pos_mercado_pago_view_form" model="ir.ui.view">
             <field name="name">pos.mercado.pago.form</field>
             <field name="model">point.of.sales.mercado.pago</field>
@@ -25,7 +24,6 @@
             </field>
         </record>
 
-        <!-- Vista tree -->
         <record id="pos_mercado_pago_view_tree" model="ir.ui.view">
             <field name="name">pos.mercado.pago.tree</field>
             <field name="model">point.of.sales.mercado.pago</field>
@@ -38,7 +36,6 @@
             </field>
         </record>
 
-        <!-- Vista action -->
         <record id="pos_mercado_pago_view_action" model="ir.actions.act_window">
             <field name="name">Point of sales - Mercado Pago</field>
             <field name="res_model">point.of.sales.mercado.pago</field>

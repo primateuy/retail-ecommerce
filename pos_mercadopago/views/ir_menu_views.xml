@@ -9,6 +9,13 @@
             />
 
         <menuitem
+            id="mercado_pago_applications_menu"
+            name="Aplicaciones"
+            action="mercado_pago_applications_action"
+            parent="pos_mercado_pago_menu"
+            sequence="5"/>
+
+        <menuitem
             id="store_branches_menu"
             name="Store Branches"
             action="store_branches_views_action"
@@ -21,6 +28,13 @@
             action="store_tills_views_action"
             parent="pos_mercado_pago_menu"
             sequence="20"/>
+
+        <menuitem
+            id="mp_payment_transaction_menu"
+            name="Transacciones"
+            action="mp_payment_transaction_action"
+            parent="pos_mercado_pago_menu"
+            sequence="25"/>
 
         <menuitem
             id="mercadopago_configuration_menu"

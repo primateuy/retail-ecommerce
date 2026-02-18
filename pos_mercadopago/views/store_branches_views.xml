@@ -1,6 +1,5 @@
 <odoo>
     <data>
-        <!-- Vista Form -->
         <record id="store_branches_views_form" model="ir.ui.view">
             <field name="name">store.branches.views.form</field>
             <field name="model">store.branches</field>
@@ -89,7 +88,6 @@
             </field>
         </record>
 
-        <!-- Vista tree -->
         <record id="store_branches_views_tree" model="ir.ui.view">
             <field name="name">store.branches.tree</field>
             <field name="model">store.branches</field>
@@ -102,7 +100,6 @@
             </field>
         </record>
 
-        <!-- Action -->
         <record id="store_branches_views_action" model="ir.actions.act_window">
             <field name="name">Store Branches</field>
             <field name="res_model">store.branches</field>
