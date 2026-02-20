@@ -107,6 +107,33 @@ class AccountMove(models.Model):
             record.ultimo_error_log = ultimo.texto if ultimo else False
 
     x_widget_dummy = fields.Char(string="Widget Dummy", compute='_compute_widget_dummy', store=False)
+
+    def _calcular_totales_iva(self):
+        pagoTotalSinIva = 0.0
+        pagoTotalConIva = 0.0
+
+        for linea in self.invoice_line_ids:
+            precio = linea.price_unit
+            cantidad = linea.quantity
+
+            if linea.tax_ids:
+                tasa_include = sum(tax.amount for tax in linea.tax_ids if tax.price_include)
+                tasa_exclude = sum(tax.amount for tax in linea.tax_ids if not tax.price_include)
+
+                if tasa_include > 0:
+                    base = (precio / (1 + tasa_include / 100.0)) * cantidad
+                    con_iva = precio * cantidad
+                else:
+                    base = precio * cantidad
+                    con_iva = base * (1 + tasa_exclude / 100.0)
+            else:
+                base = precio * cantidad
+                con_iva = base
+
+            pagoTotalSinIva += base
+            pagoTotalConIva += con_iva
+
+        return round(pagoTotalSinIva, 2), round(pagoTotalConIva, 2)
     
     def _compute_widget_dummy(self):
         for record in self:
@@ -497,26 +524,7 @@ class AccountMove(models.Model):
         pagoTotalConIva = 0.0
         distribucion_sin_iva = {}  # Para guardar montos sin IVA por método
 
-        for linea in self.invoice_line_ids:
-            _logger.info("Línea: %s - Cantidad: %s - Precio Unitario: %s", linea.name, linea.quantity, linea.price_unit)
-            
-            subtotal = linea.quantity * linea.price_unit
-            
-            # Calcular impuestos
-            if linea.tax_ids:
-                tasa_impuesto = sum(tax.amount for tax in linea.tax_ids)
-                subtotal_con_iva = subtotal * (1 + (tasa_impuesto / 100.0))
-            else:
-                subtotal_con_iva = subtotal
-            
-            _logger.info("Subtotal sin IVA: %s - Subtotal con IVA: %s", subtotal, subtotal_con_iva)
-
-            pagoTotalSinIva += subtotal
-            pagoTotalConIva += subtotal_con_iva
-
-        _logger.info("=== TOTALES CALCULADOS ===")
-        _logger.info("Total sin IVA: %s", pagoTotalSinIva)
-        _logger.info("Total con IVA: %s", pagoTotalConIva)
+        pagoTotalSinIva, pagoTotalConIva = self._calcular_totales_iva()
 
         # Inicializar montos por tipo de pago
         monto_contado = 0.0
@@ -807,21 +815,7 @@ class AccountMove(models.Model):
         else:
             raise UserError("Tipo de método de pago no reconocido")
 
-        # Calcular totales
-        pagoTotalSinIva = 0.0
-        pagoTotalConIva = 0.0
-
-        for linea in self.invoice_line_ids:
-            subtotal = linea.quantity * linea.price_unit
-            
-            if linea.tax_ids:
-                tasa_impuesto = sum(tax.amount for tax in linea.tax_ids)
-                subtotal_con_iva = subtotal * (1 + (tasa_impuesto / 100.0))
-            else:
-                subtotal_con_iva = subtotal
-            
-            pagoTotalSinIva += subtotal
-            pagoTotalConIva += subtotal_con_iva
+        pagoTotalSinIva, pagoTotalConIva = self._calcular_totales_iva()
 
         # Montos por tipo de pago
         monto_contado = str(round(pagoTotalSinIva, 2)) if metodoPago.esContado() else '0'
@@ -1053,19 +1047,7 @@ class AccountMove(models.Model):
         pagoTotalSinIva = 0.0
         pagoTotalConIva = 0.0
 
-        for linea in lineas:
-            subtotal = linea.quantity * linea.price_unit
-            
-            # Calcular impuestos
-            if linea.tax_ids:
-                tasa_impuesto = sum(tax.amount for tax in linea.tax_ids)
-                subtotal_con_iva = subtotal * (1 + (tasa_impuesto / 100.0))
-            else:
-                subtotal_con_iva = subtotal
-            
-
-            pagoTotalSinIva += subtotal
-            pagoTotalConIva += subtotal_con_iva
+        pagoTotalSinIva, pagoTotalConIva = self._calcular_totales_iva()
 
         
 
@@ -1382,27 +1364,7 @@ class AccountMove(models.Model):
         if not metodosPago or len(metodosPago) == 0:
             raise UserError("Debe haber al menos un método de pago configurado")
         
-        # Calcular totales (sin IVA y con IVA)
-        pagoTotalSinIva = 0.0
-        pagoTotalConIva = 0.0
-
-        for linea in self.invoice_line_ids:
-            # En Odoo, price_unit está sin impuestos
-            subtotal_sin_iva = linea.quantity * linea.price_unit
-            
-            # Calcular impuesto
-            monto_impuesto = 0.0
-            if linea.tax_ids:
-                # Calcular el impuesto sobre la base (sin IVA)
-                for tax in linea.tax_ids:
-                    monto_impuesto += subtotal_sin_iva * (tax.amount / 100.0)
-            
-            subtotal_con_iva = subtotal_sin_iva + monto_impuesto
-            
-            _logger.info(f"Línea {linea.name}: Base={subtotal_sin_iva}, Impuesto={monto_impuesto}, Con IVA={subtotal_con_iva}")
-            
-            pagoTotalSinIva += subtotal_sin_iva
-            pagoTotalConIva += subtotal_con_iva
+        pagoTotalSinIva, pagoTotalConIva = self._calcular_totales_iva()
 
         
         monto_contado = 0.0
