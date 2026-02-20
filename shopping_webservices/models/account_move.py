@@ -1,4 +1,5 @@
 import random
+import pytz
 from datetime import datetime
 
 from psycopg2 import Date
@@ -11,7 +12,7 @@ import logging
 from zeep.helpers import serialize_object
 import requests;
 import json;
-from odoo.exceptions import UserError
+from odoo.exceptions import UserError, ValidationError
 
 _logger = logging.getLogger(__name__)
 
@@ -42,12 +43,18 @@ class AccountMove(models.Model):
         store=False
     )
     
-    @api.depends('journal_id', 'journal_id.tecnologia', 'journal_id.shopping_payment_method_ids')
+
+
+    
+
+    @api.depends('journal_id', 'journal_id.tecnologia', 'journal_id.shopping_payment_method_ids', 'state', 'estadoEnvio')
     def _compute_mostrar_botones_declaracion(self):
         for record in self:
             record.mostrar_botones_declaracion = (
-                record.journal_id.tecnologia and 
-                record.journal_id.shopping_payment_method_ids and not record.ventaEnviada
+                record.state == 'posted' and
+                record.journal_id.tecnologia and
+                record.journal_id.shopping_payment_method_ids and
+                not record.estadoEnvio == 'enviado'
             )
     
     @api.depends('payment_distribution', 'amount_total')
@@ -63,11 +70,17 @@ class AccountMove(models.Model):
             else:
                 record.payment_distribution_complete = False
 
-    ventaEnviada = fields.Boolean(
-        string="Venta Enviada al Shopping", 
-        default=False,
-        readonly=True,  # Solo se actualiza programáticamente
-        copy=False  # No se copia al duplicar
+    
+    estadoEnvio = fields.Selection(
+        [
+            ('enviado', 'Enviado'),
+            ('noenviado', 'No enviado'),
+            ('error', 'Error')
+        ],
+        string="Estado Envío",
+        default='noenviado',
+        readonly=True,
+        copy=False
     )
     metodoUnico = fields.Boolean(string="Método Único", default=True, compute="_computar_tipo_venta", store=True);
 
@@ -77,6 +90,22 @@ class AccountMove(models.Model):
         string="Logs de Ventas Declaradas"
     )
 
+    ultimo_error_log = fields.Text(
+        string="Ultimo error",
+        compute='_compute_ultimo_error_log',
+        store=False
+    )
+
+    @api.depends('logs', 'logs.estado', 'logs.texto', 'estadoEnvio')
+    def _compute_ultimo_error_log(self):
+        for record in self:
+            ultimo = record.env['ventas.log'].search(
+                [('account_move_id', '=', record.id), ('estado', '=', 'error')],
+                order='fecha_declaracion desc',
+                limit=1
+            )
+            record.ultimo_error_log = ultimo.texto if ultimo else False
+
     x_widget_dummy = fields.Char(string="Widget Dummy", compute='_compute_widget_dummy', store=False)
     
     def _compute_widget_dummy(self):
@@ -85,12 +114,44 @@ class AccountMove(models.Model):
 
     @api.depends('journal_id.shopping_payment_method_ids')
     def _computar_tipo_venta(self):
-        journal = self.journal_id;
+        journal = self.journal_id
 
         if journal.shopping_payment_method_ids and len(journal.shopping_payment_method_ids) == 1:
-            self.metodoUnico = True;
+            self.metodoUnico = True
         else:
-            self.metodoUnico = False;
+            self.metodoUnico = False
+
+    def _validar_distribucion_pagos(self):
+        for record in self:
+            if not record.journal_id.integracionShopping:
+                continue
+            metodos = record.journal_id.shopping_payment_method_ids
+            if len(metodos) <= 1:
+                continue
+            if not record.payment_distribution:
+                raise ValidationError(
+                    "El diario tiene multiples metodos de pago configurados. "
+                    "Debe asignar la distribucion de pagos antes de confirmar la factura."
+                )
+            try:
+                distribucion = json.loads(record.payment_distribution)
+                total_asignado = sum(p.get('amount', 0) for p in distribucion)
+                if abs(total_asignado - record.amount_total) >= 0.01:
+                    raise ValidationError(
+                        f"La distribucion de pagos ({total_asignado:.2f}) no coincide con el total "
+                        f"de la factura ({record.amount_total:.2f}). Revise los montos asignados."
+                    )
+            except ValidationError:
+                raise
+            except Exception:
+                raise ValidationError(
+                    "La distribucion de pagos tiene un formato invalido. Revise los valores ingresados."
+                )
+
+    def action_post(self):
+        self._validar_distribucion_pagos()
+        return super().action_post()
+
 
     def get_credentials(self):
         rut = self.env['res.company'].browse(self.journal_id.company_id.id).vat;
@@ -99,7 +160,7 @@ class AccountMove(models.Model):
         password = self.journal_id.password;
 
         if not rut or not password:
-            raise ValueError("Faltan credenciales del shopping")
+            raise ValidationError("Faltan credenciales del shopping, revisa el rut y la configuración del diario")
 
         return str(rut), str(password)
 
@@ -155,7 +216,7 @@ class AccountMove(models.Model):
         - Pertenecen a un diario con integración Shopping (integracionShopping = True)
         """
         ventas = self.env['account.move'].search([
-            ('ventaEnviada', '=', False), 
+            ('estadoEnvio', '=', 'noenviado'), 
             ('journal_id.integracionShopping', '=', True),
             ('state', '=', 'posted')  # Solo facturas confirmadas
         ])
@@ -184,10 +245,15 @@ class AccountMove(models.Model):
                 continue
 
 
+    def _now_uruguay(self):
+        """Retorna la fecha/hora actual en zona horaria de Uruguay (GMT-3)."""
+        tz_uruguay = pytz.timezone('America/Montevideo')
+        return datetime.now(tz_uruguay)
+
     def _format_fecha_emision_cfe(self):
         """
         Formatea la fecha de emisión del CFE al formato YYYY-MM-DD HH:MM
-        Si existe cfe_fecha_hora_firma, la usa. Si no, usa la fecha/hora actual.
+        Si existe cfe_fecha_hora_firma, la usa. Si no, usa la fecha/hora actual en GMT-3.
         
         Convierte formatos como: 2026-02-06T15:14:16.0000000-03:00 → 2026-02-06 15:14
         """
@@ -199,8 +265,8 @@ class AccountMove(models.Model):
         except (ValueError, AttributeError):
             pass
         
-        # Fallback: usar la fecha/hora actual
-        return fields.Datetime.now().strftime('%Y-%m-%d %H:%M')
+        # Fallback: usar la fecha/hora actual en hora Uruguay (GMT-3)
+        return self._now_uruguay().strftime('%Y-%m-%d %H:%M')
 
     
     def get_zeep_client(self, wsdl_url):
@@ -258,7 +324,42 @@ class AccountMove(models.Model):
         return client;
 
     def declararVentaVariosMetodosManual(self):
-        tipo = self.env['account.journal'].browse(self.journal_id.id).tecnologia;
+        if self.state != 'posted':
+            raise UserError("Solo se puede declarar una venta confirmada.")
+
+        if not self.payment_distribution:
+            self.env['ventas.log'].sudo().create({
+                'account_move_id': self.id,
+                'fecha_declaracion': fields.Datetime.now(),
+                'estado': 'error',
+                'texto': 'El diario tiene multiples metodos de pago configurados. Debe asignar la distribucion de pagos antes de confirmar la factura.'
+            })
+            self.write({'estadoEnvio': 'error'})
+            self.env.cr.commit()
+            raise ValidationError("El diario tiene multiples metodos de pago configurados. Debe asignar la distribucion de pagos antes de confirmar la factura.")
+
+        try:
+            distribucion = json.loads(self.payment_distribution)
+            total_asignado = sum(p.get('amount', 0) for p in distribucion)
+            if abs(total_asignado - self.amount_total) >= 0.01:
+                self.env['ventas.log'].sudo().create({
+                    'account_move_id': self.id,
+                    'fecha_declaracion': fields.Datetime.now(),
+                    'estado': 'error',
+                    'texto': f"La distribucion de pagos ({total_asignado:.2f}) no coincide con el total de la factura ({self.amount_total:.2f}). Revise los montos asignados."
+                })
+                self.write({'estadoEnvio': 'error'})
+                self.env.cr.commit()
+                raise ValidationError(
+                    f"La distribucion de pagos ({total_asignado:.2f}) no coincide con el total "
+                    f"de la factura ({self.amount_total:.2f}). Revise los montos asignados."
+                )
+        except ValidationError:
+            raise
+        except Exception:
+            raise ValidationError("La distribucion de pagos tiene un formato invalido. Revise los valores ingresados.")
+
+        tipo = self.env['account.journal'].browse(self.journal_id.id).tecnologia
 
         if not tipo or tipo == '':
             self.env['ventas.log'].sudo().create({
@@ -300,7 +401,42 @@ class AccountMove(models.Model):
             })
 
     def declararVentaVariosMetodos(self):
-        tipo = self.env['account.journal'].browse(self.journal_id.id).tecnologia;
+        if self.state != 'posted':
+            raise UserError("Solo se puede declarar una venta confirmada.")
+
+        if not self.payment_distribution:
+            self.env['ventas.log'].sudo().create({
+                'account_move_id': self.id,
+                'fecha_declaracion': fields.Datetime.now(),
+                'estado': 'error',
+                'texto': 'El diario tiene multiples metodos de pago configurados. Debe asignar la distribucion de pagos antes de confirmar la factura.'
+            })
+            self.write({'estadoEnvio': 'error'})
+            self.env.cr.commit()
+            raise ValidationError("El diario tiene multiples metodos de pago configurados. Debe asignar la distribucion de pagos antes de confirmar la factura.")
+
+        try:
+            distribucion = json.loads(self.payment_distribution)
+            total_asignado = sum(p.get('amount', 0) for p in distribucion)
+            if abs(total_asignado - self.amount_total) >= 0.01:
+                self.env['ventas.log'].sudo().create({
+                    'account_move_id': self.id,
+                    'fecha_declaracion': fields.Datetime.now(),
+                    'estado': 'error',
+                    'texto': f"La distribucion de pagos ({total_asignado:.2f}) no coincide con el total de la factura ({self.amount_total:.2f}). Revise los montos asignados."
+                })
+                self.write({'estadoEnvio': 'error'})
+                self.env.cr.commit()
+                raise ValidationError(
+                    f"La distribucion de pagos ({total_asignado:.2f}) no coincide con el total "
+                    f"de la factura ({self.amount_total:.2f}). Revise los montos asignados."
+                )
+        except ValidationError:
+            raise
+        except Exception:
+            raise ValidationError("La distribucion de pagos tiene un formato invalido. Revise los valores ingresados.")
+
+        tipo = self.env['account.journal'].browse(self.journal_id.id).tecnologia
 
         if not tipo or tipo == '':
             self.env['ventas.log'].sudo().create({
@@ -516,7 +652,9 @@ class AccountMove(models.Model):
                     _logger.info(f"Identificador: {identificador}")
                     
                     # Guardar que la venta fue enviada
-                    self.write({'ventaEnviada': True})
+                    self.write({
+                        'estadoEnvio': 'enviado'
+                    })
                     
                     self.env['ventas.log'].sudo().create({
                         'account_move_id': self.id,
@@ -591,6 +729,10 @@ class AccountMove(models.Model):
                         'texto': f'Error al procesar: {mensaje}'
                     })
 
+                    self.write({
+                        'estadoEnvio': 'error'
+                    })
+
                     self.env.cr.commit()
                     
                     raise UserError(f"Error al procesar la venta (Estado {estado}): {mensaje}")
@@ -607,6 +749,10 @@ class AccountMove(models.Model):
                         'texto': f'Error al declarar la venta: {mensaje}'
                     })
 
+                    self.write({
+                        'estadoEnvio': 'error'
+                    })
+
                     self.env.cr.commit()
                     
                     raise UserError(f"Error al declarar la venta (Estado {estado}): {mensaje}")
@@ -614,6 +760,9 @@ class AccountMove(models.Model):
                 raise UserError("Respuesta del servicio web no válida")
 
         except Exception as e:
+            self.write({
+                'estadoEnvio': 'error'
+            })
             _logger.error("Error completo: %s", str(e), exc_info=True)
             raise
         
@@ -621,7 +770,10 @@ class AccountMove(models.Model):
         """
         Declara una venta con un único método de pago en Costa Urbana
         """
-        url = 'http://ventas.costaurbana.com.uy/soap/NodumLocales/services/forms/v1.3/wsDeclaVtas?wsdl'
+        url = self.journal_id.url;
+
+        if not url:
+            raise ValidationError("No hay url configurada.")
         
         client = self.get_zeep_client(url)
         _logger.info("Cliente Zeep creado exitosamente para Costa Urbana - Método único")
@@ -699,12 +851,12 @@ class AccountMove(models.Model):
                     dt = datetime.fromisoformat(self.cfe_fecha_hora_firma)
                     hora_transferencia = dt.strftime('%H:%M')
                 except (ValueError, AttributeError):
-                    hora_transferencia = fields.Datetime.now().strftime('%H:%M')
+                    hora_transferencia = self._now_uruguay().strftime('%H:%M')
             else:
-                hora_transferencia = fields.Datetime.now().strftime('%H:%M')        
+                hora_transferencia = self._now_uruguay().strftime('%H:%M')
 
             request_data = {
-                'wsDeclaVtas': {
+                'wsDeclaVtas2': {
                     'General': {
                         'Cab': {
                             'NumeroRUT': rut,
@@ -723,7 +875,10 @@ class AccountMove(models.Model):
                             'CodigoFormaPago': codigoFormaPago,
                             'FechaTransferencia': fecha_transferencia,
                             'Horatransferencia': hora_transferencia,
-                            'CantidadCuotas': '1'
+                            'CantidadCuotas': '1',
+                            'Total1': '0',
+                            'Total2': '0',
+                            'Total3': '0',
                         },
                         'Det': {
                             'CodRubro': codigoRubro,
@@ -735,6 +890,8 @@ class AccountMove(models.Model):
                     }
                 }
             }
+
+            _logger.info("REQUEST: %s", request_data)
 
 
             response = client.service.procesarAlta(**request_data)
@@ -749,7 +906,9 @@ class AccountMove(models.Model):
 
                 if estado == 0:
                     
-                    self.write({'ventaEnviada': True})
+                    self.write({
+                        'estadoEnvio': 'enviado'
+                    })
                     
                     # Incrementar secuencial en el diario
                     self.journal_id.write({'secuencial_ventas': secuencial + 1})
@@ -778,6 +937,10 @@ class AccountMove(models.Model):
                         'texto': f'Venta pre-grabada en Costa Urbana. ID: {identificador}'
                     })
 
+                    self.write({
+                        'estadoEnvio': 'error'
+                    })
+
                     self.env.cr.commit()
                     
                     return {
@@ -803,6 +966,10 @@ class AccountMove(models.Model):
                         'texto': f'Error en Costa Urbana (Estado {estado}): {mensaje}'
                     })
 
+                    self.write({
+                        'estadoEnvio': 'error'
+                    })
+
                     self.env.cr.commit()
                     
                     raise UserError(f"Error al declarar la venta en Costa Urbana (Estado {estado}): {mensaje}")
@@ -819,6 +986,10 @@ class AccountMove(models.Model):
                         'texto': f'Error al declarar venta en Costa Urbana: {mensaje}'
                     })
 
+                    self.write({
+                        'estadoEnvio': 'error'
+                    })
+
                     self.env.cr.commit()
                     
                     raise UserError(f"Error al declarar venta en Costa Urbana: {mensaje}")
@@ -827,6 +998,19 @@ class AccountMove(models.Model):
 
         except Exception as e:
             _logger.error("Error completo Costa Urbana: %s", str(e), exc_info=True)
+
+            self.env['ventas.log'].create({
+                'account_move_id': self.id,
+                'fecha_declaracion': fields.Datetime.now(),
+                'estado': 'error',
+                'texto': f'Error al declarar venta en Costa Urbana: {str(e)}'
+            })
+
+            self.write({
+                'estadoEnvio': 'error'
+            })
+
+            self.env.cr.commit()
             raise
 
 
@@ -952,8 +1136,9 @@ class AccountMove(models.Model):
                     _logger.info("=== DECLARACIÓN EXITOSA ===")
                     _logger.info(f"Identificador: {identificador}")
                     
-                    # Guardar que la venta fue enviada
-                    self.write({'ventaEnviada': True})
+                    self.write({
+                        'estadoEnvio': 'enviado'
+                    })
                     
 
                     self.env['ventas.log'].sudo().create({
@@ -980,6 +1165,10 @@ class AccountMove(models.Model):
                         'texto': f'Venta pre-grabada. ID: {identificador}'
                     })
 
+                    self.write({
+                        'estadoEnvio': 'error'
+                    })
+
                     self.env.cr.commit();
                     
                     return {
@@ -1004,6 +1193,10 @@ class AccountMove(models.Model):
                             'texto': f'Error al grabar: {mensaje}'
                         })
 
+                        self.write({
+                            'estadoEnvio': 'error'
+                        })
+
                         self.env.cr.commit();
 
                         _logger.info(f"Log creado con ID: {log.id}");
@@ -1024,10 +1217,14 @@ class AccountMove(models.Model):
                         'fecha_declaracion': fields.Datetime.now(),
                         'estado': 'error',
                         'texto': f'Error al procesar: {mensaje}'
+                    })  
+
+                    self.write({
+                        'estadoEnvio': 'error'
                     })
 
                     self.env.cr.commit();
-                    
+
                     raise UserError(f"Error al procesar la venta (Estado {estado}): {mensaje}")
 
                 else:
@@ -1042,6 +1239,10 @@ class AccountMove(models.Model):
                         'texto': f'Error al declarar la venta: {mensaje}'
                     })
 
+                    self.write({
+                        'estadoEnvio': 'error'
+                    })
+
                     self.env.cr.commit();
                     
                     raise UserError(f"Error al declarar la venta (Estado {estado}): {mensaje}")
@@ -1050,10 +1251,25 @@ class AccountMove(models.Model):
 
         except Exception as e:
             _logger.error("Error completo: %s", str(e), exc_info=True)
+
+            self.env['ventas.log'].create({
+                'account_move_id': self.id,
+                'fecha_declaracion': fields.Datetime.now(),
+                'estado': 'error',
+                'texto': f'Error al declarar la venta: {str(e)}'
+            })
+
+            self.write({
+                'estadoEnvio': 'error'
+            })
+
+            self.env.cr.commit()
             raise
 
     def declararVentaUnicoMetodo(self):
-        tipo = self.env['account.journal'].browse(self.journal_id.id).tecnologia;
+        if self.state != 'posted':
+            raise UserError("Solo se puede declarar una venta confirmada.")
+        tipo = self.env['account.journal'].browse(self.journal_id.id).tecnologia
 
         if not tipo or tipo == '':
             self.env['ventas.log'].sudo().create({
@@ -1082,7 +1298,9 @@ class AccountMove(models.Model):
         return;
 
     def declararVentaUnicoMetodoManual(self):
-        tipo = self.env['account.journal'].browse(self.journal_id.id).tecnologia;
+        if self.state != 'posted':
+            raise UserError("Solo se puede declarar una venta confirmada.")
+        tipo = self.env['account.journal'].browse(self.journal_id.id).tecnologia
 
         if not tipo or tipo == '':
             self.env['ventas.log'].sudo().create({
@@ -1135,7 +1353,14 @@ class AccountMove(models.Model):
         """
         Declara una venta con múltiples métodos de pago en Costa Urbana usando wsDeclaVtas2
         """
-        url = 'http://ventas.costaurbana.com.uy/soap/NodumLocales/services/forms/v1.3/wsDeclaVtas2?wsdl'
+        url = self.journal_id.url;
+
+        _logger.info(f"URL A UTILIZAR => {url}")
+
+        if not url:
+
+
+            raise ValidationError("No hay url configurada.")
         
         client = self.get_zeep_client(url)
         _logger.info("Cliente Zeep creado exitosamente para Costa Urbana - Múltiples métodos")
@@ -1179,16 +1404,11 @@ class AccountMove(models.Model):
             pagoTotalSinIva += subtotal_sin_iva
             pagoTotalConIva += subtotal_con_iva
 
-        _logger.info("=== TOTALES CALCULADOS COSTA URBANA ===")
-        _logger.info("Total sin IVA: %s", pagoTotalSinIva)
-        _logger.info("Total con IVA: %s", pagoTotalConIva)
-
-        # Inicializar montos por tipo de pago
+        
         monto_contado = 0.0
         monto_credito = 0.0
         monto_debito = 0.0
 
-        # Obtener distribución de pagos
         try:
             distribuido = json.loads(self.payment_distribution) if self.payment_distribution else []
         except:
@@ -1202,8 +1422,6 @@ class AccountMove(models.Model):
             _logger.info("Total distribuido (CON IVA): %s vs Total factura (CON IVA): %s", 
                         total_distribuido, pagoTotalConIva)
             
-            # Si la distribución no coincide con el total, usamos la distribución como porcentajes
-            # y recalculamos los montos sobre el total real
             if abs(total_distribuido - pagoTotalConIva) > 5.0:
                 _logger.warning("La distribución no coincide con el total. Recalculando proporcionalmente")
                 _logger.warning("Distribución suma: %s, Total factura: %s", total_distribuido, pagoTotalConIva)
@@ -1292,9 +1510,9 @@ class AccountMove(models.Model):
                     dt = datetime.fromisoformat(self.cfe_fecha_hora_firma)
                     hora_transferencia = dt.strftime('%H:%M')
                 except (ValueError, AttributeError):
-                    hora_transferencia = fields.Datetime.now().strftime('%H:%M')
+                    hora_transferencia = self._now_uruguay().strftime('%H:%M')
             else:
-                hora_transferencia = fields.Datetime.now().strftime('%H:%M')
+                hora_transferencia = self._now_uruguay().strftime('%H:%M')
 
             # Construir diccionario de cabecera
             cab_data = {
@@ -1421,7 +1639,9 @@ class AccountMove(models.Model):
                     _logger.info("=== DECLARACIÓN EXITOSA COSTA URBANA ===")
                     _logger.info(f"Identificador: {identificador}")
                     
-                    self.write({'ventaEnviada': True})
+                    self.write({
+                        'estadoEnvio': 'enviado'
+                    })
                     
                     self.journal_id.write({'secuencial_ventas': secuencial + 1})
 
@@ -1451,7 +1671,9 @@ class AccountMove(models.Model):
                     _logger.info(f"Identificador: {identificador}")
                     
                     self.journal_id.write({'secuencial_ventas': secuencial + 1})
-                    
+                    self.write({
+                        'estadoEnvio': 'error'
+                    })
                     self.env['ventas.log'].create({
                         'account_move_id': self.id,
                         'fecha_declaracion': fields.Datetime.now(),
@@ -1484,6 +1706,10 @@ class AccountMove(models.Model):
                         'texto': f'Error en Costa Urbana (Estado {estado}): {mensaje}'
                     })
 
+                    self.write({
+                        'estadoEnvio': 'error'
+                    })
+
                     self.env.cr.commit()
                     
                     raise UserError(f"Error al declarar venta en Costa Urbana (Estado {estado}): {mensaje}")
@@ -1500,6 +1726,10 @@ class AccountMove(models.Model):
                         'texto': f'Error al declarar venta en Costa Urbana: {mensaje}'
                     })
 
+                    self.write({
+                        'estadoEnvio': 'error'
+                    })
+
                     self.env.cr.commit()
                     
                     raise UserError(f"Error al declarar venta en Costa Urbana: {mensaje}")
@@ -1508,6 +1738,19 @@ class AccountMove(models.Model):
 
         except Exception as e:
             _logger.error("Error completo Costa Urbana: %s", str(e), exc_info=True)
+
+            self.env['ventas.log'].create({
+                'account_move_id': self.id,
+                'fecha_declaracion': fields.Datetime.now(),
+                'estado': 'error',
+                'texto': f'Error al declarar venta en Costa Urbana: {str(e)}'
+            })
+
+            self.write({
+                'estadoEnvio': 'error'
+            })
+
+            self.env.cr.commit()
             raise
             # """
             # Declara una venta con múltiples métodos de pago (crédito, débito, contado)
@@ -2063,9 +2306,9 @@ class AccountMove(models.Model):
         rut = self.env['res.company'].browse(self.journal_id.company_id.id).vat
         
         try:
-            fecha_emision = fields.Datetime.now()
-            fecha_str = fecha_emision.isoformat()  # Formato: 2026-01-30T15:30:45.123456
-            fecha_transferencia = fields.Date.today().isoformat()  # Formato: 2026-01-30
+            fecha_emision = self._now_uruguay()
+            fecha_str = fecha_emision.isoformat()  # Formato: 2026-01-30T15:30:45.123456-03:00
+            fecha_transferencia = fecha_emision.strftime('%Y-%m-%d')  # Formato: 2026-01-30 en hora Uruguay
             hora_transferencia = fecha_emision.strftime('%H:%M')
 
             request_data = {

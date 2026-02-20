@@ -12,10 +12,14 @@
 
                     
                     <group>
-                        <field name="ventaEnviada" readonly="1"/>
+                        <field name="estadoEnvio" readonly="1"/>
                         <field name="payment_distribution" invisible="1"/>
                         <!-- <field name="homologacion"/> -->
                         
+                    </group>
+
+                    <group invisible="estadoEnvio != 'error'">
+                        <field name="ultimo_error_log" readonly="1" string="Ultimo error"/>
                     </group>
                     
                     
