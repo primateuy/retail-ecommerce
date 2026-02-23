@@ -13,10 +13,17 @@ class ResPartner(models.Model):
     def _check_pos_phone_format(self):
         """
         Valida el formato de telefono segun configuracion del pais.
+        Solo se ejecuta cuando el guardado proviene del POS (context from_pos
+        o pos_session_id), para no afectar clientes creados/editados en backend.
+        Considera codigo de pais: se valida la parte nacional del numero.
 
         Raises:
             ValidationError: Si el telefono no cumple el formato o largo.
         """
+        # Ejecutar validacion solo cuando viene del POS
+        if not (self.env.context.get("from_pos") or self.env.context.get("pos_session_id")):
+            return
+
         for partner in self:
             # Saltar validacion si no hay pais configurado
             if not partner.country_id:
@@ -30,18 +37,35 @@ class ResPartner(models.Model):
             if not phone_regex and not phone_length:
                 continue
 
+            # Codigo de pais para normalizar numero (quitar prefijo antes de validar)
+            phone_code = partner.country_id.phone_code
+            phone_code_str = str(phone_code) if phone_code else ""
+
             # Validar los campos de telefono relevantes
             for field_name in ["mobile", "phone"]:
                 value = getattr(partner, field_name) or ""
                 if not value:
                     continue
-                # Normalizar solo digitos para validar largo
+                # Normalizar a solo digitos y obtener parte nacional (sin codigo de pais)
                 digits_only = re.sub(r"\D", "", value)
-                if phone_length and len(digits_only) != phone_length:
+                if phone_code_str and digits_only.startswith(phone_code_str):
+                    national_digits = digits_only[len(phone_code_str) :]
+                else:
+                    national_digits = digits_only
+                # Validar longitud de la parte nacional
+                if phone_length and len(national_digits) != phone_length:
                     raise ValidationError(
                         _("Phone length must be %s digits for this country.") % phone_length
                     )
-                if phone_regex and not re.fullmatch(phone_regex, value):
+                # Obtener parte nacional para validar formato (quitar + y codigo pais)
+                national_value = value.strip()
+                if phone_code_str and national_value.startswith("+"):
+                    rest = national_value[1:].lstrip()
+                    if rest.startswith(phone_code_str):
+                        national_value = rest[len(phone_code_str) :].lstrip()
+                    else:
+                        national_value = rest
+                if phone_regex and not re.fullmatch(phone_regex, national_value):
                     raise ValidationError(
                         _("Phone format does not match the required pattern.")
                     )
@@ -182,3 +206,23 @@ class ResPartner(models.Model):
 
         # Retornar valores desde cache del registro en memoria
         return partner.read(fields_to_read)[0]
+
+    @api.model
+    def create_from_pos(self, vals):
+        """
+        Crea un partner desde el POS con contexto from_pos para que
+        la validacion de telefono se aplique y considere codigo de pais.
+        """
+        return self.with_context(from_pos=True).create(vals)
+
+    @api.model
+    def write_from_pos(self, partner_id, vals):
+        """
+        Actualiza un partner desde el POS con contexto from_pos para que
+        la validacion de telefono se aplique y considere codigo de pais.
+
+        Args:
+            partner_id (int): ID del partner a actualizar.
+            vals (dict): Valores a escribir.
+        """
+        return self.browse(partner_id).with_context(from_pos=True).write(vals)

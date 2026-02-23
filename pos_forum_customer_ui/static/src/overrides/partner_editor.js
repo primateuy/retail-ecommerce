@@ -45,6 +45,11 @@ patch(PartnerDetailsEdit.prototype, {
 
         // Aplicar valores por defecto para calle y ciudad cuando corresponde
         this._applyDefaultAddressValues();
+
+        // Guardar pais actual para detectar cambio de pais y prefijo telefonico
+        this._previousCountryId = this.changes.country_id;
+        // Si hay pais, asegurar que telefono/celular tengan prefijo con codigo de pais
+        this._applyCountryCodeToPhones();
     },
 
     _applyDefaultAddressValues() {
@@ -68,25 +73,62 @@ patch(PartnerDetailsEdit.prototype, {
         return Boolean(this.pos.partner_firstname_enabled);
     },
 
+    /**
+     * Tipos de documento disponibles en el POS (CI, RUT, OTROS, etc.).
+     * Se muestran todos los cargados para que el usuario pueda elegir cualquier tipo.
+     */
     get identificationTypes() {
-        // Obtener tipos de documento y filtrar por pais si aplica
-        const allTypes = this.pos.identification_types || [];
-        const countryId = this.changes.country_id;
-        if (!countryId) {
-            return allTypes;
+        return this.pos.identification_types || [];
+    },
+
+    /**
+     * Codigo de pais con + para prefijo telefonico (ej. +598).
+     * Se usa al cargar el formulario y al cambiar pais.
+     */
+    get countryPhoneCode() {
+        const country = this.pos.countries?.find((c) => c.id === this.changes.country_id);
+        const code = country?.phone_code;
+        if (code != null && code !== false && code !== "") {
+            return "+" + String(code);
         }
-        return allTypes.filter(
-            (item) => !item.country_id || item.country_id[0] === countryId
+        return "";
+    },
+
+    /**
+     * Muestra el boton Consultar RUT solo cuando el tipo de documento
+     * seleccionado es RUT/RUC (mismas condiciones que en backend).
+     * En Uruguay el tipo es "RUC" (code "2"); en otras localizaciones puede ser "it_rut".
+     * code en l10n_latam puede ser numero o string, por eso se fuerza a string.
+     */
+    get showConsultRutButton() {
+        const typeId = this.changes.l10n_latam_identification_type_id;
+        if (!typeId) {
+            return false;
+        }
+        const idKey = typeof typeId === "number" ? typeId : parseInt(typeId, 10);
+        const docType = this.pos.identification_type_by_id?.[idKey];
+        if (!docType) {
+            return false;
+        }
+        const code = String(docType.code ?? "").toLowerCase().trim();
+        const name = String(docType.name ?? "").toLowerCase().trim();
+        return (
+            code === "it_rut" ||
+            code === "2" ||
+            name.includes("rut") ||
+            name.includes("ruc")
         );
     },
 
     get phonePlaceholder() {
-        // Retornar un placeholder basado en el formato configurado en el pais
+        // Placeholder con codigo de pais cuando esta definido (ej. +598 09x xxx xxx)
         const country = this.pos.countries?.find((c) => c.id === this.changes.country_id);
-        if (country && country.pos_phone_format) {
-            return country.pos_phone_format;
+        const format = country?.pos_phone_format || "09x xxx xxx";
+        const prefix = this.countryPhoneCode;
+        if (prefix) {
+            return `${prefix} ${format}`;
         }
-        return _t("09x xxx xxx");
+        return format;
     },
 
     get mobileLabel() {
@@ -122,12 +164,85 @@ patch(PartnerDetailsEdit.prototype, {
         this._validatePhoneValue(this.changes.phone, _t("Telefono"));
     },
 
+    /**
+     * Al cambiar el pais, actualizar prefijo de telefono/celular al nuevo codigo
+     * (comportamiento igual al backend).
+     * Se lee el nuevo pais desde ev.target.value porque t-model puede aun no
+     * haber actualizado this.changes.country_id cuando se dispara el evento.
+     */
+    onCountryChange(ev) {
+        // Leer nuevo pais del evento; si no hay evento, usar el ya actualizado en changes
+        const rawNew =
+            ev?.target?.value !== undefined && ev?.target?.value !== ""
+                ? ev.target.value
+                : this.changes.country_id;
+        const newCountryId = rawNew != null ? parseInt(String(rawNew), 10) : null;
+        const oldCountryId = this._previousCountryId;
+        this._previousCountryId = newCountryId;
+
+        const oldCountry = this.pos.countries?.find((c) => c.id === oldCountryId);
+        const newCountry = this.pos.countries?.find((c) => c.id === newCountryId);
+        const oldCode = oldCountry?.phone_code != null ? String(oldCountry.phone_code) : "";
+        const newCode = newCountry?.phone_code != null ? String(newCountry.phone_code) : "";
+        const newPrefix = newCode ? "+" + newCode : "";
+
+        const updatePhoneWithNewPrefix = (value) => {
+            if (!value) {
+                return newPrefix;
+            }
+            const digits = (value || "").replace(/\D/g, "");
+            if (!digits) {
+                return newPrefix;
+            }
+            // Quitar codigo del pais anterior si estaba al inicio
+            let national = digits;
+            if (oldCode && digits.startsWith(oldCode)) {
+                national = digits.slice(oldCode.length);
+            }
+            return newPrefix ? newPrefix + national : national;
+        };
+
+        const newMobile = updatePhoneWithNewPrefix(this.changes.mobile);
+        const newPhone = updatePhoneWithNewPrefix(this.changes.phone);
+        this.changes.mobile = newMobile;
+        this.changes.phone = newPhone;
+    },
+
+    /**
+     * Al cargar el formulario: si hay pais con codigo, prefijar telefono/celular
+     * con +codigo (ej. +598) cuando esten vacios o no tengan ya el prefijo.
+     */
+    _applyCountryCodeToPhones() {
+        const prefix = this.countryPhoneCode;
+        if (!prefix) {
+            return;
+        }
+        for (const field of ["mobile", "phone"]) {
+            const value = this.changes[field];
+            if (value == null || value === false || value === "") {
+                this.changes[field] = prefix;
+                continue;
+            }
+            const digits = String(value).replace(/\D/g, "");
+            if (!digits) {
+                this.changes[field] = prefix;
+                continue;
+            }
+            const code = prefix.replace("+", "");
+            if (!digits.startsWith(code)) {
+                this.changes[field] = prefix + digits;
+            }
+        }
+    },
+
     _getCountryPhoneConfig() {
-        // Obtener configuracion de telefono del pais seleccionado
+        // Obtener configuracion de telefono del pais seleccionado (incluye codigo para validacion)
         const country = this.pos.countries?.find((c) => c.id === this.changes.country_id);
+        const code = country?.phone_code != null ? String(country.phone_code) : "";
         return {
             length: country?.pos_phone_length || 0,
             format: country?.pos_phone_format || "",
+            phoneCode: code,
         };
     },
 
@@ -151,27 +266,56 @@ patch(PartnerDetailsEdit.prototype, {
         return new RegExp(`^${regexParts.join("")}$`);
     },
 
+    /**
+     * Valida formato y longitud del telefono considerando codigo de pais.
+     * Retorna true si es valido, false si es invalido (y muestra popup).
+     */
     _validatePhoneValue(value, label) {
-        // Validar formato y longitud del telefono
-        if (!value) {
-            return;
+        const { length, format, phoneCode } = this._getCountryPhoneConfig();
+        // Si no hay valor pero el pais exige telefono, se valida en campos obligatorios
+        if (!value || (value || "").trim() === "") {
+            return true;
         }
-        const { length, format } = this._getCountryPhoneConfig();
         const digitsOnly = (value || "").replace(/\D/g, "");
-        if (length && digitsOnly.length !== length) {
+        // Parte nacional: quitar codigo de pais al inicio si esta presente
+        let nationalDigits = digitsOnly;
+        if (phoneCode && digitsOnly.startsWith(phoneCode)) {
+            nationalDigits = digitsOnly.slice(phoneCode.length);
+        }
+        if (length && nationalDigits.length !== length) {
             this._showValidationError(
                 _t("Invalid Phone"),
                 _t("%s must be %s digits.", label, length)
             );
-            return;
+            return false;
         }
-        const regex = this._buildPhoneRegex(format);
-        if (regex && !regex.test(value)) {
+        // Si el pais tiene codigo pero no longitud configurada, exigir al menos 8 digitos nacionales
+        if (phoneCode && (value || "").trim() && nationalDigits.length < 8 && !length) {
             this._showValidationError(
                 _t("Invalid Phone"),
-                _t("%s format does not match the required pattern.", label)
+                _t("%s must have at least 8 digits after the country code.", label)
             );
+            return false;
         }
+        const regex = this._buildPhoneRegex(format);
+        if (regex) {
+            let nationalValue = (value || "").trim();
+            if (nationalValue.startsWith("+")) {
+                nationalValue = nationalValue.slice(1).trim();
+                if (phoneCode) {
+                    const reCode = new RegExp("^" + phoneCode.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\s*");
+                    nationalValue = nationalValue.replace(reCode, "").trim();
+                }
+            }
+            if (nationalValue && !regex.test(nationalValue)) {
+                this._showValidationError(
+                    _t("Invalid Phone"),
+                    _t("%s format does not match the required pattern.", label)
+                );
+                return false;
+            }
+        }
+        return true;
     },
 
     async _validateVatValue(vatValue) {
@@ -298,6 +442,14 @@ patch(PartnerDetailsEdit.prototype, {
             delete this.changes.lastname;
         }
 
+        // Validar telefono y celular antes de guardar (muestra popup si estan mal)
+        if (!this._validatePhoneValue(this.changes.mobile, _t("Celular"))) {
+            return;
+        }
+        if (!this._validatePhoneValue(this.changes.phone, _t("Telefono"))) {
+            return;
+        }
+
         // Validar campos obligatorios
         const missing = [];
         if (!this.changes.email) {
@@ -311,6 +463,24 @@ patch(PartnerDetailsEdit.prototype, {
         }
         if (!this.changes.l10n_latam_identification_type_id) {
             missing.push(_t("Document Type"));
+        }
+        // Fecha de nacimiento obligatoria para personas (no para empresa)
+        if (!this.changes.is_company && !this.changes.birthdate_date) {
+            missing.push(_t("Date of Birth"));
+        }
+
+        // Fecha de nacimiento no puede ser futura
+        if (!this.changes.is_company && this.changes.birthdate_date) {
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const birth = new Date(this.changes.birthdate_date);
+            if (birth > today) {
+                this._showValidationError(
+                    _t("Invalid Date"),
+                    _t("Date of birth cannot be in the future.")
+                );
+                return;
+            }
         }
 
         if (missing.length) {
@@ -356,7 +526,8 @@ patch(PartnerDetailsEdit.prototype, {
             this.changes.birthdate_date = false;
         }
 
-        // Ejecutar guardado estándar
+        // Delegar en el guardado estandar del POS para que cierre el popup y actualice
+        // la lista de clientes. Nuestras validaciones ya se ejecutaron arriba.
         return super.saveChanges(...arguments);
     },
 });

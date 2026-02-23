@@ -37,7 +37,7 @@
                                 <label class="form-label label" for="vat_person">Numero de documento</label>
                                 <input class="detail form-control" id="vat_person" name="vat" t-model="changes.vat" placeholder="Numero de documento" t-att="{'disabled': isFieldCommercialAndPartnerIsChild('vat')}" t-on-change="onVatChange" />
                             </div>
-                            <button class="btn btn-secondary" t-on-click="consultRut">Consultar RUT</button>
+                            <button class="btn btn-secondary" t-if="showConsultRutButton" t-on-click="consultRut">Consultar RUT</button>
                         </div>
                         <div t-if="partnerFirstnameEnabled">
                             <div class="partner-detail col">
@@ -56,8 +56,8 @@
                             </div>
                         </div>
                         <div class="partner-detail col">
-                            <label class="form-label label" for="birthdate_date">Fecha de nacimiento</label>
-                            <input class="detail form-control" id="birthdate_date" name="birthdate_date" t-model="changes.birthdate_date" type="date" />
+                            <label class="form-label label" for="birthdate_date">Fecha de nacimiento <span class="text-danger">*</span></label>
+                            <input class="detail form-control" id="birthdate_date" name="birthdate_date" t-model="changes.birthdate_date" type="date" required="required" />
                         </div>
                         <div class="partner-detail col">
                             <label class="form-label label" for="email_person">Correo electronico</label>
@@ -84,7 +84,7 @@
                         </div>
                         <div class="partner-detail col">
                             <label class="form-label label" for="country_person">Pais</label>
-                            <select class="detail form-select" id="country_person" name="country_id" t-model="changes.country_id" t-att="{'disabled': isFieldCommercialAndPartnerIsChild('country_id')}">
+                            <select class="detail form-select" id="country_person" name="country_id" t-model="changes.country_id" t-on-change="onCountryChange" t-att="{'disabled': isFieldCommercialAndPartnerIsChild('country_id')}">
                                 <option value="">Seleccione</option>
                                 <t t-foreach="pos.countries" t-as="country" t-key="country.id">
                                     <option t-att-value="country.id">
@@ -121,7 +121,7 @@
                                 <label class="form-label label" for="vat_company">Numero de documento</label>
                                 <input class="detail form-control" id="vat_company" name="vat" t-model="changes.vat" placeholder="Numero de documento" t-att="{'disabled': isFieldCommercialAndPartnerIsChild('vat')}" t-on-change="onVatChange" />
                             </div>
-                            <button class="btn btn-secondary" t-on-click="consultRut">Consultar RUT</button>
+                            <button class="btn btn-secondary" t-if="showConsultRutButton" t-on-click="consultRut">Consultar RUT</button>
                         </div>
                         <div class="partner-detail col">
                             <label class="form-label label" for="social_reason">Razon social</label>
@@ -152,7 +152,7 @@
                         </div>
                         <div class="partner-detail col">
                             <label class="form-label label" for="country_company">Pais</label>
-                            <select class="detail form-select" id="country_company" name="country_id" t-model="changes.country_id" t-att="{'disabled': isFieldCommercialAndPartnerIsChild('country_id')}">
+                            <select class="detail form-select" id="country_company" name="country_id" t-model="changes.country_id" t-on-change="onCountryChange" t-att="{'disabled': isFieldCommercialAndPartnerIsChild('country_id')}">
                                 <option value="">Seleccione</option>
                                 <t t-foreach="pos.countries" t-as="country" t-key="country.id">
                                     <option t-att-value="country.id">

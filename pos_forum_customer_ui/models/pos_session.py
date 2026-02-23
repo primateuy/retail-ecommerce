@@ -90,8 +90,8 @@ class PosSession(models.Model):
             and "fields" in result["search_params"]
             and isinstance(result["search_params"]["fields"], list)
         ):
-            # Agregar campos de validacion si no existen
-            extra_fields = ["pos_phone_length", "pos_phone_format"]
+            # Agregar campos de validacion y codigo de pais para telefono
+            extra_fields = ["pos_phone_length", "pos_phone_format", "phone_code"]
             for field_name in extra_fields:
                 if field_name not in result["search_params"]["fields"]:
                     result["search_params"]["fields"].append(field_name)

@@ -77,30 +77,50 @@ patch(ProductScreen.prototype, {
         return Boolean(cashier[fieldName]);
     },
 
+    /**
+     * Devuelve los botones del Numpad aplicando permisos del cajero.
+     * Igual que pos_access_right_hr: no se eliminan botones (evita romper el layout),
+     * sino que se marca disabled en los que el empleado no tiene permiso.
+     */
     getNumpadButtons() {
-        // Obtener botones del numpad desde el comportamiento base
         const buttons = originalGetNumpadButtons.call(this);
 
-        // Mantener comportamiento por defecto si POS HR no esta activo
         if (!this.pos.config.module_pos_hr) {
             return buttons;
         }
 
-        // Si no hay cajero, mantener comportamiento por defecto
         const cashier = this.pos.get_cashier?.();
         if (!cashier || !cashier.id) {
             return buttons;
         }
 
-        // Filtrar botones segun permisos configurados en el empleado
-        return buttons.filter((button) => {
-            if (button.value === "discount" && !cashier.pos_allow_numpad_discount) {
-                return false;
+        // Aplicar permisos como en pos_access_right_hr: mantener todos los botones
+        // y usar disabled en lugar de filtrar, para no romper la vista del Numpad.
+        return buttons.map((button) => {
+            let disabled = button.disabled;
+            if (button.value === "discount") {
+                disabled = disabled || !cashier.pos_allow_numpad_discount;
+            } else if (button.value === "price") {
+                disabled = disabled || !cashier.pos_allow_numpad_price;
             }
-            if (button.value === "price" && !cashier.pos_allow_numpad_price) {
-                return false;
-            }
-            return true;
+            return { ...button, disabled };
         });
+    },
+
+    /**
+     * Bloquea el cambio a modo descuento o precio por teclado/atajo cuando el cajero
+     * no tiene permiso (mismo criterio que pos_access_right_hr).
+     */
+    async updateSelectedOrderline({ buffer, key }) {
+        const cashier = this.pos?.get_cashier?.();
+        if (this.pos.config.module_pos_hr && cashier?.id) {
+            if (key === "discount" && !cashier.pos_allow_numpad_discount) {
+                return;
+            }
+            if (key === "price" && !cashier.pos_allow_numpad_price) {
+                return;
+            }
+        }
+        return super.updateSelectedOrderline(...arguments);
     },
 });
