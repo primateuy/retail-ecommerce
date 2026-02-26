@@ -1,0 +1,105 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+
+        <record id="fenicio_log_view_tree" model="ir.ui.view">
+            <field name="name">fenicio.log.tree</field>
+            <field name="model">fenicio.log</field>
+            <field name="arch" type="xml">
+                <tree decoration-danger="estado == 'error'"
+                      decoration-success="estado == 'ok'"
+                      default_order="fecha desc">
+                    <field name="fecha" string="Fecha y Hora" width="160"/>
+                    <field name="estado" widget="badge"
+                           decoration-danger="estado == 'error'"
+                           decoration-success="estado == 'ok'"
+                           width="100"/>
+                    <field name="endpoint" width="140"/>
+                    <field name="request_preview" string="Detalle Request" />
+                    <field name="company_id" groups="base.group_multi_company" width="120"/>
+                </tree>
+            </field>
+        </record>
+
+        <record id="fenicio_log_view_form" model="ir.ui.view">
+            <field name="name">fenicio.log.form</field>
+            <field name="model">fenicio.log</field>
+            <field name="arch" type="xml">
+                <form string="Log Fenicio" create="false" edit="false">
+                    <sheet>
+                        <group>
+                            <group>
+                                <field name="fecha" string="Fecha y Hora"/>
+                                <field name="estado" widget="badge"
+                                       decoration-danger="estado == 'error'"
+                                       decoration-success="estado == 'ok'"/>
+                            </group>
+                            <group>
+                                <field name="endpoint"/>
+                                <field name="company_id" groups="base.group_multi_company"/>
+                            </group>
+                        </group>
+                        
+                        <notebook>
+                            <page string="Request (JSON)" name="request_page">
+                                <field name="request_pretty" readonly="1" widget="text"
+                                       style="font-family: monospace; font-size: 12px; background: #f8f9fa; padding: 12px; border-radius: 6px; white-space: pre;"/>
+                            </page>
+                            <page string="Respuesta (JSON)" name="response_page">
+                                <field name="mensaje_pretty" readonly="1" widget="text"
+                                       style="font-family: monospace; font-size: 12px; background: #f1f8ff; padding: 12px; border-radius: 6px; white-space: pre;"/>
+                            </page>
+                        </notebook>
+                    </sheet>
+                </form>
+            </field>
+        </record>
+
+        <record id="fenicio_log_view_search" model="ir.ui.view">
+            <field name="name">fenicio.log.search</field>
+            <field name="model">fenicio.log</field>
+            <field name="arch" type="xml">
+                <search string="Buscar Logs">
+                    <field name="request" string="Request"/>
+                    <field name="endpoint" string="Endpoint"/>
+                    <separator/>
+                    <filter string="Exitosos" name="exitosos" domain="[('estado','=','ok')]"/>
+                    <filter string="Errores"  name="errores"  domain="[('estado','=','error')]"/>
+                    <separator/>
+                    <filter string="Hoy" name="hoy"
+                            domain="[('fecha','&gt;=', (datetime.date.today()).strftime('%Y-%m-%d 00:00:00'))]"/>
+                    <group expand="0" string="Agrupar por">
+                        <filter string="Estado"   name="group_estado" context="{'group_by': 'estado'}"/>
+                        <filter string="Endpoint" name="group_endpoint" context="{'group_by': 'endpoint'}"/>
+                        <filter string="Día"      name="group_dia"    context="{'group_by': 'fecha:day'}"/>
+                        <filter string="Compañía" name="group_company" context="{'group_by': 'company_id'}"
+                                groups="base.group_multi_company"/>
+                    </group>
+                </search>
+            </field>
+        </record>
+
+        <record id="fenicio_log_action" model="ir.actions.act_window">
+            <field name="name">Logs de Integración</field>
+            <field name="res_model">fenicio.log</field>
+            <field name="view_mode">tree,form</field>
+            <field name="search_view_id" ref="fenicio_log_view_search"/>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">
+                    No hay logs registrados todavía.
+                </p>
+            </field>
+        </record>
+        <menuitem id="fenicio_menu_root"
+                  name="Fenicio"
+                  sequence="90"
+                  web_icon="odoo_fenicio,static/description/icon.png"/>
+
+        <menuitem id="fenicio_menu_logs"
+                  name="Logs de Integración"
+                  parent="fenicio_menu_root"
+                  action="fenicio_log_action"
+                  sequence="10"/>
+
+    </data>
+</odoo>
