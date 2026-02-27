@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates id="template" xml:space="preserve">
+    <t t-name="pos_forum_payment_constraints.input_readonly" t-inherit="point_of_sale.input" t-inherit-mode="extension" owl="1">
+        <!-- Cualquier input (no solo border-0) para compatibilidad con distintas versiones -->
+        <xpath expr="//input" position="attributes">
+            <attribute name="t-att-disabled">props.readonly</attribute>
+        </xpath>
+    </t>
+</templates>

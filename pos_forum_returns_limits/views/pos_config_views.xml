@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="pos_config_view_form_refund_limit" model="ir.ui.view">
+        <field name="name">pos.config.form.refund.limit</field>
+        <field name="model">pos.config</field>
+        <field name="inherit_id" ref="point_of_sale.pos_config_view_form" />
+        <field name="arch" type="xml">
+            <!-- Segundo bloque o_settings_container (el que se oculta en create_mode); el primero es restaurant_on_create -->
+            <xpath expr="(//div[contains(@class, 'o_settings_container')])[2]" position="inside">
+                <setting
+                    string="Refund Days Limit"
+                    help="Define el máximo de días permitidos para devoluciones desde la fecha de la venta."
+                >
+                    <field name="refund_days_limit" />
+                </setting>
+            </xpath>
+        </field>
+    </record>
+</odoo>

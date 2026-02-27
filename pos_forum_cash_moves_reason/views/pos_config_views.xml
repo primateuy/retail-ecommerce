@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Vista compatible con Community/Enterprise: usa //sheet en lugar de o_settings_container -->
+    <record id="pos_config_view_form_cash_move_reason" model="ir.ui.view">
+        <field name="name">pos.config.form.cash.move.reason</field>
+        <field name="model">pos.config</field>
+        <field name="inherit_id" ref="point_of_sale.pos_config_view_form" />
+        <field name="arch" type="xml">
+            <xpath expr="//sheet" position="inside">
+                <group string="Razones de movimiento de efectivo" name="cash_move_reasons">
+                    <field
+                        name="cash_move_reason_ids"
+                        widget="many2many_tags"
+                        options="{'no_create': True}"
+                        placeholder="Razones habilitadas para entradas/salidas en este POS"
+                    />
+                </group>
+            </xpath>
+        </field>
+    </record>
+</odoo>
