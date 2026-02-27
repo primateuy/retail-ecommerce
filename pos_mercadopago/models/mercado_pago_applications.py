@@ -68,12 +68,14 @@ class MercadoPagoApplications(models.Model):
                 "access_token": new_token,
                 "token_last_refresh": fields.Datetime.now(),
             })
-            # Actualizar el token en los metodos de pago de PdV vinculados
-            payment_methods = self.env['pos.payment.method'].sudo().search([
-                ('use_payment_terminal', '=', 'mercado_pago'),
-            ])
-            if payment_methods:
-                payment_methods.write({'mp_bearer_token': new_token})
+            # Actualizar el token en los metodos de pago de PdV vinculados a ESTA aplicacion
+            tills = self.store_branch_ids.store_tills_ids
+            pos_configs = self.env['pos.config'].sudo().search([('mp_tills', 'in', tills.ids)])
+            payment_methods = pos_configs.mapped('payment_method_ids').filtered(
+                lambda pm: pm.use_payment_terminal == 'mercado_pago'
+            )
+            for pm in payment_methods:
+                pm.write({'mp_bearer_token': new_token})
             _logger.info("Token refrescado correctamente para la aplicacion '%s' (ID: %s)", self.name, self.id)
         except requests.exceptions.RequestException as e:
             raise ValidationError(_("Error de conexion al refrescar token: %s") % str(e))
@@ -140,7 +142,7 @@ class MercadoPagoApplications(models.Model):
                 "external_id": store.get("external_id", ""),
                 "application_id": self.id,
                 "street_number": location.get("street_number", ""),
-                "street_name": location.get("street_name", ""),
+                "street_name": location.get("address_line") or location.get("street_name", ""),
                 "city_name": location.get("city_name", ""),
                 "state_name": location.get("state_name", ""),
                 "latitude": str(location.get("latitude", "0")),
