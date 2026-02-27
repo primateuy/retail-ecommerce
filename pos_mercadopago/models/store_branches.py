@@ -14,9 +14,8 @@ class StoreBranches(models.Model):
     external_id = fields.Char()
 
     business_hours_ids = fields.One2many(
-        'business.hours', 
-        'store_branch_id', 
-        required=True
+        'business.hours',
+        'store_branch_id',
     )
     mp_store_branch_id = fields.Integer()
 
@@ -72,8 +71,8 @@ class StoreBranches(models.Model):
 
             # Validamos si hubo un error al crear la sucursal
             if response.status_code >= 400:
-                raise ValidationError(_("Ha ocurrido un error al crear la sucursal"))
-            
+                raise ValidationError(_("Ha ocurrido un error al crear la sucursal: %s") % response.text)
+
             data = response.json()
             self.write({
                 "mp_store_branch_id": data["id"]
@@ -86,10 +85,11 @@ class StoreBranches(models.Model):
                     "message": "Sucursal creada correctamente"
                 }
             }
+        except ValidationError:
+            raise
         except Exception as e:
-            _logger.info("Ocurrio un error al crear la sucursal")
-            _logger.info(str(e))
-            raise ValidationError(_("Ha ocurrido un error al crear la sucursal"))
+            _logger.error("Ocurrio un error al crear la sucursal: %s", str(e))
+            raise ValidationError(_("Ha ocurrido un error al crear la sucursal: %s") % str(e))
 
     def get_endpoint_route(self):
         if self.application_id:
@@ -110,18 +110,20 @@ class StoreBranches(models.Model):
 
     # Obtener el body que sera enviado en la peticion para crear la sucursal
     def get_endpoint_store_branch_body(self):
-        return {
+        body = {
             "name": self.name,
-            "business_hours": self.prepare_business_hours(),
             "external_id": self.external_id,
             "location": self.get_location()
         }
+        business_hours = self.prepare_business_hours()
+        if business_hours:
+            body["business_hours"] = business_hours
+        return body
 
     # Obtener la lista de horarios laborales como lo necesita recibir el endpoint
     def prepare_business_hours(self):
-        # Validamos si hay horarios registrados
-        if len(self.business_hours_ids) == 0:
-            raise ValidationError(_("You must add at least one business hour"))
+        if not self.business_hours_ids:
+            return {}
 
         # Organizamos los horarios en un diccionario
         days = {}

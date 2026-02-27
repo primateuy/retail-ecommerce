@@ -14,6 +14,8 @@ class AccountMove(models.Model):
     def create_payment_fenicio(self, json_data_pago, mode_update=False, payment_ids=False):
         self.ensure_one()
 
+        fenicio_compania = self.env.company
+
         if mode_update:
             payment_ids.write({'estado': json_data_pago['estado']})
             if json_data_pago['estado'] == 'CANCELADO':
@@ -21,11 +23,13 @@ class AccountMove(models.Model):
                 payment_ids.cancel()
             return False
 
-        journal_id = self.env['account.journal'].search([('code', '=', json_data_pago['codigo'])], limit=1)
+        journal_id = self.env['account.journal'].search([
+            ('code', '=', json_data_pago['codigo']),
+            ('company_id', '=', fenicio_compania.id)
+        ], limit=1)
         if not journal_id:
             raise UserError('No se encontró diario para registrar el pago, codigo: %s' % json_data_pago['codigo'])
 
-        # Obtener el método de pago inbound del diario
         payment_method_line = journal_id.inbound_payment_method_line_ids and journal_id.inbound_payment_method_line_ids[0] or False
         if not payment_method_line:
             raise UserError('El diario %s no tiene configurado un método de pago inbound' % journal_id.name)
@@ -34,6 +38,7 @@ class AccountMove(models.Model):
             'journal_id': journal_id.id,
             'payment_date': json_data_pago['fechaPago'],
             'payment_method_line_id': payment_method_line.id,
+            'company_id': fenicio_compania.id,
         })
 
         payment_ids = payment_register_id._create_payments()
@@ -49,6 +54,7 @@ class AccountMove(models.Model):
                 'cuotas': json_data_pago['cuotas'],
                 'bin': json_data_pago['bin'],
                 'autorizacion': json_data_pago['autorizacion'],
+                'company_id': fenicio_compania.id,
             }
             payment_ids.write(vals)
 
@@ -65,6 +71,7 @@ class AccountMove(models.Model):
             'reason': 'ORDEN CANCELADA DESDE FENICIO',
             'refund_method': 'cancel',
             'move_ids': [(6, 0, self.ids)],
+            'company_id': self.env.company.id,
         })
         move_reversal_id.reverse_moves()
 

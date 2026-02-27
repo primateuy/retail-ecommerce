@@ -18,12 +18,9 @@ class MercadoPagoController(http.Controller):
         notification_type = kwargs.get('type')
 
         if merchant_order_id:
-            # Referencia de la orden de compra
             external_reference = False
             payment = False
-            # Si el tipo de notificacion es de un pago
             if notification_type == 'payment':
-                # Obtenemos informacion del pago
                 payment = self.get_payment_endpoint(payment_id=merchant_order_id)
 
                 if payment == False:
@@ -32,7 +29,6 @@ class MercadoPagoController(http.Controller):
                         status=200
                     )
 
-                # Verificamos que el pago este aprobado
                 payment_status = payment.get("status")
                 if payment_status != "approved":
                     _logger.info("Notificacion de pago recibida con status '%s', ignorando (payment_id: %s)", payment_status, merchant_order_id)
@@ -41,75 +37,63 @@ class MercadoPagoController(http.Controller):
                         status=200
                     )
 
-                # Asignamos la referencia externa de la orden
                 external_reference = payment["external_reference"]
             
             elif notification_type == "merchant_order":
-                # Buscamos la orden de pago
                 merchant_order = self.get_merchant_order_mp(merchant_order_id)
 
-                # Validamos si la orden esta abierta, si es asi, retornamos el error
                 if merchant_order == False:
                     return Response(
                         json.dumps({ "error": True, "message": "Hubo un error al buscar la orden de pago" }),
                         status=200
                     )
 
-                # Asignamos la referencia externa
-                external_reference = merchant_order_id
+                external_reference = merchant_order.get("external_reference")
             else:
                 return Response(
                     json.dumps({ "error": True, "message": "Hubo un error al buscar el orden de pago o el pago" }),
                     status=200
                 )
 
-            # Registrar el pago y marcar la orden como pagada
             order = request.env["pos.order"].sudo().search([("name","=",external_reference)],limit=1)
 
-            # Validamos si la orden no existe
             if not order:
                 return Response(
                     json.dumps({ "error": True, "message": f"Orden no encontrada en el sistema, numero de referencia: {external_reference}" }),
                     status=404
                 )
             
-            # Buscamos el metodo de pago
             payment_method = request.env["pos.payment.method"].sudo().search([("use_payment_terminal","=","mercado_pago")], limit=1)
 
-            # Formateamos la fecha de la creacion del pago
-            dt = datetime.fromisoformat(payment["date_created"])
+            dt = datetime.fromisoformat(payment["date_created"]) if payment else None
 
-            # Actualizamos la orden de pago y agregamos un pago a dicha orden
             order.sudo().write({
                 "state":"paid",
-                # "payment_ids":[(0,0, {
-                #     "amount": payment["transaction_amount"],
-                #     "payment_method_id": payment_method["id"],
-                #     "payment_date": dt.strftime('%Y-%m-%d %H:%M:%S')
-                # })]
+                "payment_ids":[(0,0, {
+                    "amount": payment.get("transaction_amount", 0) if payment else order.amount_total,
+                    "payment_method_id": payment_method.id,
+                    "payment_date": dt.strftime('%Y-%m-%d %H:%M:%S') if dt else datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                })]
             })
 
-            # Creamos la transaccion de pago de Mercado Pago
             try:
                 mp_provider = request.env['payment.provider'].sudo().search([('code', '=', 'mercado_pago')], limit=1)
                 mp_payment_method = request.env.ref('pos_mercadopago.payment_method_mercado_pago', raise_if_not_found=False)
                 request.env['mp.payment.transaction'].sudo().create({
-                    'name': payment.get('external_reference', external_reference),
+                    'name': payment.get('external_reference', external_reference) if payment else external_reference,
                     'payment_method_id': mp_payment_method.id if mp_payment_method else False,
                     'provider_id': mp_provider.id if mp_provider else False,
                     'company_id': order.company_id.id,
-                    'amount': payment.get('transaction_amount', 0),
+                    'amount': payment.get('transaction_amount', 0) if payment else 0,
                     'pos_order_id': order.id,
                 })
             except Exception as e:
                 _logger.error("Error al crear mp.payment.transaction: %s", str(e))
 
-            # Retornamos que todo bien
             return Response(
                 json.dumps({ "error": False, "message": f"Pago realizado correctamente, Factura pagada: {external_reference}" }),
                 status=200
             ) 
-            # self.process_mercadopago_payment(merchant_order_id)
         return Response(json.dumps(
             { "error": True, "message": "No se encontro ni una orden de pago ni un pago" }),
             status=200
@@ -120,11 +104,9 @@ class MercadoPagoController(http.Controller):
             till = order.session_id.config_id.mp_tills
             if till and till.store_branch_id.application_id:
                 return till.store_branch_id.application_id.access_token
-        # Fallback: buscar la primera app disponible
         app = request.env['mercado_pago.applications'].sudo().search([], limit=1)
         if app:
             return app.access_token
-        # Ultimo fallback: config global
         return request.env.ref('pos_mercadopago.access_token_mercado_pago_conf').sudo().value
 
     def get_headers(self, order=None):
@@ -133,29 +115,22 @@ class MercadoPagoController(http.Controller):
             "Authorization": f"Bearer {self._get_access_token(order)}",
         }
 
-    # Metodo para verificar el pago de una factura
     def get_payment_endpoint(self, payment_id):
         try:
-            # Preparamos endpoint y headers
             url = f"https://api.mercadopago.com/v1/payments/{payment_id}"
             headers = self.get_headers()
 
-            # Realizamos peticion
             result = requests.get(url=url, headers=headers)
 
-            # Retornamos el resultado
             return result.json()
         except Exception as e:
             _logger.info("Hubo un error al buscar el pago")
             return False
 
-    # Metodo para obtener la orden de pago desde mercado pago
     def get_merchant_order_mp(self,merchant_order_id):
         try:
-            # Obtenemos los headers
             headers = self.get_headers()
 
-            # 1. Consultar los detalles de la orden
             order_url = f"https://api.mercadopago.com/merchant_orders/{merchant_order_id}"
             response = requests.get(order_url, headers=headers)
             response.raise_for_status()
@@ -164,7 +139,6 @@ class MercadoPagoController(http.Controller):
             status = order_data.get('status')
             payments = order_data.get('payments', [])
 
-            # 2. Verificar si la orden está cerrada y con pagos
             if status == 'closed' and len(payments) > 0:
                 _logger.info(f"La orden {merchant_order_id} está cerrada y con pagos")
                 return order_data
@@ -187,13 +161,15 @@ class MercadoPagoController(http.Controller):
             "qr_type":qr_type
         }
     
-    # Metodo para obtener el precio del producto
     def get_price_product(self, kwards, product, tax):
-        # Retornamos el monto con impuestos
         if len(kwards["paymentLines"]) == 1:
-            return round(product["unit_price"] + ((tax["amount"]/100) * product["unit_price"]), 2)
-        
-        # Retornamos el precio seleccionado
+            if tax and tax.price_include:
+                return round(product["unit_price"], 2)
+            elif tax:
+                return round(product["unit_price"] + ((tax.amount / 100) * product["unit_price"]), 2)
+            else:
+                return round(product["unit_price"], 2)
+
         for payment in kwards["paymentLines"]:
             if payment["is_mercado_pago"]:
                 return payment["amount"]
@@ -209,18 +185,20 @@ class MercadoPagoController(http.Controller):
             margin = 0
             
             for item in kwards["items"]:
-                tax = request.env["account.tax"].search([("id","=",item['tax_ids_after_fiscal_position'][0])], limit=1)
-                
-                # Calculamos el precio con impuestos incluidos
-                price_subtotal_incl = item["unit_price"] + ((tax["amount"]/100) * item["unit_price"])
+                tax_ids = item.get('tax_ids_after_fiscal_position') or []
+                tax = request.env["account.tax"].search([("id", "=", tax_ids[0])], limit=1) if tax_ids else None
 
-                # Sumamos los impuestos
-                amount_tax = amount_tax + ((tax["amount"]/100) * item["unit_price"])
+                if tax and tax.price_include:
+                    price_subtotal_incl = item["unit_price"]
+                    amount_tax += item["unit_price"] - (item["unit_price"] / (1 + tax.amount / 100))
+                elif tax:
+                    price_subtotal_incl = item["unit_price"] + ((tax.amount / 100) * item["unit_price"])
+                    amount_tax += (tax.amount / 100) * item["unit_price"]
+                else:
+                    price_subtotal_incl = item["unit_price"]
 
-                # Sumamos los margenes de ganancia
                 margin = margin + (price_subtotal_incl - (item["quantity"] * item["standard_price"]))
 
-                # Lista de ordenes
                 order_lines.append((0,0,{
                     "name":item["title"],
                     "full_product_name":item["title"],
@@ -233,7 +211,6 @@ class MercadoPagoController(http.Controller):
                     "tax_ids_after_fiscal_position": [(6,0,item['tax_ids_after_fiscal_position'])]  
                 }))
 
-                # Lista de items para mercado pago
                 if kwards["qr_type"] == 'static':
                     order_mp_lines.append({
                         "id": item["id"],
@@ -255,7 +232,6 @@ class MercadoPagoController(http.Controller):
                         "total_amount": item["quantity"] * self.get_price_product(kwards,item,tax)
                     })
 
-            # Organizamos los pagos para registrarlos tambien
             for payment in kwards["paymentLines"]:
                 payment_ids.append((0,0,{
                     "amount":payment["amount"],
@@ -263,10 +239,8 @@ class MercadoPagoController(http.Controller):
                     "payment_method_id": payment["payment_method_id"],
                 }))
 
-            # Generamos la referencia de la orden una sola vez
             order_reference = request.env['ir.sequence'].sudo().next_by_code('pos.order.line')
             
-            # Creamos la orden en odoo
             order = request.env["pos.order"].create({
                 "name": order_reference,
                 "pos_reference": order_reference,
@@ -285,10 +259,8 @@ class MercadoPagoController(http.Controller):
                 "payment_ids": payment_ids
             })
 
-            # Buscamos la caja
             till = request.env["store.tills"].search([("id","=",kwards["store_till_id"])],limit=1)
 
-            # Validamos
             if not till:
                 return Response(
                     json.dumps({
@@ -299,7 +271,6 @@ class MercadoPagoController(http.Controller):
                 )
         
             if kwards["qr_type"] == 'static':
-                # Creamos la orden de pago en mercado pago
                 result = till.create_payment_order(order={
                     "external_reference":order["name"],
                     "items": order_mp_lines
@@ -342,7 +313,6 @@ class MercadoPagoController(http.Controller):
         try:
             order = request.env['pos.order'].sudo().search([("id","=",kwards["order_id"])],limit=1)
             order.state = 'cancel'
-            # Obtenemos los headers
             headers = self.get_headers(order=order)
             delete_url = f"https://api.mercadopago.com/instore/qr/seller/collectors/{kwards['user_id']}/pos/{kwards['external_id']}/orders"
             response = requests.delete(delete_url, headers=headers)
