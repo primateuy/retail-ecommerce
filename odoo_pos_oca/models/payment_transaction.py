@@ -270,7 +270,43 @@ class PaymentTransaction(models.Model):
         
         # Llamar al método write original
         return super(PaymentTransaction, self).write(vals)
-    
+
+    def _create_payment(self, **extra_create_values):
+        """
+        Sobrescribe el método de account_payment para NO crear account.payment en
+        transacciones que provienen del POS OCA.
+
+        En ventas POS OCA el cobro ya está representado por pos.payment; si además
+        se creara un account.payment (el que se ve como "Online Payment" en la UI),
+        quedaría un pago extra asociado a la orden y a la transacción, lo cual es
+        incorrecto. Para transacciones con origen pos_payment o pos_order no se
+        debe crear account.payment.
+
+        Al probar: revisar logs con "OCA POS: omitiendo creación de account.payment"
+        y verificar que en la orden/transacción no aparezca un pago extra de
+        contabilidad (solo debe existir el pos.payment).
+        """
+        self.ensure_one()
+        # Identificar transacciones que provienen del POS OCA (no crear account.payment)
+        is_pos_oca = (
+            self.transaction_origin in ('pos_payment', 'pos_order')
+            or bool(self.pos_payment_id)
+        )
+        if is_pos_oca:
+            _logger.info(
+                'OCA POS: omitiendo creación de account.payment para transacción %s '
+                '(reference=%s, pos_order_id=%s, pos_payment_id=%s). '
+                'El cobro ya está registrado en pos.payment.',
+                self.oca_transaction_id or self.reference,
+                self.reference,
+                self.pos_order_id.id if self.pos_order_id else None,
+                self.pos_payment_id.id if self.pos_payment_id else None,
+            )
+            # Retornar recordset vacío; el flujo estándar no crea pago para esta transacción
+            return self.env['account.payment']
+        # Para transacciones que no son POS OCA (ej. portal/ecommerce), comportamiento estándar
+        return super(PaymentTransaction, self)._create_payment(**extra_create_values)
+
     @api.model
     def create_oca_transaction(self, pos_data, oca_response, pos_order=None, pos_payment=None):
         """

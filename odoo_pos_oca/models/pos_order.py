@@ -18,126 +18,145 @@ class PosOrder(models.Model):
     @api.model
     def create(self, vals):
         """
-        Sobrescribe el método create para asociar automáticamente transacciones OCA
-        cuando se crea una orden POS
-        
-        Args:
-            vals (dict): Valores para crear la orden
-            
-        Returns:
-            pos.order: Orden creada
+        Sobrescribe el método create para permitir asociación posterior de
+        transacciones OCA. La asociación real se hace en _process_order
+        después de que se crean las líneas de pago (_process_payment_lines),
+        porque en create() aún no existen payment_ids.
         """
-        # Crear la orden primero
-        order = super(PosOrder, self).create(vals)
-        
-        # Intentar asociar transacciones OCA huérfanas
-        order._associate_oca_transactions()
-        
-        return order
-    
+        return super(PosOrder, self).create(vals)
+
+    @api.model
+    def _process_order(self, order, draft, existing_order):
+        """
+        Tras procesar las líneas de pago, asocia las transacciones OCA a esta
+        orden por referencia (pos.payment.transaction_id = payment.transaction.oca_transaction_id).
+        """
+        result = super(PosOrder, self)._process_order(order, draft, existing_order)
+        pos_order = self.browse(result) if isinstance(result, int) else result
+        pos_order._associate_oca_transactions()
+        return result
+
     def _associate_oca_transactions(self):
         """
-        Asocia transacciones OCA huérfanas con esta orden
-        
-        Este método se ejecuta después de crear la orden para buscar y asociar
-        transacciones OCA que no tengan orden asociada y que correspondan a esta sesión
+        Asocia transacciones OCA con esta orden usando la referencia de transacción
+        cuando está disponible, para evitar ambigüedad cuando hay varios pagos del
+        mismo monto en la sesión.
+
+        Flujo:
+        1. El frontend guarda en la línea de pago el ID de transacción OCA
+           (transaction_id / origin_transaction_id) y se persiste en pos.payment.transaction_id.
+        2. Al crear la orden, para cada pago OCA se busca payment.transaction por
+           oca_transaction_id = pos.payment.transaction_id (referencia unívoca).
+        3. Si no hay transaction_id en el pago, se hace fallback a coincidencia por monto
+           (comportamiento anterior, para compatibilidad).
         """
         try:
-            # Obtener los valores de forma segura para evitar errores de cursor
             order_name = getattr(self, 'name', 'Unknown') or 'Unknown'
             session_id = getattr(self, 'session_id', None)
             session_id_value = session_id.id if session_id else 'Unknown'
-            
-            _logger.info('Buscando transacciones OCA para asociar con orden: %s (Sesión: %s)', 
-                        order_name, session_id_value)
-            
-            # Buscar transacciones OCA sin orden asociada en esta sesión
-            orphaned_transactions = self.env['payment.transaction'].sudo().search([
-                ('oca_transaction_id', '!=', False),
-                ('pos_order_id', '=', False),
-                ('state', 'in', ['pending', 'done'])
-            ])
-            
-            if not orphaned_transactions:
-                _logger.info('No se encontraron transacciones OCA huérfanas para asociar')
-                return
-            
-            _logger.info('Encontradas %s transacciones OCA huérfanas para evaluar', len(orphaned_transactions))
-            
-            # Buscar pagos OCA en esta orden
+
+            _logger.info(
+                'Buscando transacciones OCA para asociar con orden: %s (Sesión: %s)',
+                order_name, session_id_value
+            )
+
             oca_payments = self.payment_ids.filtered(
                 lambda p: p.payment_method_id.use_payment_terminal == 'oca'
             )
-            
+
             if not oca_payments:
-                _logger.info('La orden %s no tiene pagos OCA aún, programando verificación posterior...', order_name)
-                # Programar una verificación posterior cuando se creen los pagos
+                _logger.info(
+                    'La orden %s no tiene pagos OCA aún, programando verificación posterior...',
+                    order_name
+                )
                 self._schedule_oca_association_check()
                 return
-            
+
             _logger.info('Orden %s tiene %s pagos OCA', order_name, len(oca_payments))
-            
-            # Para cada pago OCA en esta orden, buscar la transacción correspondiente
+
+            # Proveedor OCA para filtrar transacciones
+            oca_provider = self.env['payment.provider'].sudo().search(
+                [('code', '=', 'oca')], limit=1
+            )
+            if not oca_provider:
+                _logger.warning('No se encontró proveedor OCA; asociación por referencia no disponible.')
+
             for oca_payment in oca_payments:
                 payment_name = getattr(oca_payment, 'name', 'Unknown') or 'Unknown'
                 payment_amount = getattr(oca_payment, 'amount', 0.0)
-                
-                _logger.info('Procesando pago OCA: %s (Monto: %s)', payment_name, payment_amount)
-                
-                # Buscar transacción que coincida por monto
+                payment_tid = getattr(oca_payment, 'transaction_id', None) or ''
+
+                _logger.info(
+                    'Procesando pago OCA: %s (Monto: %s, transaction_id=%s)',
+                    payment_name, payment_amount, payment_tid or '(vacío)'
+                )
+
                 matching_transaction = None
-                best_score = 0
-                
-                for transaction in orphaned_transactions:
-                    # Calcular score de coincidencia
-                    score = 0
-                    
-                    # Coincidencia exacta de monto (score alto)
-                    if abs(transaction.amount - payment_amount) < 0.01:
-                        score += 100
-                        _logger.info('Coincidencia exacta de monto: Transacción %s (%.2f) = Pago %s (%.2f)', 
-                                   transaction.oca_transaction_id, transaction.amount, 
-                                   payment_name, payment_amount)
-                    # Coincidencia aproximada de monto (score medio)
-                    elif abs(transaction.amount - payment_amount) < 1.0:
-                        score += 50
-                        _logger.info('Coincidencia aproximada de monto: Transacción %s (%.2f) ≈ Pago %s (%.2f)', 
-                                   transaction.oca_transaction_id, transaction.amount, 
-                                   payment_name, payment_amount)
-                    
-                    # Verificar que la transacción no esté ya asociada a otra orden
-                    if transaction.pos_order_id:
-                        _logger.info('Transacción %s ya asociada a orden %s, saltando...', 
-                                   transaction.oca_transaction_id, transaction.pos_order_id.name)
-                        continue
-                    
-                    # Si es la mejor coincidencia hasta ahora, guardarla
-                    if score > best_score:
-                        best_score = score
-                        matching_transaction = transaction
-                        _logger.info('Nueva mejor coincidencia: Transacción %s (Score: %s)', 
-                                   transaction.oca_transaction_id, score)
-                
-                if matching_transaction and best_score > 0:
-                    # Asociar la transacción con esta orden y pago
+                match_by_reference = False
+
+                # 1) Asociación por referencia: pos.payment.transaction_id = payment.transaction.oca_transaction_id
+                if payment_tid and oca_provider:
+                    tx_by_ref = self.env['payment.transaction'].sudo().search([
+                        ('oca_transaction_id', '=', payment_tid),
+                        ('provider_id', '=', oca_provider.id),
+                        ('pos_order_id', '=', False),
+                        ('state', 'in', ['pending', 'done']),
+                    ], limit=1)
+                    if tx_by_ref:
+                        matching_transaction = tx_by_ref
+                        match_by_reference = True
+                        _logger.info(
+                            'Transacción OCA encontrada por referencia (oca_transaction_id=%s) -> reference=%s',
+                            payment_tid, matching_transaction.reference
+                        )
+
+                # 2) Fallback: coincidencia por monto (cuando no hay transaction_id o no se encontró por ref)
+                if not matching_transaction:
+                    orphan_domain = [
+                        ('oca_transaction_id', '!=', False),
+                        ('pos_order_id', '=', False),
+                        ('state', 'in', ['pending', 'done']),
+                    ]
+                    if oca_provider:
+                        orphan_domain.append(('provider_id', '=', oca_provider.id))
+                    orphaned_transactions = self.env['payment.transaction'].sudo().search(orphan_domain)
+                    best_score = 0
+                    for transaction in orphaned_transactions:
+                        if transaction.pos_order_id:
+                            continue
+                        score = 0
+                        if abs(transaction.amount - payment_amount) < 0.01:
+                            score = 100
+                        elif abs(transaction.amount - payment_amount) < 1.0:
+                            score = 50
+                        if score > best_score:
+                            best_score = score
+                            matching_transaction = transaction
+                    if matching_transaction:
+                        _logger.info(
+                            'Transacción OCA asociada por monto (fallback): %s (%.2f)',
+                            matching_transaction.oca_transaction_id, matching_transaction.amount
+                        )
+
+                if matching_transaction:
                     matching_transaction.pos_order_id = self.id
                     matching_transaction.pos_payment_id = oca_payment.id
-                    
-                    # Actualizar el número de factura
                     if order_name and order_name != 'Unknown':
                         matching_transaction.invoice_number = order_name
-                    
-                    _logger.info('Transacción OCA asociada exitosamente: %s -> Orden: %s, Pago: %s (Score: %s)', 
-                               matching_transaction.oca_transaction_id, order_name, payment_name, best_score)
+                    _logger.info(
+                        'Transacción OCA asociada a orden: %s -> Orden: %s, Pago: %s (por_ref=%s)',
+                        matching_transaction.reference or matching_transaction.oca_transaction_id,
+                        order_name, payment_name, match_by_reference
+                    )
                 else:
-                    _logger.warning('No se encontró transacción OCA para el pago: %s (Monto: %s)', 
-                                  payment_name, payment_amount)
-            
-            # Ejecutar diagnóstico después de la asociación
+                    _logger.warning(
+                        'No se encontró transacción OCA para el pago: %s (Monto: %s, transaction_id=%s)',
+                        payment_name, payment_amount, payment_tid or '(vacío)'
+                    )
+
             self._diagnose_oca_associations()
-            
+
         except Exception as e:
-            # Usar un mensaje de error más seguro que no acceda a campos del ORM
             _logger.error('Error al asociar transacciones OCA con orden ID %s: %s', self.id, str(e))
     
     def _schedule_oca_association_check(self):
