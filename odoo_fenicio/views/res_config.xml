@@ -9,26 +9,17 @@
             <xpath expr="//form" position="inside">
                 <app string="Fenicio" name="odoo_fenicio">
                     <block title="Configuración de Fenicio" name="fenicio_settings">
-                        <setting id="fenicio_token_setting" help="Token de autenticación para las peticiones de Fenicio">
-                            <field name="fenicio_token" class="oe_inline" password="True"/>
-                        </setting>
                         <setting id="fenicio_website_setting" help="Seleccione el sitio web donde se registrarán las ventas procesadas por Fenicio">
                             <field name="fenicio_website_id" class="oe_inline"/>
                         </setting>
                         <setting id="fenicio_pricelist_venta_setting" help="Lista de precios de venta predeterminada para todos los productos Fenicio">
-                            <field name="fenicio_pricelist_venta_id" class="oe_inline"/>
+                            <field name="fenicio_pricelist_venta" class="oe_inline"/>
                         </setting>
                         <setting id="fenicio_pricelist_lista_setting" help="Lista de precios lista predeterminada para todos los productos Fenicio">
-                            <field name="fenicio_pricelist_lista_id" class="oe_inline"/>
+                            <field name="fenicio_pricelist_lista" class="oe_inline"/>
                         </setting>
                         <setting id="fenicio_pricelist_alternativo_setting" help="Lista de precios alternativa predeterminada para todos los productos Fenicio">
-                            <field name="fenicio_pricelist_alternativo_id" class="oe_inline"/>
-                        </setting>
-                        <setting id="fenicio_stock_location_setting" help="Ubicaciones de donde se consultará el stock para Fenicio">
-                            <field name="fenicio_stock_location_ids" widget="many2many_tags" class="oe_inline"/>
-                        </setting>
-                        <setting id="fenicio_compania_setting" help="Compañía actual para la que se está configurando Fenicio">
-                            <field name="fenicio_compania_id" class="oe_inline"/>
+                            <field name="fenicio_pricelist_alternativo" class="oe_inline"/>
                         </setting>
                     </block>
                 </app>

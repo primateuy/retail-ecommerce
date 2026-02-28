@@ -3,56 +3,34 @@ from odoo import fields, models
 class ResConfigSettings(models.TransientModel):
     _inherit = 'res.config.settings'
 
-    fenicio_token = fields.Char(
-        string='Token de Autenticación Fenicio',
-        related='company_id.fenicio_token',
-        readonly=False,
-    )
-
     fenicio_website_id = fields.Many2one(
         'website',
         string='Sitio Web Fenicio',
-        related='company_id.fenicio_website_id',
-        readonly=False,
+        stored=True,
+        config_parameter='odoo_fenicio.website_id',
         help='Sitio web donde se registrarán las ventas de Fenicio'
     )
-
-    fenicio_compania_id = fields.Many2one(
-        'res.company',
-        string='Compañía Fenicio',
-        related='company_id',
-        readonly=True,
-        help='Compañía donde se registrarán las ventas de Fenicio'
-    )
     
-    fenicio_pricelist_venta_id = fields.Many2one(
+    fenicio_pricelist_venta = fields.Many2one(
         'product.pricelist',
         string='Lista de Precios de Venta Fenicio',
-        related='company_id.fenicio_pricelist_venta_id',
-        readonly=False,
+        stored=True,
+        config_parameter='odoo_fenicio.pricelist_venta',
         help='Lista de precios de venta predeterminada para todos los productos Fenicio'
     )
     
-    fenicio_pricelist_lista_id = fields.Many2one(
+    fenicio_pricelist_lista = fields.Many2one(
         'product.pricelist',
         string='Lista de Precios Lista Fenicio',
-        related='company_id.fenicio_pricelist_lista_id',
-        readonly=False,
+        stored=True,
+        config_parameter='odoo_fenicio.pricelist_lista',
         help='Lista de precios lista predeterminada para todos los productos Fenicio'
     )
     
-    fenicio_pricelist_alternativo_id = fields.Many2one(
+    fenicio_pricelist_alternativo = fields.Many2one(
         'product.pricelist',
         string='Lista de Precios Alternativo Fenicio',
-        related='company_id.fenicio_pricelist_alternativo_id',
-        readonly=False,
+        stored=True,
+        config_parameter='odoo_fenicio.pricelist_alternativo',
         help='Lista de precios alternativa predeterminada para todos los productos Fenicio'
-    )
-
-    fenicio_stock_location_ids = fields.Many2many(
-        'stock.location',
-        string='Ubicaciones de Stock Fenicio',
-        related='company_id.fenicio_stock_location_ids',
-        readonly=False,
-        help='Ubicaciones de donde se consultará el stock para Fenicio'
     )
