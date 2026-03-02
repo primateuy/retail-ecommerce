@@ -12,7 +12,6 @@
     "depends": [
         "point_of_sale",
         "l10n_uy_einvoice_base",
-        "l10n_uy_vat_query",
         "l10n_latam_base",
     ],
     "data": [

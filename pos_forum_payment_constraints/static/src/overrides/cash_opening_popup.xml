@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates id="template" xml:space="preserve">
+    <!--
+    No forzamos template propio para evitar "Missing template" (el bundle puede no cargar esta herencia a tiempo).
+    El readonly del efectivo de apertura se aplica por JS en cash_opening_popup.js (lockInput en mounted/patched).
+    Heredad vacía por si en el futuro se carga la plantilla; no modificamos el DOM aquí.
+    -->
+    <t t-name="pos_forum_payment_constraints.CashOpeningPopup" t-inherit="point_of_sale.CashOpeningPopup" t-inherit-mode="extension" owl="1"/>
+</templates>

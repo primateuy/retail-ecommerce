@@ -7,4 +7,3 @@ precios_alternativos,precios_alternativos,model_precios_alternativos,base.group_
 access_guia_talles_user,guia.talles.user,model_guia_talles,base.group_user,1,1,1,1
 product_pricelist_relation,product.pricelist.relation,model_product_pricelist_relation,base.group_user,1,1,1,1
 product_product_pricelist_relation,product.product.pricelist.relation,model_product_product_pricelist_relation,base.group_user,1,1,1,1
-fenicio_log,fenicio.log,model_fenicio_log,base.group_user,1,1,1,1

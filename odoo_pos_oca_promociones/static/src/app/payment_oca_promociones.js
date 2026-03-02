@@ -241,7 +241,27 @@ patch(PaymentOCA.prototype, {
                 
                 // 3. Obtener nuevo monto total de la orden (desde backend)
                 const orderData = await this.getOrderUpdatedTotals(order.id);
-                
+
+                // 3b. Actualizar el monto de la línea de pago al total con descuento aplicado.
+                //     Usar set_amount() para que el POS actualice redondeo y estado interno.
+                //     Así el pos.payment que se cree tendrá el importe correcto (con promoción).
+                //     Al probar: en consola del navegador debe verse el log con montos antes/después.
+                const amountBefore = paymentLine.get_amount ? paymentLine.get_amount() : paymentLine.amount;
+                const newTotal = orderData.newTotal != null ? orderData.newTotal : orderData.newInvoiceAmount;
+                const amountWithDiscount = Math.abs(newTotal);
+                if (typeof paymentLine.set_amount === 'function') {
+                    paymentLine.set_amount(amountWithDiscount);
+                } else {
+                    paymentLine.amount = amountWithDiscount;
+                }
+                const amountAfter = paymentLine.get_amount ? paymentLine.get_amount() : paymentLine.amount;
+                console.log(
+                    '[OCA Promociones] Monto de línea de pago actualizado para que pos.payment quede correcto:',
+                    'antes=', amountBefore,
+                    'después (con descuento)=', amountAfter,
+                    'newTotal=', newTotal
+                );
+
                 // 4. Preparar datos para confirmación con nuevo monto
                 const confirmData = this.prepareConfirmData(
                     cardData,

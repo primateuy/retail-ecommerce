@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="pos_config_view_form_payment_default_customer" model="ir.ui.view">
+        <field name="name">pos.config.form.payment.default.customer</field>
+        <field name="model">pos.config</field>
+        <field name="inherit_id" ref="point_of_sale.pos_config_view_form" />
+        <field name="arch" type="xml">
+            <!-- Segundo bloque o_settings_container (el que se oculta en create_mode); el primero es restaurant_on_create -->
+            <xpath expr="(//div[contains(@class, 'o_settings_container')])[2]" position="inside">
+                <setting
+                    string="Default Customer at Payment"
+                    help="Cliente que se asigna al entrar a la pantalla de pago si la orden no tiene cliente."
+                >
+                    <field name="payment_default_customer_id" options="{'no_create': True}" />
+                </setting>
+            </xpath>
+        </field>
+    </record>
+</odoo>

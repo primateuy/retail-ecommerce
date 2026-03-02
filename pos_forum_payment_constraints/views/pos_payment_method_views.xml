@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="pos_payment_method_view_form_constraints" model="ir.ui.view">
+        <field name="name">pos.payment.method.form.constraints</field>
+        <field name="model">pos.payment.method</field>
+        <field name="inherit_id" ref="point_of_sale.pos_payment_method_view_form" />
+        <field name="arch" type="xml">
+            <xpath expr="//group[@name='Payment methods']/group[1]" position="after">
+                <group string="POS Controls">
+                    <field name="readonly_opening_cash" />
+                    <field name="readonly_closing_non_cash" />
+                    <field name="limit_closing_cash_to_balance" />
+                </group>
+            </xpath>
+        </field>
+    </record>
+</odoo>

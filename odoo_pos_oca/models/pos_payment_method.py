@@ -207,16 +207,20 @@ class PosPaymentMethod(models.Model):
                 except (ValueError, TypeError) as e:
                     _logger.warning('Error al convertir InvoiceNumber a ID: %s', str(e))
             
-            # Si no se encuentra por InvoiceNumber, buscar el pedido más reciente como fallback
-            _logger.info('No se encontró pedido por InvoiceNumber, buscando el más reciente')
-            pos_order = self.env['pos.order'].search([
-                ('session_id', '=', pos_session_id)
-            ], order='id desc', limit=1)
-            
-            if pos_order:
-                _logger.info('Pedido POS encontrado (fallback): %s', pos_order.name)
-            
-            return pos_order
+            # Si no se encuentra por InvoiceNumber, NO usar más el fallback de
+            # \"último pedido de la sesión\" porque puede asociar la transacción
+            # a la orden anterior en lugar de la orden actual.
+            #
+            # En su lugar, dejamos la transacción sin pos_order_id y delegamos
+            # la asociación final a pos.order._associate_oca_transactions()
+            # cuando se cree y registre efectivamente la orden.
+            _logger.info(
+                'No se encontró pedido POS por InvoiceNumber para transacción %s en sesión %s. '
+                'Se deja sin pedido asociado y se delega asociación a pos.order._associate_oca_transactions.',
+                transaction_id,
+                pos_session_id,
+            )
+            return self.env['pos.order']
             
         except Exception as e:
             _logger.error('Error al buscar pedido POS relacionado: %s', str(e))
@@ -829,37 +833,57 @@ class PosPaymentMethod(models.Model):
 
     def _find_related_pos_order_by_transaction(self, transaction_id, pos_session_id):
         """
-        Busca el pedido POS relacionado con una transacción
+        Busca el pedido POS relacionado con una transacción.
+        
+        NOTA IMPORTANTE:
+        Antes se usaba como fallback \"el último pedido de la sesión\", lo que
+        provocaba que la transacción OCA quedara asociada a la orden anterior
+        en vez de a la orden que se está creando ahora.
+        
+        Ahora, este método NO fuerza ninguna asociación por fallback y deja
+        la transacción sin pos_order_id para que sea pos.order._associate_oca_transactions()
+        quien realice la asociación definitiva una vez creada la orden POS.
         
         Args:
             transaction_id (str): ID de la transacción OCA
             pos_session_id (int): ID de la sesión POS
             
         Returns:
-            pos.order: Pedido POS encontrado o None
+            pos.order: Recordset vacío cuando no se puede determinar con certeza
         """
-        # Buscar el pedido más reciente en la sesión
-        pos_order = self.env['pos.order'].search([
-            ('session_id', '=', pos_session_id)
-        ], order='id desc', limit=1)
-        
-        return pos_order
+        _logger.info(
+            'OCA POS: _find_related_pos_order_by_transaction no aplicará fallback para transacción %s en sesión %s. '
+            'La asociación se hará después desde pos.order._associate_oca_transactions.',
+            transaction_id,
+            pos_session_id,
+        )
+        return self.env['pos.order']
 
     def _find_related_pos_payment_by_transaction(self, transaction_id, pos_session_id):
         """
-        Busca el pago POS relacionado con una transacción
+        Busca el pago POS relacionado con una transacción.
+        
+        Igual que con el pedido, antes se usaba como fallback \"el último pago
+        OCA de la sesión\", lo que podía asociar la transacción al pago de una
+        orden anterior. Esto generaba inconsistencias cuando se procesaban
+        varias ventas seguidas.
+        
+        Ahora NO se aplica ese fallback y se deja la transacción sin
+        pos_payment_id; la asociación se hará luego mediante:
+        - pos.payment._associate_oca_transaction()
+        - y, en promociones, la extensión en odoo_pos_oca_promociones.
         
         Args:
             transaction_id (str): ID de la transacción OCA
             pos_session_id (int): ID de la sesión POS
             
         Returns:
-            pos.payment: Pago POS encontrado o None
+            pos.payment: Recordset vacío cuando no se puede determinar con certeza
         """
-        # Buscar el pago OCA más reciente en la sesión
-        pos_payment = self.env['pos.payment'].search([
-            ('session_id', '=', pos_session_id),
-            ('payment_method_id', '=', self.id)
-        ], order='id desc', limit=1)
-        
-        return pos_payment 
+        _logger.info(
+            'OCA POS: _find_related_pos_payment_by_transaction no aplicará fallback para transacción %s en sesión %s. '
+            'La asociación del pago se hará después desde pos.payment._associate_oca_transaction.',
+            transaction_id,
+            pos_session_id,
+        )
+        return self.env['pos.payment'] 

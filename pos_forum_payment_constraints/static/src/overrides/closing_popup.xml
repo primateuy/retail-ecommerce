@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates id="template" xml:space="preserve">
+    <!--
+    Heredad de ClosePosPopup sin modificar el DOM: la estructura del popup de cierre
+    varía en Enterprise/versiones custom y un xpath fijo rompe el bundle (404).
+    El límite de saldo en cierre (limit_closing_cash_to_balance) sigue aplicándose por JS (closing_popup.js).
+    -->
+    <t t-name="pos_forum_payment_constraints.ClosePosPopup" t-inherit="point_of_sale.ClosePosPopup" t-inherit-mode="extension" owl="1"/>
+</templates>

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates id="template" xml:space="preserve">
+    <t t-name="pos_forum_order_search_expand.ReprintChangeTicketButton" owl="1">
+        <button class="btn btn-lg btn-secondary" t-on-click="click" t-att-disabled="!props.order">
+            <i class="fa fa-exchange-alt me-1" role="img" aria-label="Change Ticket"></i>
+            Ticket de cambio
+        </button>
+    </t>
+</templates>

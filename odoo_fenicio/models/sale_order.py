@@ -5,7 +5,6 @@ import logging
 import pytz
 from dateutil.parser import parse
 from odoo import models, fields, api
-from odoo.exceptions import ValidationError
 
 _logger = logging.getLogger(__name__)
 
@@ -56,44 +55,51 @@ class SaleOrder(models.Model):
         self.write(vals)
 
     def create_payment_transaction(self, json_data):
+        """Crear transacción de pago para la orden"""
         try:
             self.ensure_one()
-
-            fenicio_compania = self.env.company
             
             if not ('pago' in json_data and json_data['pago']):
-                raise ValidationError("No se proporcionaron datos de pago")
+                _logger.warning("No hay datos de pago para crear transacción")
+                return {'error': 'No hay datos de pago', 'transaccion': False}
             
             json_data_pago = json_data['pago']
             id_externo = json_data_pago.get('idExterno')
             
+            # Verificar si ya existe una transacción con ese ID externo
             existing_transaction = self.env['payment.transaction'].search([
-                ('reference', '=', id_externo),
-                ('company_id', '=', fenicio_compania.id)
+                ('reference', '=', id_externo)
             ], limit=1)
             
             if existing_transaction:
-                raise ValidationError(f"Ya existe una transacción de pago con el ID externo: {id_externo}")
+                msg = f"Ya existe una transacción de pago con el ID externo: {id_externo}"
+                _logger.warning(msg)
+                return {'error': msg, 'transaccion': existing_transaction.id}
             
+            # Obtener proveedor de pago Fenicio
             provider = self.env['payment.provider'].search([('name', '=', 'Fenicio')], limit=1)
             if not provider:
-                raise ValidationError("No se encontró proveedor de pago Fenicio")
-                
+                _logger.error("No se encontró proveedor de pago Fenicio")
+                return {'error': 'Proveedor de pago Fenicio no encontrado', 'transaccion': False}
+            
+            # Obtener moneda
             currency = self.env['res.currency'].search([('name', '=', json_data_pago.get('moneda', 'UYU'))], limit=1)
             if not currency:
                 currency = self.env['res.currency'].search([('name', '=', 'UYU')], limit=1)
             
+            # Buscar el payment de la factura
             payment_id = False
             if self.invoice_ids:
+                # Obtener la primera factura
                 invoice = self.invoice_ids[0]
                 
                 payment_id = self.env['account.payment'].search([
-                    ('ref', '=', invoice.name),
-                    ('company_id', '=', fenicio_compania.id)
+                    ('ref', '=', invoice.name)
                 ], limit=1)
 
                 
             
+            # Crear transacción de pago
             transaction = self.env['payment.transaction'].create({
                 'reference': id_externo,
                 'amount': float(json_data_pago.get('importe', 0)),
@@ -101,36 +107,42 @@ class SaleOrder(models.Model):
                 'partner_id': self.partner_id.id,
                 'provider_id': provider.id,
                 'payment_method_id': self.env['payment.method'].search([('name', '=', 'Fenicio')], limit=1).id,
-                'payment_id': payment_id.id if payment_id else False,
+                'payment_id': payment_id.id if payment_id else False,  # ← El ID del payment de la factura
                 'state': 'done' if json_data_pago.get('estado') in ['APROBADO', 'CANCELADO'] else 'pending',
                 'sale_order_ids': [(6, 0, [self.id])],
-                'company_id': fenicio_compania.id,
             })
             
             return {'mensaje': 'Transacción de pago creada correctamente', 'transaccion': transaction.id}
             
         except Exception as e:
-            raise ValidationError(f'Error al crear transacción de pago: {str(e)}')
+            _logger.error("Error al crear transacción de pago: %s", str(e))
+            return {'error': f'Error al crear transacción de pago: {str(e)}', 'transaccion': False}
 
 
     @api.model
-    def create_or_update_order(self, json_data, token):
+    def create_or_update_order(self, json_data):
         try:
-
-            fenicio_compania = self.env['api.internal'].verificar_token(token)
             
             partner_id = self.env['res.partner'].sudo().with_context(skip_vat_check=True).get_partner_orden_venta(json_data)
             if not partner_id:
-                raise ValidationError("Error: No se pudo crear o obtener el cliente")
+                return False, "Error: No se pudo crear o obtener el cliente"
             
+            # Obtener dirección de facturación (basada en direccionFacturacion)
             partner_invoice_id = partner_id.get_partner_invoice_address_orden_venta(json_data)
             
+            # Obtener dirección de envío (basada en entrega.direccionEnvio)
             partner_shipping_id = partner_id.get_partner_shipping_address_orden_venta(json_data)
             
 
+            tarifa_id = self.env['product.pricelist'].search([
+                ('e_fenicio', '=', True),
+                ('currency_id.name', '=', json_data['pago']['moneda']),
+            ])
 
-            tarifa_id = self.env['res.company'].search([('id', '=', fenicio_compania.id)], limit=1).fenicio_pricelist_venta_id;
-
+            if not tarifa_id:
+                error_msg = f"No se encuentra lista de precios para la moneda {json_data['pago']['moneda']}"
+                _logger.error(error_msg)
+                return False, error_msg
 
             
             date_order = parse(json_data['fechaInicio'])
@@ -149,6 +161,7 @@ class SaleOrder(models.Model):
             effective_date = parse(json_data['fechaFin'])
 
             lines = []
+            # eliminar cualquier linea anteriormente creada
             if self.id and len(self.order_line) != 0:
                 self.write({'order_line': [(5,)]})
 
@@ -169,53 +182,31 @@ class SaleOrder(models.Model):
                             return False, error_msg
                         
                         
-                        precio_fenicio = line_data['precio']
+                        
+                        # Obtener el precio y aplicar descuentos si existen
+                        precio_unitario = product_id.list_price
                         descuentos = ('descuentos' in line_data and line_data['descuentos']) or []
-                        precio_unitario = None
-
-                        if tarifa_id:
-                            try:
-                                precio_lista = tarifa_id._get_product_price(
-                                    product=product_id,
-                                    quantity=line_data['cantidad'],
-                                    partner=None,
-                                    uom_id=product_id.uom_id.id,
-                                )
-                                if precio_lista and precio_lista > 0 and precio_lista != product_id.lst_price:
-                                    precio_unitario = precio_lista
-                                    _logger.info(
-                                        "SKU %s: usando precio de lista (%.2f) en lugar de Fenicio (%.2f).",
-                                        product_id.default_code, precio_lista, precio_fenicio
-                                    )
-                            except Exception as e:
-                                _logger.warning(
-                                    "No se pudo obtener precio de lista para SKU %s: %s. "
-                                    "Se usará el precio enviado por Fenicio.",
-                                    product_id.default_code, str(e)
-                                )
-
-                        if precio_unitario is None:
-                            precio_unitario = precio_fenicio
-                            if descuentos:
-                                total_descuentos = sum(d.get('monto', 0) for d in descuentos)
-                                precio_unitario = max(0, precio_unitario - total_descuentos)
-
+                        
+                        # Si hay descuentos, restar el total de descuentos del precio
+                        if descuentos:
+                            total_descuentos = sum(d.get('monto', 0) for d in descuentos)
+                            precio_unitario = max(0, precio_unitario - total_descuentos)
                         
                         vals = {
                             'product_id': product_id.id,
                             'name': product_id.name,
                             'product_uom_qty': line_data['cantidad'],
                             'price_unit': precio_unitario,
-                            'tax_id': [(5,)],
                         }
                         lines.append((0, 0, vals))
                     except Exception as e:
                         error_msg = f"Error procesando línea {idx}: {str(e)}"
-                        raise ValidationError(error_msg)
+                        _logger.error(error_msg)
+                        return False, error_msg
 
             
 
-            
+            # Obtener observaciones de forma segura
             entrega = json_data.get('entrega') or {}
             horario = entrega.get('horario') or {}
             direccion_envio = horario.get('direccionEnvio') or {}
@@ -223,17 +214,15 @@ class SaleOrder(models.Model):
 
             
 
-            journal_id = self.env['account.journal'].search([
-                ('code', '=', 'fenv'),
-                ('company_id', '=', fenicio_compania.id)
-            ], limit=1)
+            journal_id = self.env['account.journal'].search([('code', '=', 'fenv')], limit=1)
+            company_id = self.env['res.company'].search([], limit=1)
             vals = {
                 'id_order_fenicio': json_data['idOrden'],
                 'estado': json_data['estado'],
                 'partner_id': partner_id.id,
                 'partner_invoice_id': partner_invoice_id and partner_invoice_id.id or partner_id.id,
                 'partner_shipping_id': partner_shipping_id and partner_shipping_id.id or partner_id.id,
-                'pricelist_id': tarifa_id.id if tarifa_id else False,
+                'pricelist_id': tarifa_id.id,
                 'motivo_cancelacion': json_data['motivoCancelacion'],
                 'origen': json_data['origen'],
                 'date_order': self.convert_datetime(date_order),
@@ -244,7 +233,7 @@ class SaleOrder(models.Model):
                 'effective_date': self.convert_datetime(effective_date),
                 'observaciones': observaciones,
                 'order_line': lines,
-                'company_id': fenicio_compania.id,
+                'company_id': company_id.id,
             }
 
             # Crear o actualizar orden
@@ -337,13 +326,15 @@ class SaleOrder(models.Model):
         try:
             self.ensure_one()
             
-            # Obtener el website_id desde la compañía
-            fenicio_website_id = self.env.company.fenicio_website_id.id
+            # Obtener el website_id desde la configuración de Fenicio
+            fenicio_website_id_str = self.env['ir.config_parameter'].sudo().get_param('odoo_fenicio.website_id')
+            
 
-            if not fenicio_website_id:
-                _logger.error("No está configurado el sitio web de Fenicio en la compañía.");
+            if not fenicio_website_id_str:
+                _logger.error("No está configurado el sitio web de Fenicio en la configuración.");
                 return False;
 
+            fenicio_website_id = int(fenicio_website_id_str)
             self.write({'website_id': fenicio_website_id});
 
 

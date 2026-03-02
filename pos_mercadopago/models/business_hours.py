@@ -28,12 +28,14 @@ class BusinessHours(models.Model):
     # Validacion de la hora de entrada
     @api.constrains("open_hour")
     def _open_hour_constrains(self):
-        self.validate_hour_format(self.open_hour)
-    
+        for record in self:
+            record.validate_hour_format(record.open_hour)
+
     # Validacion de la hora de salida
     @api.constrains("close_hour")
     def _close_hour_constrains(self):
-        self.validate_hour_format(self.close_hour)
+        for record in self:
+            record.validate_hour_format(record.close_hour)
         
     def validate_hour_format(self, hour):
         if len(hour) != 5 or ":" not in hour:
