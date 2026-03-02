@@ -11,7 +11,14 @@ class ResCompany(models.Model):
     fenicio_pricelist_venta_id = fields.Many2one('product.pricelist', string='Lista de Precios de Venta Fenicio')
     fenicio_pricelist_lista_id = fields.Many2one('product.pricelist', string='Lista de Precios Lista Fenicio')
     fenicio_pricelist_alternativo_id = fields.Many2one('product.pricelist', string='Lista de Precios Alternativo Fenicio')
-    fenicio_stock_location_ids = fields.Many2many('stock.location', string='Ubicaciones de Stock Fenicio', domain=[('usage', '=', 'internal'), ('fenicio_visible', '=', True)])
+    fenicio_stock_location_ids = fields.Many2many(
+        'stock.location', 
+        relation='fenicio_res_company_stock_location_rel',
+        column1='company_id',
+        column2='location_id',
+        string='Ubicaciones de Stock Fenicio', 
+        domain=[('usage', '=', 'internal'), ('fenicio_visible', '=', True)]
+    )
 
     @api.constrains('fenicio_token')
     def _check_fenicio_token_unique(self):
