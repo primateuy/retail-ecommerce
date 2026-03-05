@@ -1,6 +1,6 @@
 {
     "name": "POS MercadoPago Integration",
-    "version": "17.0.1.0.19",
+    "version": "17.0.1.0.20",
     "author": "Tu Nombre / Empresa",
     "category": "Point of Sale",
     "depends": ["base","payment_mercado_pago","pos_mercado_pago"],
@@ -17,6 +17,7 @@
         "views/ir_config_parameter_views.xml",
         "views/pos_mercado_pago_views.xml",
         "views/pos_payment_method_views.xml",
+        "views/mercado_pago_user_views.xml",
         "views/mercado_pago_applications_views.xml",
         "views/mp_payment_transaction_views.xml",
         "views/store_branches_views.xml",

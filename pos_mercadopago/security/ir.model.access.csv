@@ -3,5 +3,6 @@ access_group_user_pos_mercado_pago_model,pos.mercado.pago.model.group.user,model
 access_group_user_store_branches,store.branches.group.user,model_store_branches,base.group_user,1,0,0,0
 access_group_user_business_hours,business.hours.group.user,model_business_hours,base.group_user,1,0,0,0
 access_group_user_store_tills,store.tills.group.user,model_store_tills,base.group_user,1,0,0,0
+access_group_user_mercado_pago_user,mercado_pago.user.group.user,model_mercado_pago_user,base.group_user,1,0,0,0
 access_group_user_mercado_pago_applications,mercado_pago.applications.group.user,model_mercado_pago_applications,base.group_user,1,0,0,0
 access_group_user_mp_payment_transaction,mp.payment.transaction.group.user,model_mp_payment_transaction,base.group_user,1,0,0,0

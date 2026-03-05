@@ -28,10 +28,10 @@ class StoreBranches(models.Model):
     longitude = fields.Char()
     reference = fields.Char()
 
-    # Application
-    application_id = fields.Many2one(
-        'mercado_pago.applications',
-        string='Application',
+    # Usuario MP
+    mp_user_id = fields.Many2one(
+        'mercado_pago.user',
+        string='Usuario MP',
     )
 
     # Store tills
@@ -67,7 +67,10 @@ class StoreBranches(models.Model):
             url = self.get_endpoint_route()
 
             # Enviamos la solicitud POST
-            response = requests.post(url, json=body, headers=headers)
+            if self.mp_user_id:
+                response = self.mp_user_id._make_request('post', url, json=body)
+            else:
+                response = requests.post(url, json=body, headers=headers)
 
             # Validamos si hubo un error al crear la sucursal
             if response.status_code >= 400:
@@ -92,15 +95,15 @@ class StoreBranches(models.Model):
             raise ValidationError(_("Ha ocurrido un error al crear la sucursal: %s") % str(e))
 
     def get_endpoint_route(self):
-        if self.application_id:
-            user_id = self.application_id.user_id
+        if self.mp_user_id:
+            user_id = self.mp_user_id.user_id
         else:
             user_id = self.env.ref('pos_mercadopago.user_id_mercado_pago_conf').sudo().value
         return f"https://api.mercadopago.com/users/{user_id}/stores"
 
     def get_endpoint_headers(self):
-        if self.application_id:
-            token = self.application_id.access_token
+        if self.mp_user_id:
+            token = self.mp_user_id.access_token
         else:
             token = self.env.ref('pos_mercadopago.access_token_mercado_pago_conf').sudo().value
         return {
