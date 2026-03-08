@@ -6,10 +6,10 @@ class PosConfig(models.Model):
     _inherit = "pos.config"
 
     default_partner_street = fields.Char(
-        string="Default Partner Street",
+        string="Direccion por defecto del POS",
         help="Valor por defecto para Calle al crear clientes desde el POS.",
     )
     default_partner_city = fields.Char(
-        string="Default Partner City",
+        string="Ciudad por defecto en POS",
         help="Valor por defecto para Ciudad al crear clientes desde el POS.",
     )

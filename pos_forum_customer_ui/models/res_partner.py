@@ -55,7 +55,7 @@ class ResPartner(models.Model):
                 # Validar longitud de la parte nacional
                 if phone_length and len(national_digits) != phone_length:
                     raise ValidationError(
-                        _("Phone length must be %s digits for this country.") % phone_length
+                        _("Largo de número debe ser %s digitos para el país seleccionado.") % phone_length
                     )
                 # Obtener parte nacional para validar formato (quitar + y codigo pais)
                 national_value = value.strip()
@@ -67,7 +67,7 @@ class ResPartner(models.Model):
                         national_value = rest
                 if phone_regex and not re.fullmatch(phone_regex, national_value):
                     raise ValidationError(
-                        _("Phone format does not match the required pattern.")
+                        _("Formato de Celular incorrecto.")
                     )
 
     @api.constrains("email")
@@ -125,15 +125,15 @@ class ResPartner(models.Model):
         # Validar que exista el partner
         partner = self.browse(partner_id).exists()
         if not partner:
-            raise UserError(_("Partner not found for RUT query."))
+            raise UserError(_("RUT Consultado no hallado"))
 
         # Validar que el metodo de consulta exista
         if not hasattr(partner, "_consultar_partner_ruc"):
-            raise UserError(_("RUT query is not available on this system."))
+            raise UserError(_("Consulta RUT no disponible"))
 
         # Validar que el partner tenga numero de documento
         if not partner.vat:
-            raise UserError(_("Document number is required to query RUT."))
+            raise UserError(_("Es necesario un número de RUT para ejecutar la consulta"))
 
         # Ejecutar consulta y actualizar el partner
         partner._consultar_partner_ruc()
@@ -181,7 +181,7 @@ class ResPartner(models.Model):
 
         # Validar que el metodo de consulta exista en el sistema
         if not hasattr(partner, "_consultar_partner_ruc"):
-            raise UserError(_("RUT query is not available on this system."))
+            raise UserError(_("Consulta RUT no está disponible"))
 
         # Ejecutar consulta y poblar datos en memoria
         partner._consultar_partner_ruc()
