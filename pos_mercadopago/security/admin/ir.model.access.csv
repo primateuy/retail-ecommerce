@@ -3,5 +3,6 @@ access_pos_mercado_pago_model,pos.mercado.pago.model,model_point_of_sales_mercad
 access_store_branches,store.branches,model_store_branches,base.group_system,1,1,1,1
 access_business_hours,business.hours,model_business_hours,base.group_system,1,1,1,1
 access_store_tills,store.tills,model_store_tills,base.group_system,1,1,1,1
+access_mercado_pago_user,mercado_pago.user,model_mercado_pago_user,base.group_system,1,1,1,1
 access_mercado_pago_applications,mercado_pago.applications,model_mercado_pago_applications,base.group_system,1,1,1,1
 access_mp_payment_transaction,mp.payment.transaction,model_mp_payment_transaction,base.group_system,1,1,1,1

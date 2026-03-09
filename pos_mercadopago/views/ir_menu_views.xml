@@ -9,6 +9,13 @@
             />
 
         <menuitem
+            id="mercado_pago_user_menu"
+            name="Usuarios MP"
+            action="mercado_pago_user_action"
+            parent="pos_mercado_pago_menu"
+            sequence="3"/>
+
+        <menuitem
             id="mercado_pago_applications_menu"
             name="Aplicaciones"
             action="mercado_pago_applications_action"
