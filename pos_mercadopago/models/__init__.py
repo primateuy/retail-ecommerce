@@ -1,6 +1,7 @@
 from . import settings
 from . import pos_payment_method
 from . import pos_mercado_pago
+from . import mercado_pago_user
 from . import mercado_pago_applications
 from . import business_hours
 from . import store_tills

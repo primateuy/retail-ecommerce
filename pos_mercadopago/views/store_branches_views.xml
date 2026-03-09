@@ -11,6 +11,7 @@
                     <sheet>
                         <group string="Basic Info">
                             <field name="name" placeholder="My store"/>
+                            <field name="mp_user_id"/>
                             <field name="external_id" readonly="1"/>
                             <field name="mp_store_branch_id" readonly="1"/>
                         </group>

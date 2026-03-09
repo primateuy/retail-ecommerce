@@ -6,7 +6,7 @@ import json
 import logging
 import uuid
 from odoo.exceptions import ValidationError
-from datetime import datetime
+from datetime import datetime, timezone
 
 _logger = logging.getLogger(__name__)
 
@@ -63,9 +63,18 @@ class MercadoPagoController(http.Controller):
                     status=404
                 )
             
-            payment_method = request.env["pos.payment.method"].sudo().search([("use_payment_terminal","=","mercado_pago")], limit=1)
+            payment_method = order.session_id.config_id.payment_method_ids.filtered(
+                lambda pm: pm.use_payment_terminal == 'mercado_pago'
+            )[:1]
+            if not payment_method:
+                payment_method = request.env["pos.payment.method"].sudo().search([("use_payment_terminal","=","mercado_pago")], limit=1)
 
-            dt = datetime.fromisoformat(payment["date_created"]) if payment else None
+            if payment:
+                dt = datetime.fromisoformat(payment["date_created"])
+                if dt.tzinfo:
+                    dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
+            else:
+                dt = None
 
             order.sudo().write({
                 "state":"paid",
@@ -79,14 +88,15 @@ class MercadoPagoController(http.Controller):
             try:
                 mp_provider = request.env['payment.provider'].sudo().search([('code', '=', 'mercado_pago')], limit=1)
                 mp_payment_method = request.env.ref('pos_mercadopago.payment_method_mercado_pago', raise_if_not_found=False)
-                request.env['mp.payment.transaction'].sudo().create({
-                    'name': payment.get('external_reference', external_reference) if payment else external_reference,
-                    'payment_method_id': mp_payment_method.id if mp_payment_method else False,
-                    'provider_id': mp_provider.id if mp_provider else False,
-                    'company_id': order.company_id.id,
-                    'amount': payment.get('transaction_amount', 0) if payment else 0,
-                    'pos_order_id': order.id,
-                })
+                with request.env.cr.savepoint():
+                    request.env['mp.payment.transaction'].sudo().create({
+                        'name': payment.get('external_reference', external_reference) if payment else external_reference,
+                        'payment_method_id': mp_payment_method.id if mp_payment_method else False,
+                        'provider_id': mp_provider.id if mp_provider else False,
+                        'company_id': order.company_id.id,
+                        'amount': payment.get('transaction_amount', 0) if payment else 0,
+                        'pos_order_id': order.id,
+                    })
             except Exception as e:
                 _logger.error("Error al crear mp.payment.transaction: %s", str(e))
 
@@ -102,11 +112,11 @@ class MercadoPagoController(http.Controller):
     def _get_access_token(self, order=None):
         if order:
             till = order.session_id.config_id.mp_tills
-            if till and till.store_branch_id.application_id:
-                return till.store_branch_id.application_id.access_token
-        app = request.env['mercado_pago.applications'].sudo().search([], limit=1)
-        if app:
-            return app.access_token
+            if till and till.store_branch_id.mp_user_id:
+                return till.store_branch_id.mp_user_id.access_token
+        mp_user = request.env['mercado_pago.user'].sudo().search([], limit=1)
+        if mp_user:
+            return mp_user.access_token
         return request.env.ref('pos_mercadopago.access_token_mercado_pago_conf').sudo().value
 
     def get_headers(self, order=None):
@@ -180,7 +190,6 @@ class MercadoPagoController(http.Controller):
 
             order_lines = []
             order_mp_lines = []
-            payment_ids = []
             amount_tax = 0
             margin = 0
             
@@ -232,15 +241,8 @@ class MercadoPagoController(http.Controller):
                         "total_amount": item["quantity"] * self.get_price_product(kwards,item,tax)
                     })
 
-            for payment in kwards["paymentLines"]:
-                payment_ids.append((0,0,{
-                    "amount":payment["amount"],
-                    "name": payment["name"],
-                    "payment_method_id": payment["payment_method_id"],
-                }))
-
             order_reference = request.env['ir.sequence'].sudo().next_by_code('pos.order.line')
-            
+
             order = request.env["pos.order"].create({
                 "name": order_reference,
                 "pos_reference": order_reference,
@@ -256,7 +258,6 @@ class MercadoPagoController(http.Controller):
                 # "amount_return": 0,
                 "company_id":kwards["company_id"],
                 "lines": order_lines,
-                "payment_ids": payment_ids
             })
 
             till = request.env["store.tills"].search([("id","=",kwards["store_till_id"])],limit=1)

@@ -63,7 +63,11 @@ class StoreTills(models.Model):
             url = self.get_endpoint_url()
 
             # Enviamos la solicitud POST
-            response = requests.post(url, json=body, headers=headers)
+            mp_user = self.store_branch_id.mp_user_id
+            if mp_user:
+                response = mp_user._make_request('post', url, json=body)
+            else:
+                response = requests.post(url, json=body, headers=headers)
 
             # Validamos si hubo un error al crear la sucursal
             if response.status_code >= 400:
@@ -95,9 +99,9 @@ class StoreTills(models.Model):
         return "https://api.mercadopago.com/pos"
 
     def get_endpoint_headers(self):
-        app = self.store_branch_id.application_id
-        if app:
-            token = app.access_token
+        mp_user = self.store_branch_id.mp_user_id
+        if mp_user:
+            token = mp_user.access_token
         else:
             token = self.env.ref('pos_mercadopago.access_token_mercado_pago_conf').sudo().value
         return {
@@ -135,7 +139,11 @@ class StoreTills(models.Model):
             body = self.get_body_create_order_mp(order)
 
             # Enviamos la solicitud POST
-            response = requests.post(url, json=body, headers=headers)
+            mp_user = self.store_branch_id.mp_user_id
+            if mp_user:
+                response = mp_user._make_request('post', url, json=body)
+            else:
+                response = requests.post(url, json=body, headers=headers)
 
             # Validamos si hubo un error al crear la sucursal
             if response.status_code >= 400:
@@ -170,7 +178,11 @@ class StoreTills(models.Model):
             body["total_amount"] = sum(body['items'][i]['total_amount'] for i in range(len(body['items'])))
 
             # Enviamos la solicitud POST
-            response = requests.post(url, json=body, headers=headers)
+            mp_user = self.store_branch_id.mp_user_id
+            if mp_user:
+                response = mp_user._make_request('post', url, json=body)
+            else:
+                response = requests.post(url, json=body, headers=headers)
 
             data = response.json()
             data["qr_data"] = qrcode.make(data["qr_data"])
@@ -203,9 +215,9 @@ class StoreTills(models.Model):
         return f"https://api.mercadopago.com/instore/orders/qr/seller/collectors/{self.user_id_mp}/pos/{self.external_id}/qrs"
     
     def get_headers_create_order_mp(self):
-        app = self.store_branch_id.application_id
-        if app:
-            token = app.access_token
+        mp_user = self.store_branch_id.mp_user_id
+        if mp_user:
+            token = mp_user.access_token
         else:
             token = self.env.ref('pos_mercadopago.access_token_mercado_pago_conf').sudo().value
         return {
