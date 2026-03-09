@@ -1,9 +1,32 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <templates id="template" xml:space="preserve">
     <!--
-    Heredad de ClosePosPopup sin modificar el DOM: la estructura del popup de cierre
-    varía en Enterprise/versiones custom y un xpath fijo rompe el bundle (404).
-    El límite de saldo en cierre (limit_closing_cash_to_balance) sigue aplicándose por JS (closing_popup.js).
+    Extiende la vista original de cierre de sesión del POS.
+    - Agrega un texto informativo (para verificar la herencia).
+    - Hace que la columna "Contado" sea de solo lectura para métodos de pago
+      no efectivos que tengan marcado readonly_closing_non_cash.
     -->
-    <t t-name="pos_forum_payment_constraints.ClosePosPopup" t-inherit="point_of_sale.ClosePosPopup" t-inherit-mode="extension" owl="1"/>
+    <t t-name="pos_forum_payment_constraints.ClosePosPopup"
+       t-inherit="point_of_sale.ClosePosPopup"
+       t-inherit-mode="extension"
+       owl="1">
+        <!--
+        Para los métodos de pago "otros" (no efectivo):
+        - Si no son readonly: se muestra el Input estándar.
+        - Si son readonly (readonly_closing_non_cash): se muestra el valor contado como texto.
+        -->
+        <xpath expr="//tr[contains(@t-foreach, 'other_payment_methods')]/td[.//Input]" position="replace">
+            <td t-if="_showDiff">
+                <t t-if="!isClosingMethodReadonly(pm.id)">
+                    <Input tModel="[state.payments[pm.id], 'counted']"
+                        isValid.bind="env.utils.isValidFloat" />
+                </t>
+                <t t-else="">
+                    <span class="form-control d-flex align-items-center py-1 bg-view text-muted border-0"
+                        t-esc="state.payments[pm.id].counted"
+                        style="min-width: 60px; pointer-events: none; background-color: #e9ecef;"/>
+                </t>
+            </td>
+        </xpath>
+    </t>
 </templates>

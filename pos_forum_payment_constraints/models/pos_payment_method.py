@@ -17,6 +17,6 @@ class PosPaymentMethod(models.Model):
     )
     limit_closing_cash_to_balance = fields.Boolean(
         string="Limit Closing Cash to Balance",
-        help="Si está activo, el monto contado en cierre no puede superar el saldo esperado.",
+        help="Si está activo: (1) Al momento del pago, el monto de este método no puede superar el saldo pendiente de la orden. (2) En cierre de caja, el efectivo contado no puede superar el saldo esperado.",
         default=False,
     )

@@ -1,7 +1,9 @@
 /** @odoo-module */
 
 import { Order, Orderline } from "@point_of_sale/app/store/models";
+import { ErrorPopup } from "@point_of_sale/app/errors/popups/error_popup";
 import { patch } from "@web/core/utils/patch";
+import { _t } from "@web/core/l10n/translation";
 
 patch(Order.prototype, {
     setup(_defaultObj, options) {
@@ -68,6 +70,37 @@ patch(Order.prototype, {
     has_line_without_salesperson() {
         // Verificar si existe alguna línea sin vendedor
         return this.get_orderlines().some((line) => line.get_line_emp && !line.get_line_emp());
+    },
+
+    /**
+     * Exige vendedor de la orden y en todas las líneas antes de permitir entrar
+     * a la pantalla de pago. Así se evita llegar a Validar con métodos
+     * irreversibles (tarjeta, Mercado Pago, etc.) sin poder volver a asignar vendedor.
+     */
+    async pay() {
+        if (!this.canPay()) {
+            return;
+        }
+
+        const orderSalesperson = this.get_order_salesperson?.();
+        if (!orderSalesperson) {
+            await this.env.services.popup.add(ErrorPopup, {
+                title: _t("Missing Salesperson"),
+                body: _t("Please select a salesperson for the order before paying."),
+            });
+            return;
+        }
+
+        this.apply_order_salesperson_to_lines?.();
+        if (this.has_line_without_salesperson?.()) {
+            await this.env.services.popup.add(ErrorPopup, {
+                title: _t("Missing Salesperson"),
+                body: _t("All order lines must have a salesperson before paying."),
+            });
+            return;
+        }
+
+        return await super.pay(...arguments);
     },
 
     async add_product(product, options) {
