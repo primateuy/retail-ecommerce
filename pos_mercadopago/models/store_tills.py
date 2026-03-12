@@ -50,7 +50,13 @@ class StoreTills(models.Model):
                 result.write({
                     "external_id": result.generate_external_id()
                 })
-            result.create_pos_mercado_pago()
+            try:
+                result.create_pos_mercado_pago()
+            except Exception as e:
+                _logger.warning(
+                    "La caja '%s' se guardo en Odoo pero no se pudo crear en Mercado Pago: %s",
+                    result.name, str(e)
+                )
         return result
     
     # Methods

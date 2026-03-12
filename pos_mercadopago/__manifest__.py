@@ -1,6 +1,6 @@
 {
     "name": "POS MercadoPago Integration",
-    "version": "17.0.1.0.20",
+    "version": "17.0.1.0.21",
     "author": "Tu Nombre / Empresa",
     "category": "Point of Sale",
     "depends": ["base","payment_mercado_pago","pos_mercado_pago"],
