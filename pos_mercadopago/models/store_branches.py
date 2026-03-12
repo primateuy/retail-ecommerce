@@ -48,6 +48,11 @@ class StoreBranches(models.Model):
             result.write({
                 "external_id": result.generate_external_id()
             })
+        if result.mp_user_id and not result.mp_store_branch_id and not self.env.context.get('skip_external_id'):
+            try:
+                result.create_store_branch_mp()
+            except Exception as e:
+                _logger.warning("No se pudo crear la tienda en MP automaticamente: %s", str(e))
         return result
 
     # Generamos el id externo
@@ -57,6 +62,8 @@ class StoreBranches(models.Model):
     # Create a store branch with Mercado Pago API
     def create_store_branch_mp(self):
         try:
+            if not self.mp_user_id:
+                raise ValidationError(_("La tienda no tiene un Usuario MP asignado. Asigne un usuario antes de crear la tienda en Mercado Pago."))
             # Validamos si ya esta registrado
             if self.mp_store_branch_id:
                 raise ValidationError(_("This branch is already registered in Mercado Pago"))
