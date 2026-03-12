@@ -113,7 +113,7 @@ export class PaymentOCA extends PaymentInterface {
         }
 
         // Respetar nro de cuotas de la línea de pago (line.installments) si existe
-        var numCuotas = 1;
+        var numCuotas = 0;
         if (line.installments !== undefined && line.installments !== null) {
             var parsed = parseInt(line.installments, 10);
             if (!isNaN(parsed) && parsed >= 1) numCuotas = parsed;
@@ -121,7 +121,7 @@ export class PaymentOCA extends PaymentInterface {
 
         var data = this.get_base_data();
         data.Amount = `${amount_to_send_by_100}`;
-        data.Quotas = String(numCuotas);
+        data.Quotas = "0";
         data.Plan = "0";
         data.Currency = currency_code;
         //data.TaxRefund = "0";
@@ -130,7 +130,7 @@ export class PaymentOCA extends PaymentInterface {
         data.InvoiceAmount = `${total_order_amount}`;
         // Enviar un InvoiceNumber simple - el backend se encargará de encontrar la orden correcta
         data.InvoiceNumber = "1";
-        data.Installments = String(numCuotas);
+        data.Installments = "1";
         data.TicketNumber = "";
 
         // Log para debuggear los datos que se envían
