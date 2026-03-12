@@ -88,17 +88,46 @@ class MercadoPagoController(http.Controller):
             try:
                 mp_provider = request.env['payment.provider'].sudo().search([('code', '=', 'mercado_pago')], limit=1)
                 mp_payment_method = request.env.ref('pos_mercadopago.payment_method_mercado_pago', raise_if_not_found=False)
+                mp_payment_id = str(payment.get('id', '')) if payment else ''
+                reference = f"MP-{mp_payment_id}" if mp_payment_id else f"MP-{merchant_order_id}"
+                amount = payment.get('transaction_amount', 0) if payment else order.amount_total
+                partner = order.partner_id or order.company_id.partner_id
+                currency = order.currency_id
+
+                tx_vals = {
+                    'reference': reference,
+                    'provider_id': mp_provider.id if mp_provider else False,
+                    'payment_method_id': mp_payment_method.id if mp_payment_method else False,
+                    'amount': amount,
+                    'currency_id': currency.id,
+                    'partner_id': partner.id,
+                    'company_id': order.company_id.id,
+                    'state': 'done',
+                    'provider_reference': mp_payment_id,
+                }
+                if hasattr(request.env['payment.transaction'], 'pos_order_ids'):
+                    tx_vals['pos_order_ids'] = [(4, order.id)]
+                # Setear pos_order_id (campo singular de OCA) para que la vista
+                # muestre correctamente "Punto de Venta" y demás campos relacionados
+                if hasattr(request.env['payment.transaction'], 'pos_order_id'):
+                    tx_vals['pos_order_id'] = order.id
+                # Linkear también el pos.payment recién creado (para que coincida con el flujo OCA)
+                pos_payment = order.payment_ids.filtered(
+                    lambda p: p.payment_method_id.id == payment_method.id
+                ).sorted('create_date', reverse=True)[:1]
+                if pos_payment:
+                    if hasattr(request.env['payment.transaction'], 'pos_payment_id'):
+                        tx_vals['pos_payment_id'] = pos_payment.id
+                    if hasattr(request.env['payment.transaction'], 'transaction_origin'):
+                        tx_vals['transaction_origin'] = 'pos_payment'
+
                 with request.env.cr.savepoint():
-                    request.env['mp.payment.transaction'].sudo().create({
-                        'name': payment.get('external_reference', external_reference) if payment else external_reference,
-                        'payment_method_id': mp_payment_method.id if mp_payment_method else False,
-                        'provider_id': mp_provider.id if mp_provider else False,
-                        'company_id': order.company_id.id,
-                        'amount': payment.get('transaction_amount', 0) if payment else 0,
-                        'pos_order_id': order.id,
-                    })
+                    tx = request.env['payment.transaction'].sudo().create(tx_vals)
+                # Actualizar payment_transaction_id en el pos.payment si el campo existe
+                if pos_payment and hasattr(pos_payment, 'payment_transaction_id'):
+                    pos_payment.sudo().payment_transaction_id = tx.id
             except Exception as e:
-                _logger.error("Error al crear mp.payment.transaction: %s", str(e))
+                _logger.error("Error al crear payment.transaction: %s", str(e))
 
             return Response(
                 json.dumps({ "error": False, "message": f"Pago realizado correctamente, Factura pagada: {external_reference}" }),
@@ -241,7 +270,8 @@ class MercadoPagoController(http.Controller):
                         "total_amount": item["quantity"] * self.get_price_product(kwards,item,tax)
                     })
 
-            order_reference = request.env['ir.sequence'].sudo().next_by_code('pos.order.line')
+            session = request.env['pos.session'].sudo().browse(kwards["session_id"])
+            order_reference = session.config_id.sequence_id.next_by_id()
 
             order = request.env["pos.order"].create({
                 "name": order_reference,
@@ -270,6 +300,13 @@ class MercadoPagoController(http.Controller):
                     }),
                     status=404
                 )
+
+            _logger.info(
+                "Creando orden MP — Till: %s (ID: %s) | Sucursal: %s | Usuario MP: %s",
+                till.name, till.id,
+                till.store_branch_id.name if till.store_branch_id else 'N/A',
+                till.store_branch_id.mp_user_id.user_id if till.store_branch_id.mp_user_id else 'N/A',
+            )
         
             if kwards["qr_type"] == 'static':
                 result = till.create_payment_order(order={
