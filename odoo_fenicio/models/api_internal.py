@@ -3,7 +3,7 @@
 import logging
 
 from odoo import models, fields, api
-from odoo.exceptions import UserError
+from odoo.exceptions import UserError, ValidationError
 
 _logger = logging.getLogger(__name__)
 
@@ -20,22 +20,24 @@ class ApiInternal(models.Model):
 
     @api.model
     def verificar_token(self, token):
-        store_token = self.env['ir.config_parameter'].sudo().get_param('token_autenticacion_efenicio')
-        if store_token != token:
-            raise UserError('El token de autenticacion efenicio es incorrecto.')
-        return True
+        if not token:
+            raise UserError('No se proporcionó un token de autenticación.')
+        company = self.env['res.company'].sudo().search([('fenicio_token', '=', token)], limit=1)
+
+        _logger.info("La compañia que tiene el token es: %s", company.name)
+        if not company:
+            raise UserError('El token de autenticación efenicio es incorrecto o no está asociado a ninguna compañía.')
+        return company
 
     
 
     @api.model
-    def listar_productos(self, json_data):
+    def listar_productos(self, json_data, token):
         
-        # Obtener parámetros con valores por defecto
         limit = json_data.get('total', 100)
         offset = json_data.get('desde', 0)
-        
-        # Obtener código de moneda
-        currency_code = self.env.company.currency_id.name
+        empresa = self.verificar_token(token)
+        currency_code = empresa.currency_id.name
         
         product_template_ids = self.env['product.template'].search([
             ('product_e_fenicio', '=', True),
@@ -55,14 +57,6 @@ class ApiInternal(models.Model):
                 first_variant = product_template_id.product_variant_ids[0]
                 
                 if hasattr(first_variant, 'public_categ_ids') and first_variant.public_categ_ids:
-                    # codigos = []
-                    # for cat in first_variant.public_categ_ids:
-                    #     if cat.fenicio_code:
-                    #         codigos.append(cat.fenicio_code)
-                    #     else:
-                    #         codigos.append('000')
-                            
-                    #     listaCategoria = '\/'.join(codigos)
                     
                     listaCategoria = first_variant.public_categ_ids[0].fenicio_code or '000';
 
@@ -88,7 +82,14 @@ class ApiInternal(models.Model):
             }
 
             for atributos in product_template_id.product_settings_ids:
-                vals['atributos'][atributos.attribute_id.name] = atributos.value_id.name;
+                codigo_atributo = atributos.attribute_id.codigo if atributos.attribute_id.codigo else '000'
+
+                codigo_variante = atributos.value_id.fenicio_attribute_value_code if atributos.value_id.fenicio_attribute_value_code else '000'
+
+                vals['atributos'][codigo_atributo] = codigo_variante;
+
+
+            
 
             if len(product_template_id.product_variant_ids) > 1:
                 # Agrupar variantes por atributos de variante
@@ -108,23 +109,29 @@ class ApiInternal(models.Model):
                     nombre_parts = []
                     atributos = {}
                     
-
+                    
 
                     for attr_val in variant_attrs:
-                        
                         codigo_fenicio = attr_val.product_attribute_value_id.fenicio_attribute_value_code
-                        nombre_fenicio = attr_val.product_attribute_value_id.name
-
-
-                        codigo_parts.append(str(codigo_fenicio) if codigo_fenicio else '000');
                         
-                        nombre_parts.append(nombre_fenicio)
-                        
-                        # Atributos
-                        atributos[attr_val.attribute_id.name] = nombre_fenicio
-                    
-                    codigo_variante = ''.join(codigo_parts)
+                        # Todos los valores posibles del atributo en el template
+                        todos_los_valores = [
+                            v.name 
+                            for v in attr_val.attribute_id.value_ids
+                            if v.id in product_template_id.attribute_line_ids.filtered(
+                                lambda l: l.attribute_id.id == attr_val.attribute_id.id
+                            ).value_ids.ids
+                        ]
+
+                        codigo_parts.append(str(codigo_fenicio) if codigo_fenicio else '000')
+                        nombre_parts.append(', '.join(todos_los_valores))  # ← todos los valores
+
+                        clave = attr_val.attribute_id.name
+                        atributos[clave] = ', '.join(todos_los_valores) if len(todos_los_valores) > 1 else todos_los_valores[0]
+
                     nombre_variante = ' / '.join(nombre_parts)
+                    codigo_variante = ''.join(codigo_parts)
+
             
 
                     # Usar código de variante como clave para agrupar
@@ -136,29 +143,21 @@ class ApiInternal(models.Model):
                             'presentaciones': [],
                         }
 
-                    # Obtener listas de precio de la configuración global de Fenicio
-                    config_params = self.env['ir.config_parameter'].sudo()
-                    listaVenta_id = config_params.get_param('odoo_fenicio.pricelist_venta')
-                    listaPrecios_id = config_params.get_param('odoo_fenicio.pricelist_lista')
-                    listaAlternativo_id = config_params.get_param('odoo_fenicio.pricelist_alternativo')
-                    
-                    listaVenta = self.env['product.pricelist'].sudo().browse(int(listaVenta_id)) if listaVenta_id else False
-                    listaPrecios = self.env['product.pricelist'].sudo().browse(int(listaPrecios_id)) if listaPrecios_id else False
-                    listaAlternativo = self.env['product.pricelist'].sudo().browse(int(listaAlternativo_id)) if listaAlternativo_id else False
+                    listaVenta = self.env.company.fenicio_pricelist_venta_id
+                    listaPrecios = self.env.company.fenicio_pricelist_lista_id
+                    listaAlternativo = self.env.company.fenicio_pricelist_alternativo_id
                     
 
-                    # Si no hay atributos de presentación, crear una presentación por defecto
                     if not presentacion_attrs:
                         codigo = variante.default_code or ''
                         nombre = variante.name
                         sku = variante.default_code or ''
-                        stock = self._get_fenicio_stock(variante)
+                        stock = self._get_fenicio_stock(variante, token)
 
                         precioVenta = 0.0
                         precioLista = 0.0
                         precioAlternativo = 0.0
 
-                        # Calcular precio de venta con fórmulas/descuentos
                         if listaVenta:
                             try:
                                 precioVenta = listaVenta._get_product_price(
@@ -170,7 +169,6 @@ class ApiInternal(models.Model):
                             except Exception as e:
                                 precioVenta = variante.lst_price or 0.0
 
-                        # Calcular precio de lista con fórmulas/descuentos
                         if listaPrecios:
                             try:
                                 precioLista = listaPrecios._get_product_price(
@@ -182,7 +180,6 @@ class ApiInternal(models.Model):
                             except Exception as e:
                                 precioLista = variante.lst_price or 0.0
 
-                        # Calcular precio alternativo con fórmulas/descuentos
                         if listaAlternativo:
                             try:
                                 precioAlternativo = listaAlternativo._get_product_price(
@@ -206,18 +203,16 @@ class ApiInternal(models.Model):
                             }
                         )
                     else:
-                        # Agregar todas las presentaciones para esta variante
                         for pres_attr_val in presentacion_attrs:
-                            codigo = str(pres_attr_val.attribute_id.codigo) if pres_attr_val.attribute_id.codigo else '000'
+                            codigo = pres_attr_val.product_attribute_value_id.fenicio_attribute_value_code if pres_attr_val.product_attribute_value_id.fenicio_attribute_value_code else '000'
                             nombre = pres_attr_val.product_attribute_value_id.name
                             sku = variante.default_code or ''
-                            stock = self._get_fenicio_stock(variante)
+                            stock = self._get_fenicio_stock(variante, token)
 
                             precioVenta = 0.0
                             precioLista = 0.0
                             precioAlternativo = 0.0
 
-                            # Calcular precio de venta con fórmulas/descuentos
                             if listaVenta:
                                 try:
                                     precioVenta = listaVenta._get_product_price(
@@ -230,7 +225,6 @@ class ApiInternal(models.Model):
                                 except Exception as e:
                                     precioVenta = variante.lst_price or 0.0
 
-                            # Calcular precio de lista con fórmulas/descuentos
                             if listaPrecios:
                                 try:
                                     precioLista = listaPrecios._get_product_price(
@@ -243,7 +237,6 @@ class ApiInternal(models.Model):
                                 except Exception as e:
                                     precioLista = variante.lst_price or 0.0
 
-                            # Calcular precio alternativo con fórmulas/descuentos
                             if listaAlternativo:
                                 try:
                                     precioAlternativo = listaAlternativo._get_product_price(
@@ -267,7 +260,6 @@ class ApiInternal(models.Model):
                                 }
                             )
 
-                # Agregar todas las variantes agrupadas al response
                 for variante_data in variantes_map.values():
                     vals['variantes'].append(variante_data)
 
@@ -284,11 +276,9 @@ class ApiInternal(models.Model):
                     'presentaciones': []
                 }
 
-                # Agregar presentación única
-                presentacion_data = self._build_presentacion_data(product_id, product_id.name, True, codigo_unico=True)
+                presentacion_data = self._build_presentacion_data(product_id, product_id.name, True, codigo_unico=True, token=token)
                 variante['presentaciones'].append(presentacion_data)
 
-                # Agregar atributos del producto
                 for attr_val in product_id.product_template_attribute_value_ids:
                     variante['atributos'][attr_val.attribute_id.display_name] = attr_val.product_attribute_value_id.name
 
@@ -299,22 +289,28 @@ class ApiInternal(models.Model):
         return response
 
 
-    def _get_fenicio_stock(self, product_id):
-    # Obtener ubicaciones visibles para Fenicio
-        fenicio_locations = self.env['stock.location'].search([
-            ('fenicio_visible', '=', True),
-            ('usage', '=', 'internal')
-        ])
+    def _get_fenicio_stock(self, product_id, token):
+    # Obtener ubicaciones configuradas para la compañía
+        fenicio_locations = self.env.company.fenicio_stock_location_ids
         
         if not fenicio_locations:
-            _logger.warning("Producto %s: No hay ubicaciones Fenicio configuradas", product_id.default_code)
+            _logger.warning("Producto %s: No hay ubicaciones Fenicio configuradas para la compañía %s", product_id.default_code, self.env.company.id)
             return 0.0
         
         
         # Obtener el tope máximo de stock a mostrar
         variante = self.env['product.product'].browse(product_id.id);
         
-        tope_maximo = variante.available_threshold if variante.show_availability and variante.available_threshold > 0 else 25;
+        empresa = self.verificar_token(token);
+
+        if not empresa or not empresa.cantidad_stock_bydefault:
+            cantidad_bydefault = 0
+        else:
+            cantidad_bydefault = empresa.cantidad_stock_bydefault
+
+        tope_maximo = variante.available_threshold if variante.show_availability and variante.available_threshold > 0 else cantidad_bydefault
+
+
 
         
         stock_atp = 0.0
@@ -322,7 +318,7 @@ class ApiInternal(models.Model):
             qty_atp = self.env['stock.quant']._get_available_quantity(product_id, location)
             stock_atp += qty_atp
         
-        
+        _logger.info(f"Stock por defecto {cantidad_bydefault}, stock ATP {stock_atp}, tope máximo {tope_maximo} para el producto {product_id.default_code} en la compañía {self.env.company.name}")
         
         stock_final = min(stock_atp, tope_maximo)
         
@@ -331,7 +327,6 @@ class ApiInternal(models.Model):
 
     @api.model
     def _build_variant_name(self, product_product_ids):
-        """Construir nombre: Color + " / " + Color Secundario"""
         if not product_product_ids:
             return ""
             
@@ -360,23 +355,13 @@ class ApiInternal(models.Model):
     def _build_presentacion_data(self, product_id, nombre_presentacion, es_unico=False, codigo_unico=False):
         """Construir datos de presentación para un producto"""
         
-        # Obtener stock
-        stock_quant_id = self.env['stock.quant'].search([
-            ('product_id', '=', product_id.id),
-            ('on_hand', '=', True),
-        ], limit=1)
-        
-        stock = stock_quant_id.quantity if stock_quant_id else 0.0
+        # Obtener stock usando la ubicación configurada en la empresa
+        stock = self._get_fenicio_stock(product_id)
 
-        # Obtener listas de precio de la configuración global de Fenicio
-        config_params = self.env['ir.config_parameter'].sudo()
-        listaVenta_id = config_params.get_param('odoo_fenicio.pricelist_venta')
-        listaPrecios_id = config_params.get_param('odoo_fenicio.pricelist_lista')
-        listaAlternativo_id = config_params.get_param('odoo_fenicio.pricelist_alternativo')
-        
-        listaVenta = self.env['product.pricelist'].sudo().browse(int(listaVenta_id)) if listaVenta_id else False
-        listaPrecios = self.env['product.pricelist'].sudo().browse(int(listaPrecios_id)) if listaPrecios_id else False
-        listaAlternativo = self.env['product.pricelist'].sudo().browse(int(listaAlternativo_id)) if listaAlternativo_id else False
+        # Obtener listas de precio de la compañía
+        listaVenta = self.env.company.fenicio_pricelist_venta_id
+        listaPrecios = self.env.company.fenicio_pricelist_lista_id
+        listaAlternativo = self.env.company.fenicio_pricelist_alternativo_id
 
         # Obtener precio de lista
         precio_lista = 0.0
@@ -417,7 +402,6 @@ class ApiInternal(models.Model):
             except Exception as e:
                 precio_alternativo = product_id.lst_price or 0.0
 
-        # Obtener identificadores
         identificadores = []
         for identificador in product_id.indentificadores_ids:
             identificadores.append({
@@ -577,96 +561,73 @@ class ApiInternal(models.Model):
             return False
 
     @api.model
-    def stockporsku(self, json_data):
-        skus_pedido = json_data['skus']
-
-        productos = self.env['product.product'];
+    def stockporsku(self, json_data, token):
+        skus_pedido = json_data.get('skus', [])
+        vals_list = []
+        sku_no_encontrados = []
 
         for sku in skus_pedido:
-            product_id = self.env['product.product'].search([('default_code', '=', sku)], limit=1)
-            if product_id:
-                productos += product_id
-
-        
-
-        
-        skus_encontrados = set(productos.mapped('default_code'))
-        sku_no_encontrados = set(skus_pedido) - set(skus_encontrados)
-
-        vals_list = []
-
-
-
-        stock_quant_encontrados_ids = self.env['stock.quant']
-
-        for product_id in productos:
-            stock_quant_id = self.env['stock.quant'].search([
-                ('product_id', '=', product_id.id),
-                ('on_hand', '=', True),
+            if not sku:
+                continue
+            
+            sku = str(sku).strip()
+            product_id = self.env['product.product'].search([
+                '|', '|', ('default_code', '=', sku), ('barcode', '=', sku), ('code_e_fenicio', '=', sku)
             ], limit=1)
 
-            if stock_quant_id:
-                stock_quant_encontrados_ids += stock_quant_id
-                vals = {
-                    "sku": stock_quant_id.product_id.default_code,
-                    "stock": stock_quant_id.quantity,
-                }
-                vals_list.append(vals)
+            if not product_id:
+                sku_no_encontrados.append(sku)
+                continue
 
-        sku_sin_stock = productos - stock_quant_encontrados_ids.mapped('product_id')
-        for product_id in sku_sin_stock:
-            vals = {
-                "sku": product_id.default_code,
-                "stock": 0.0,
-            }
-            vals_list.append(vals)
+            stock_total = self._get_fenicio_stock(product_id, token)
+            _logger.info("SKU: %s - STOCK TOTAL %s", sku, stock_total)
+            
+            vals_list.append({
+                "sku": product_id.default_code or sku,
+                "stock": stock_total,
+            })
 
         response = {
             'stockPorSku': vals_list,
         }
 
         msg = ''
-        if len(sku_no_encontrados) > 0:
+        if sku_no_encontrados:
             msg = f'Los siguientes sku no fueron encontrados: {sku_no_encontrados}'
 
         return response, msg
 
     @api.model
-    def crear_orden_venta(self, json_data):
+    def crear_orden_venta(self, json_data, token):
         estados = ['EN_CURSO', 'APROBADA', 'ABANDONADA', 'PAGO_PENDIENTE', 'REQUIERE_APROBACION', 'CANCELADA']
+        
 
+        fenicio_compania = self.env.company
+        
         # verificar que sea un estado valido
         if 'estado' not in json_data or json_data['estado'] not in estados:
             return {'error': 'Estado de la orden no válido'}
         try:
 
-            # obtener el valor del estado
             estado = json_data['estado']
-            # obtener el id de la orden
             id_orden_fenicio = json_data['idOrden']
 
-
             SALE_ORDER_ENV = self.env['sale.order']
-            # obtener cualquier orden anteriormente creada
-            sale_order_id = SALE_ORDER_ENV.search([('id_order_fenicio', '=', id_orden_fenicio)], limit=1)
+            sale_order_id = SALE_ORDER_ENV.search([('id_order_fenicio', '=', id_orden_fenicio), ('company_id', '=', fenicio_compania.id)], limit=1)
 
-            # boolean para saber si la orden es recien creada o no
             is_new_order = False
 
 
             error = ''
             if sale_order_id and sale_order_id.state == 'draft' and estado == 'EN_CURSO':
-                # si hay un presupuesto y el estado del json es EN_CURSO:
-                # actualizar los datos de la orden
-                sale_order_id, error = sale_order_id.create_or_update_order(json_data)
+                sale_order_id, error = sale_order_id.create_or_update_order(json_data, token)
             elif not sale_order_id:
-                # si no existe ninguna orden: crearla
-                sale_order_id, error = SALE_ORDER_ENV.create_or_update_order(json_data)
+                sale_order_id, error = SALE_ORDER_ENV.create_or_update_order(json_data, token)
                 is_new_order = True
 
-            # si no se pudo crear la orden: retornar error
-            if not sale_order_id:
-                return {'error': error}
+                # si no se pudo crear la orden: lanzar error para rollback
+                if not sale_order_id:
+                    return {'error': error or "No se pudo crear la orden de venta"}
 
             if estado in ['PAGO_PENDIENTE', 'REQUIERE_APROBACION', 'APROBADA']:
                 if sale_order_id.state in ['draft', 'sent']:
@@ -678,7 +639,6 @@ class ApiInternal(models.Model):
 
             cancelable = False
             if estado in ['ABANDONADA', 'CANCELADA']:
-                # cancelable, cancel_error = SALE_ORDER_ENV.is_cancelable(id_orden_fenicio)
                 cancelable = True
 
             
@@ -686,7 +646,6 @@ class ApiInternal(models.Model):
                 invoices_ids = sale_order_id.invoice_ids
                 picking_ids = sale_order_id.picking_ids
 
-                # payment_ids = self.env['account.payment'].search([('invoice_ids', 'in', invoices_ids.ids)])
                 ids_payment = []
                 for invoice_id in invoices_ids:
                     reconciled_invoices_partials = invoice_id._get_reconciled_invoices_partials()
@@ -699,7 +658,6 @@ class ApiInternal(models.Model):
                 
                 invoices_ids.crear_nota_credito()
 
-                # picking_ids.action_cancel()
                 for picking_id in picking_ids:
                     move_lines_ids = picking_id.mapped('move_lines')
                     any_done = any(move.state == 'done' for move in move_lines_ids)
@@ -728,12 +686,13 @@ class ApiInternal(models.Model):
 
            
             if picking_error:
-                return {'error': picking_error}
+                raise UserError(picking_error)
 
             if estado in ['PAGO_PENDIENTE', 'REQUIERE_APROBACION', 'APROBADA']:
                 
                 if len(sale_order_id.invoice_ids) == 0:
-                    sale_order_id.create_invoice_fenicio()
+                    if not sale_order_id.create_invoice_fenicio():
+                        raise UserError("No se pudo crear la factura para la orden")
                     invoice_ids = sale_order_id.invoice_ids
 
                     plazo_pago_id = self.env['account.payment.term'].search([('for_fenicio', '=', True)], limit=1)
@@ -749,15 +708,21 @@ class ApiInternal(models.Model):
                     for invoice_id in invoice_ids:
                         payment_ids = invoice_id.payment_ids
 
+                        if invoice_id.amount_residual == 0:
+                            _logger.info(
+                                "Factura %s ya tiene saldo 0, se omite el registro de pago.",
+                                invoice_id.name
+                            )
+                            continue
+
                         invoice_id.create_payment_fenicio(json_data_pago, mode_update=(len(payment_ids) > 0), payment_ids=payment_ids)
 
 
-            # Crear transacción de pago si la orden fue aprobada
-            if estado == 'APROBADA' and sale_order_id.invoice_ids:
-                transaction_result = sale_order_id.create_payment_transaction(json_data)
-                # Si hay error en la transacción, retornarlo
-                if 'error' in transaction_result:
-                    return transaction_result
+                if estado == 'APROBADA' and sale_order_id.invoice_ids:
+                    transaction_result = sale_order_id.create_payment_transaction(json_data)
+                    # Si hay error en la transacción, lanzar error para rollback total
+                    if 'error' in transaction_result:
+                        raise UserError(transaction_result['error'])
             
             return {
                 'referencia': sale_order_id.display_name,
@@ -766,7 +731,7 @@ class ApiInternal(models.Model):
             }
         except Exception as e:
             _logger.error("Error al crear o actualizar la orden de venta: %s", str(e))
-            return {'error': 'Error al procesar la orden de venta: ' + str(e)}
+            raise ValidationError(str(e)) 
 
     @api.model
     def puede_cancelar(self, json_data):
