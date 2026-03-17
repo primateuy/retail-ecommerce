@@ -8,3 +8,4 @@ from . import store_tills
 from . import store_branches
 from . import point_of_sale
 from . import mp_payment_transaction
+from . import mp_pending_order

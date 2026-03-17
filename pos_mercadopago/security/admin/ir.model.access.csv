@@ -6,3 +6,4 @@ access_store_tills,store.tills,model_store_tills,base.group_system,1,1,1,1
 access_mercado_pago_user,mercado_pago.user,model_mercado_pago_user,base.group_system,1,1,1,1
 access_mercado_pago_applications,mercado_pago.applications,model_mercado_pago_applications,base.group_system,1,1,1,1
 access_mp_payment_transaction,mp.payment.transaction,model_mp_payment_transaction,base.group_system,1,1,1,1
+access_mp_pending_order,mp.pending.order,model_mp_pending_order,base.group_system,1,1,1,1

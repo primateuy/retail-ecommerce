@@ -1,6 +1,6 @@
 {
     "name": "POS MercadoPago Integration",
-    "version": "17.0.1.0.22",
+    "version": "17.0.1.0.23",
     "author": "Tu Nombre / Empresa",
     "category": "Point of Sale",
     "depends": ["base","payment_mercado_pago","pos_mercado_pago"],
@@ -26,12 +26,9 @@
         "views/point_of_sale.xml",
         "views/ir_menu_views.xml",
     ],
-    "assets":{
-        # 'point_of_sale.assets': [
-        #     'pos_mercadopago/static/src/components/popup_qr/popup_qr.js',
-        #     'pos_mercadopago/static/src/components/popup_qr/popup_qr.xml',
-        # ],
+    "assets": {
         'point_of_sale._assets_pos': [
+            'pos_mercadopago/static/src/components/**/*',
             'pos_mercadopago/static/src/overrides/**/*',
         ]
     },

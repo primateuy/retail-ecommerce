@@ -4,7 +4,7 @@ import requests
 import qrcode
 from io import BytesIO
 import base64
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import logging
 
@@ -166,14 +166,9 @@ class StoreTills(models.Model):
 
     def process_create_payment_order_qr_tramma(self, order):
         try:
-            # Obtener fecha actual con zona horaria
-            actual_date = datetime.now()
-
-            # Agregar 5 minutos
-            five_min_date = actual_date + timedelta(minutes=5)
-
-            # Formatear la fecha con el formato específico
-            formated_datetime = five_min_date.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "-04:00"
+            
+            five_min_date = datetime.now(timezone.utc) + timedelta(minutes=5)
+            formated_datetime = five_min_date.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "+00:00"
 
             url = self.get_create_qr_tramma_mp_endpoint()
             headers = self.get_headers_create_order_mp()
