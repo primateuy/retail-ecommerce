@@ -86,7 +86,10 @@ class MercadoPagoController(http.Controller):
             })
 
             try:
-                mp_provider = request.env['payment.provider'].sudo().search([('code', '=', 'mercado_pago')], limit=1)
+                mp_provider = request.env['payment.provider'].sudo().search([
+                    ('code', '=', 'mercado_pago'),
+                    ('company_id', '=', order.company_id.id),
+                ], limit=1)
                 mp_payment_method = request.env.ref('pos_mercadopago.payment_method_mercado_pago', raise_if_not_found=False)
                 mp_payment_id = str(payment.get('id', '')) if payment else ''
                 reference = f"MP-{mp_payment_id}" if mp_payment_id else f"MP-{merchant_order_id}"
@@ -228,11 +231,14 @@ class MercadoPagoController(http.Controller):
 
                 if tax and tax.price_include:
                     price_subtotal_incl = item["unit_price"]
-                    amount_tax += item["unit_price"] - (item["unit_price"] / (1 + tax.amount / 100))
+                    price_subtotal = item["unit_price"] / (1 + tax.amount / 100)
+                    amount_tax += item["unit_price"] - price_subtotal
                 elif tax:
-                    price_subtotal_incl = item["unit_price"] + ((tax.amount / 100) * item["unit_price"])
+                    price_subtotal = item["unit_price"]
+                    price_subtotal_incl = item["unit_price"] * (1 + tax.amount / 100)
                     amount_tax += (tax.amount / 100) * item["unit_price"]
                 else:
+                    price_subtotal = item["unit_price"]
                     price_subtotal_incl = item["unit_price"]
 
                 margin = margin + (price_subtotal_incl - (item["quantity"] * item["standard_price"]))
@@ -243,7 +249,7 @@ class MercadoPagoController(http.Controller):
                     "product_id":item["product_id"],
                     "price_unit":item["unit_price"],
                     "qty": item["quantity"],
-                    "price_subtotal": item["unit_price"],
+                    "price_subtotal": price_subtotal,
                     "price_subtotal_incl": price_subtotal_incl,
                     "tax_ids": [(6,0,item["tax_ids"])],
                     "tax_ids_after_fiscal_position": [(6,0,item['tax_ids_after_fiscal_position'])]  
@@ -273,19 +279,18 @@ class MercadoPagoController(http.Controller):
             session = request.env['pos.session'].sudo().browse(kwards["session_id"])
             order_reference = session.config_id.sequence_id.next_by_id()
 
-            order = request.env["pos.order"].create({
+            order = request.env["pos.order"].sudo().create({
                 "name": order_reference,
                 "pos_reference": order_reference,
                 "session_id": kwards["session_id"],
                 "user_id": kwards["user_id"],
+                "partner_id": kwards.get("partner_id") or False,
+                "order_salesperson_id": kwards.get("cashier_id") or False,
                 "amount_tax": amount_tax,
                 "state":"draft",
-                # "amount_total": self.get_total_amount(order_mp_lines) if len(kwards["paymentLines"]) == 1 else self.get_total_amount_by_order_lines(order_lines),
                 "amount_total": self.get_total_amount(order_mp_lines) if len(kwards["paymentLines"]) == 1 else sum(map(lambda p: p["amount"], kwards["paymentLines"])),
-                # "amount_paid": kwards["amount_paid"],
                 "amount_paid": self.get_total_amount(order_mp_lines) if len(kwards["paymentLines"]) == 1 else sum(map(lambda p: p["amount"], kwards["paymentLines"])),
                 "amount_return": self.get_total_amount(order_mp_lines) - kwards["amount_paid"],
-                # "amount_return": 0,
                 "company_id":kwards["company_id"],
                 "lines": order_lines,
             })

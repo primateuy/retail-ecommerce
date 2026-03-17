@@ -78,11 +78,13 @@ export class PaymentMercadoPagoQR extends PaymentMercadoPago {
                 // Creamos la orden por endpoint
                 const order = await this.pos.orm.rpc(
                     "/pos/create-order",
-                    { 
-                        store_till_id: this.pos.store_till.id, 
+                    {
+                        store_till_id: this.pos.store_till.id,
                         items: posOrders,
                         session_id: this.pos.pos_session.id,
                         user_id: this.pos.pos_session.user_id[0],
+                        partner_id: orderFrontend.partner?.id || false,
+                        cashier_id: orderFrontend.order_salesperson?.id || false,
                         amount_paid: 0,
                         company_id: this.pos.config.company_id[0],
                         qr_type: this.pos.qr_type,
@@ -90,77 +92,94 @@ export class PaymentMercadoPagoQR extends PaymentMercadoPago {
                     }
                 );
                 this.orderToPaid = JSON.parse(order);
-                
-                const foundImg = document.querySelector(".right-content img#qr_code_pos");
+
                 const self = this;
                 const position = document.querySelector(".right-content");
 
-                // Reutilizar o crear elementos
-                let img = foundImg || document.createElement("img");
-                let buttonAcept = document.querySelector(".right-content button#validate-btn") || document.createElement("button");
-                let buttonCancel = document.querySelector(".right-content button#delete-order-btn") || document.createElement("button");
+                const prevImg = document.querySelector(".right-content img#qr_code_pos");
+                const prevAcept = document.querySelector(".right-content button#validate-btn");
+                const prevCancel = document.querySelector(".right-content button#delete-order-btn");
+                if (prevImg) position.removeChild(prevImg);
+                if (prevAcept) position.removeChild(prevAcept);
+                if (prevCancel) position.removeChild(prevCancel);
 
-                if (!foundImg) {
-                    img.className = "m-5 d-flex";
-                    img.id = "qr_code_pos";
-                    img.width = "200";
-                    img.height = "200";
+                const img = document.createElement("img");
+                img.className = "m-5 d-flex";
+                img.id = "qr_code_pos";
+                img.width = "200";
+                img.height = "200";
 
-                    buttonAcept.className = "btn btn-primary mx-3 py-2 px-3";
-                    buttonAcept.textContent = "Comprobar pago";
-                    buttonAcept.id = "validate-btn";
+                const buttonAcept = document.createElement("button");
+                buttonAcept.className = "btn btn-primary mx-3 py-2 px-3";
+                buttonAcept.textContent = "Comprobar pago";
+                buttonAcept.id = "validate-btn";
 
-                    buttonCancel.className = "btn btn-danger mx-3 py-2 px-3";
-                    buttonCancel.textContent = "Eliminar Orden";
-                    buttonCancel.id = "delete-order-btn";
+                const buttonCancel = document.createElement("button");
+                buttonCancel.className = "btn btn-danger mx-3 py-2 px-3";
+                buttonCancel.textContent = "Eliminar Orden";
+                buttonCancel.id = "delete-order-btn";
 
-                    position.appendChild(img);
-                    position.appendChild(buttonAcept);
-                    position.appendChild(buttonCancel);
-                }
+                position.appendChild(img);
+                position.appendChild(buttonAcept);
+                position.appendChild(buttonCancel);
 
                 img.src = this.pos.qr_type == 'static' ? this.pos.store_till.qr_url : this.orderToPaid.data.qr_data;
 
                 buttonAcept.onclick = async (e) => {
                     e.target.disabled = true;
                     buttonCancel.disabled = true;
+                    try {
+                        const result = await self.env.services.orm.searchRead(
+                            "pos.order",
+                            [["id", "=", self.orderToPaid["pos.order"]["id"]]]
+                        );
 
-                    const result = await self.env.services.orm.searchRead(
-                        "pos.order",
-                        [["id", "=", self.orderToPaid["pos.order"]["id"]]]
-                    );
+                        if (result[0].state == "draft") {
+                            return self._showMsg(
+                                "La orden aun sigue sin recibir el pago",
+                                "| Comprobacion del Pago"
+                            );
+                        }
 
-                    if (result[0].state == "draft") {
-                        buttonCancel.disabled = false;
+                        const frontendOrder = self.pos.get_order();
+                        frontendOrder.finalized = true;
+                        self.pos.db.remove_unpaid_order(frontendOrder);
+
+                        self.pos.showScreen("ReceiptScreen");
+                    } catch (err) {
+                        console.error("Error al comprobar pago", err);
+                        self._showMsg("Hubo un error al comprobar el pago", "| Error");
+                    } finally {
                         e.target.disabled = false;
-                        return self._showMsg(
-                            "La orden aun sigue sin recibir el pago",
-                            "| Comprobacion del Pago"
-                        )
+                        buttonCancel.disabled = false;
                     }
-
-                    self.pos.showScreen("ReceiptScreen");
                 };
 
                 buttonCancel.onclick = async (e) => {
                     e.target.disabled = true;
                     buttonAcept.disabled = true;
+                    try {
+                        const result = await self.pos.orm.rpc(
+                            "/pos/delete-order",
+                            {
+                                external_id: self.pos.store_till.external_id,
+                                user_id: self.pos.store_till.user_id_mp,
+                                session_id: self.pos.pos_session.id,
+                                order_id: self.orderToPaid["pos.order"]["id"]
+                            }
+                        );
 
-                    const result = await self.pos.orm.rpc(
-                        "/pos/delete-order",
-                        {
-                            external_id: self.pos.store_till.external_id,
-                            user_id: self.pos.store_till.user_id_mp,
-                            session_id: self.pos.pos_session.id,
-                            order_id: self.orderToPaid["pos.order"]["id"]
+                        if (JSON.parse(result).error == false) {
+                            position.removeChild(buttonCancel);
+                            position.removeChild(buttonAcept);
+                            position.removeChild(img);
+                        } else {
+                            e.target.disabled = false;
+                            buttonAcept.disabled = false;
                         }
-                    );
-
-                    if (JSON.parse(result).error == false) {
-                        position.removeChild(buttonCancel);
-                        position.removeChild(buttonAcept);
-                        position.removeChild(img);
-                    } else {
+                    } catch (err) {
+                        console.error("Error al eliminar orden", err);
+                        self._showMsg("Hubo un error al eliminar la orden", "| Error");
                         e.target.disabled = false;
                         buttonAcept.disabled = false;
                     }
