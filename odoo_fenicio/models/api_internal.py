@@ -352,11 +352,11 @@ class ApiInternal(models.Model):
             return product_id.name
 
     @api.model
-    def _build_presentacion_data(self, product_id, nombre_presentacion, es_unico=False, codigo_unico=False):
+    def _build_presentacion_data(self, product_id, nombre_presentacion, es_unico=False, codigo_unico=False, token=None):
         """Construir datos de presentación para un producto"""
         
         # Obtener stock usando la ubicación configurada en la empresa
-        stock = self._get_fenicio_stock(product_id)
+        stock = self._get_fenicio_stock(product_id, token)
 
         # Obtener listas de precio de la compañía
         listaVenta = self.env.company.fenicio_pricelist_venta_id
