@@ -141,6 +141,18 @@ class MercadoPagoController(http.Controller):
                 status=404
             )
 
+        try:
+            request.env.cr.execute(
+                'SELECT id FROM mp_pending_order WHERE id = %s FOR UPDATE NOWAIT',
+                (pending.id,)
+            )
+        except Exception:
+            _logger.info("Webhook concurrente para orden %s — ya está siendo procesado", external_reference)
+            return Response(
+                json.dumps({"error": False, "message": "Orden siendo procesada por otro webhook"}),
+                status=200
+            )
+
         order_data = json.loads(pending.order_data)
         session = pending.session_id
 
