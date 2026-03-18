@@ -65,7 +65,7 @@
                         </div>
                         <div class="partner-detail col">
                             <label class="form-label label" for="mobile_person"><t t-esc="mobileLabel" /></label>
-                            <input class="detail form-control" id="mobile_person" name="mobile" t-model="changes.mobile" t-att-placeholder="phonePlaceholder" t-att="{'disabled': isFieldCommercialAndPartnerIsChild('mobile')}" t-on-change="onMobileChange" />
+                            <input class="detail form-control" id="mobile_person" name="mobile" t-model="changes.mobile" t-att-placeholder="mobilePlaceholder" t-att="{'disabled': isFieldCommercialAndPartnerIsChild('mobile')}" t-on-change="onMobileChange" />
                         </div>
                         <div class="partner-detail col">
                             <label class="form-label label" for="phone_person"><t t-esc="phoneLabel" /></label>
@@ -133,7 +133,7 @@
                         </div>
                         <div class="partner-detail col">
                             <label class="form-label label" for="mobile_company"><t t-esc="mobileLabel" /></label>
-                            <input class="detail form-control" id="mobile_company" name="mobile" t-model="changes.mobile" t-att-placeholder="phonePlaceholder" t-att="{'disabled': isFieldCommercialAndPartnerIsChild('mobile')}" t-on-change="onMobileChange" />
+                            <input class="detail form-control" id="mobile_company" name="mobile" t-model="changes.mobile" t-att-placeholder="mobilePlaceholder" t-att="{'disabled': isFieldCommercialAndPartnerIsChild('mobile')}" t-on-change="onMobileChange" />
                         </div>
                         <div class="partner-detail col">
                             <label class="form-label label" for="phone_company"><t t-esc="phoneLabel" /></label>

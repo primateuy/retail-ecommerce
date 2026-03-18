@@ -1,36 +1,24 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<templates id="template" xml:space="preserve">
-    <t t-name="pos_mercadopago.MercadoPagoPopup">
-        <Dialog header="false">
-            <div class="input-amount d-flex mb-2 gap-2">
-                <!-- <div class="input-group" t-att-class="{ 'w-50' : this.ui.isSmall }">
-                    <button t-on-click="() => this.onClickButton('in')" t-attf-class="input-type btn btn-secondary lh-lg #{this.ui.isSmall ? 'btn-md' : 'btn-lg'} #{state.type === 'in' ? 'highlight btn-success' : '' }">
-                        Cash In
-                    </button>
-                    <button t-on-click="() => this.onClickButton('out')" t-attf-class="input-type btn btn-secondary lh-lg #{this.ui.isSmall ? 'btn-md' : 'btn-lg'} #{state.type === 'out' ? 'red-highlight btn-danger' : '' }">
-                        Cash Out
-                    </button>
-                </div>
-                <div t-attf-class="{{this.ui.isSmall ? 'mw-50 h-50' : 'w-25'}}">
-                    <Input tModel="[state, 'amount']"
-                        icon="{type: 'string', value: pos.currency.symbol}"
-                        iconOnLeftSide="pos.currency.position === 'before'"
-                        isValid.bind="env.utils.isValidFloat"
-                        autofocus="true"
-                        getRef="(ref) => this.inputRef = ref" />
-                </div> -->
-                <h2>Aqui va el QR</h2>
-            </div>
-            <t t-set-slot="footer">
-                <button class="button confirm btn btn-lg lh-lg btn-primary"
-                    t-on-click="confirm"
-                    t-att-disabled="!isValidCashMove()">
-                    Confirm
-                </button>
-                <button class="button cancel btn btn-lg lh-lg btn-secondary" t-on-click="cancel">
-                    Discard
-                </button>
-            </t>
-        </Dialog>
+<templates xml:space="preserve">
+    <t t-name="pos_mercadopago.MercadoPagoQRPanel">
+        <div class="d-flex flex-column align-items-center p-3 gap-2">
+            <img t-att-src="qrSrc" width="200" height="200" class="rounded" />
+            <button
+                class="btn btn-primary w-100"
+                t-on-click="onComprobar"
+                t-att-disabled="state.checking or state.cancelling"
+            >
+                <t t-if="state.checking">Verificando...</t>
+                <t t-else="">Comprobar pago</t>
+            </button>
+            <button
+                class="btn btn-danger w-100"
+                t-on-click="onEliminar"
+                t-att-disabled="state.checking or state.cancelling"
+            >
+                <t t-if="state.cancelling">Cancelando...</t>
+                <t t-else="">Eliminar Orden</t>
+            </button>
+        </div>
     </t>
 </templates>

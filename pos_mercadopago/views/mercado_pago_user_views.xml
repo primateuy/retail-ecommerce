@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+
+        <record id="mercado_pago_user_view_form" model="ir.ui.view">
+            <field name="name">mercado_pago.user.form</field>
+            <field name="model">mercado_pago.user</field>
+            <field name="arch" type="xml">
+                <form string="Usuario Mercado Pago">
+                    <header>
+                        <button
+                            name="fetch_stores_and_tills"
+                            string="Importar Tiendas y Cajas desde MP"
+                            type="object"
+                            class="oe_highlight"
+                            icon="fa-download"
+                        />
+                        <button
+                            name="refresh_access_token"
+                            string="Refrescar Token"
+                            type="object"
+                            icon="fa-refresh"
+                        />
+                    </header>
+                    <sheet>
+                        <group>
+                            <group string="General">
+                                <field name="name"/>
+                                <field name="company_id"/>
+                            </group>
+                            <group string="Credenciales">
+                                <field name="user_id"/>
+                                <field name="access_token" widget="password"/>
+                                <field name="token_refresh_hours"/>
+                                <field name="token_last_refresh"/>
+                            </group>
+                        </group>
+                        <notebook>
+                            <page string="Aplicaciones" name="applications">
+                                <field name="applications_ids">
+                                    <tree>
+                                        <field name="name"/>
+                                        <field name="client_id"/>
+                                    </tree>
+                                </field>
+                            </page>
+                            <page string="Tiendas" name="stores">
+                                <field name="store_branch_ids">
+                                    <tree>
+                                        <field name="name"/>
+                                        <field name="external_id"/>
+                                        <field name="mp_store_branch_id"/>
+                                        <field name="city_name"/>
+                                        <field name="state_name"/>
+                                    </tree>
+                                </field>
+                            </page>
+                        </notebook>
+                    </sheet>
+                </form>
+            </field>
+        </record>
+
+        <record id="mercado_pago_user_view_tree" model="ir.ui.view">
+            <field name="name">mercado_pago.user.tree</field>
+            <field name="model">mercado_pago.user</field>
+            <field name="arch" type="xml">
+                <tree string="Usuarios Mercado Pago">
+                    <field name="name"/>
+                    <field name="user_id"/>
+                    <field name="company_id"/>
+                </tree>
+            </field>
+        </record>
+
+        <record id="mercado_pago_user_action" model="ir.actions.act_window">
+            <field name="name">Usuarios MP</field>
+            <field name="res_model">mercado_pago.user</field>
+            <field name="view_mode">tree,form</field>
+        </record>
+
+    </data>
+</odoo>

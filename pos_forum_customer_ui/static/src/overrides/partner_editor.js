@@ -120,8 +120,8 @@ patch(PartnerDetailsEdit.prototype, {
         );
     },
 
-    get phonePlaceholder() {
-        // Placeholder con codigo de pais cuando esta definido (ej. +598 09x xxx xxx)
+    get mobilePlaceholder() {
+        // Placeholder de celular con codigo de pais cuando esta definido (ej. +598 09x xxx xxx)
         const country = this.pos.countries?.find((c) => c.id === this.changes.country_id);
         const format = country?.pos_phone_format || "09x xxx xxx";
         const prefix = this.countryPhoneCode;
@@ -129,6 +129,12 @@ patch(PartnerDetailsEdit.prototype, {
             return `${prefix} ${format}`;
         }
         return format;
+    },
+
+    get phonePlaceholder() {
+        // Placeholder de telefono SIN prefijo de pais; solo el formato nacional
+        const country = this.pos.countries?.find((c) => c.id === this.changes.country_id);
+        return country?.pos_phone_format || "09x xxx xxx";
     },
 
     get mobileLabel() {
@@ -203,9 +209,7 @@ patch(PartnerDetailsEdit.prototype, {
         };
 
         const newMobile = updatePhoneWithNewPrefix(this.changes.mobile);
-        const newPhone = updatePhoneWithNewPrefix(this.changes.phone);
         this.changes.mobile = newMobile;
-        this.changes.phone = newPhone;
     },
 
     /**
@@ -217,21 +221,21 @@ patch(PartnerDetailsEdit.prototype, {
         if (!prefix) {
             return;
         }
-        for (const field of ["mobile", "phone"]) {
-            const value = this.changes[field];
-            if (value == null || value === false || value === "") {
-                this.changes[field] = prefix;
-                continue;
-            }
-            const digits = String(value).replace(/\D/g, "");
-            if (!digits) {
-                this.changes[field] = prefix;
-                continue;
-            }
-            const code = prefix.replace("+", "");
-            if (!digits.startsWith(code)) {
-                this.changes[field] = prefix + digits;
-            }
+        // Aplicar prefijo solo al campo de celular (mobile)
+        const field = "mobile";
+        const value = this.changes[field];
+        if (value == null || value === false || value === "") {
+            this.changes[field] = prefix;
+            return;
+        }
+        const digits = String(value).replace(/\D/g, "");
+        if (!digits) {
+            this.changes[field] = prefix;
+            return;
+        }
+        const code = prefix.replace("+", "");
+        if (!digits.startsWith(code)) {
+            this.changes[field] = prefix + digits;
         }
     },
 

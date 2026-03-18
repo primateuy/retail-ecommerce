@@ -4,7 +4,7 @@ import requests
 import qrcode
 from io import BytesIO
 import base64
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import logging
 
@@ -50,7 +50,13 @@ class StoreTills(models.Model):
                 result.write({
                     "external_id": result.generate_external_id()
                 })
-            result.create_pos_mercado_pago()
+            try:
+                result.create_pos_mercado_pago()
+            except Exception as e:
+                _logger.warning(
+                    "La caja '%s' se guardo en Odoo pero no se pudo crear en Mercado Pago: %s",
+                    result.name, str(e)
+                )
         return result
     
     # Methods
@@ -63,7 +69,11 @@ class StoreTills(models.Model):
             url = self.get_endpoint_url()
 
             # Enviamos la solicitud POST
-            response = requests.post(url, json=body, headers=headers)
+            mp_user = self.store_branch_id.mp_user_id
+            if mp_user:
+                response = mp_user._make_request('post', url, json=body)
+            else:
+                response = requests.post(url, json=body, headers=headers)
 
             # Validamos si hubo un error al crear la sucursal
             if response.status_code >= 400:
@@ -95,9 +105,9 @@ class StoreTills(models.Model):
         return "https://api.mercadopago.com/pos"
 
     def get_endpoint_headers(self):
-        app = self.store_branch_id.application_id
-        if app:
-            token = app.access_token
+        mp_user = self.store_branch_id.mp_user_id
+        if mp_user:
+            token = mp_user.access_token
         else:
             token = self.env.ref('pos_mercadopago.access_token_mercado_pago_conf').sudo().value
         return {
@@ -135,7 +145,11 @@ class StoreTills(models.Model):
             body = self.get_body_create_order_mp(order)
 
             # Enviamos la solicitud POST
-            response = requests.post(url, json=body, headers=headers)
+            mp_user = self.store_branch_id.mp_user_id
+            if mp_user:
+                response = mp_user._make_request('post', url, json=body)
+            else:
+                response = requests.post(url, json=body, headers=headers)
 
             # Validamos si hubo un error al crear la sucursal
             if response.status_code >= 400:
@@ -152,14 +166,9 @@ class StoreTills(models.Model):
 
     def process_create_payment_order_qr_tramma(self, order):
         try:
-            # Obtener fecha actual con zona horaria
-            actual_date = datetime.now()
-
-            # Agregar 5 minutos
-            five_min_date = actual_date + timedelta(minutes=5)
-
-            # Formatear la fecha con el formato específico
-            formated_datetime = five_min_date.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "-04:00"
+            
+            five_min_date = datetime.now(timezone.utc) + timedelta(minutes=5)
+            formated_datetime = five_min_date.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "+00:00"
 
             url = self.get_create_qr_tramma_mp_endpoint()
             headers = self.get_headers_create_order_mp()
@@ -170,7 +179,11 @@ class StoreTills(models.Model):
             body["total_amount"] = sum(body['items'][i]['total_amount'] for i in range(len(body['items'])))
 
             # Enviamos la solicitud POST
-            response = requests.post(url, json=body, headers=headers)
+            mp_user = self.store_branch_id.mp_user_id
+            if mp_user:
+                response = mp_user._make_request('post', url, json=body)
+            else:
+                response = requests.post(url, json=body, headers=headers)
 
             data = response.json()
             data["qr_data"] = qrcode.make(data["qr_data"])
@@ -203,9 +216,9 @@ class StoreTills(models.Model):
         return f"https://api.mercadopago.com/instore/orders/qr/seller/collectors/{self.user_id_mp}/pos/{self.external_id}/qrs"
     
     def get_headers_create_order_mp(self):
-        app = self.store_branch_id.application_id
-        if app:
-            token = app.access_token
+        mp_user = self.store_branch_id.mp_user_id
+        if mp_user:
+            token = mp_user.access_token
         else:
             token = self.env.ref('pos_mercadopago.access_token_mercado_pago_conf').sudo().value
         return {

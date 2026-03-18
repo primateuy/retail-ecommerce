@@ -18,12 +18,16 @@ function getOpeningCashPopupRoot() {
 
 /**
  * Obtiene el input de efectivo de apertura dentro de un nodo raíz.
+ * El componente Input del POS renderiza un input dentro de .input-container.
  */
 function findOpeningCashInput(root) {
     if (!root || !root.querySelector) return null;
     return (
+        root.querySelector(".cash-input-sub-section .input-container input") ||
         root.querySelector(".cash-input-sub-section input") ||
+        root.querySelector(".opening-cash-section .input-container input") ||
         root.querySelector(".opening-cash-section input") ||
+        root.querySelector(".input-container input") ||
         root.querySelector("main input") ||
         root.querySelector('input[type="text"]') ||
         root.querySelector("input:not([type='hidden'])")
@@ -38,6 +42,7 @@ const LOCKED_ATTR = "data-pos-opening-cash-locked";
 function lockInput(input, lockedValue) {
     if (!input) return;
     const value = lockedValue != null ? String(lockedValue) : (input.value || "");
+    input.value = value;
     input.readOnly = true;
     input.disabled = true;
     input.setAttribute("readonly", "readonly");
@@ -80,9 +85,14 @@ patch(CashOpeningPopup.prototype, {
         if (!this.isOpeningReadonly) return;
 
         const self = this;
+        // Marcar el popup para que el listener global de focus pueda identificar inputs a bloquear
+        if (self.el) {
+            self.el.setAttribute("data-pos-opening-readonly", "1");
+        }
+
         const apply = () => {
             if (!self.isOpeningReadonly) return;
-            const target = getOpeningCashPopupRoot();
+            const target = getOpeningCashPopupRoot() || self.el;
             const input = findOpeningCashInput(target);
             if (input) lockInput(input, self.state?.openingCash ?? input.value);
         };
@@ -92,6 +102,7 @@ patch(CashOpeningPopup.prototype, {
         setTimeout(apply, 50);
         setTimeout(apply, 150);
         setTimeout(apply, 350);
+        setTimeout(apply, 600);
 
         this._openingCashReadonlyObserver = new MutationObserver(() => apply());
         this._openingCashReadonlyObserver.observe(document.body, {
@@ -103,11 +114,23 @@ patch(CashOpeningPopup.prototype, {
         this._openingCashReadonlyInterval = setInterval(() => {
             apply();
             ticks += 1;
-            if (ticks >= 100) {
+            if (ticks >= 150) {
                 clearInterval(self._openingCashReadonlyInterval);
                 self._openingCashReadonlyInterval = null;
             }
         }, 100);
+
+        // Bloquear al recibir foco por si el input se re-renderiza o se activa después
+        this._boundOpeningFocusLock = (e) => {
+            if (!self.isOpeningReadonly || !e.target?.closest) return;
+            if (
+                e.target.tagName === "INPUT" &&
+                e.target.closest("[data-pos-opening-readonly='1']")
+            ) {
+                lockInput(e.target, self.state?.openingCash ?? e.target.value);
+            }
+        };
+        document.addEventListener("focusin", this._boundOpeningFocusLock, true);
     },
 
     willUnmount() {
@@ -119,13 +142,20 @@ patch(CashOpeningPopup.prototype, {
             clearInterval(this._openingCashReadonlyInterval);
             this._openingCashReadonlyInterval = null;
         }
+        if (this._boundOpeningFocusLock) {
+            document.removeEventListener("focusin", this._boundOpeningFocusLock, true);
+            this._boundOpeningFocusLock = null;
+        }
+        if (this.el) {
+            this.el.removeAttribute("data-pos-opening-readonly");
+        }
         super.willUnmount?.();
     },
 
     patched() {
         super.patched?.(...arguments);
         if (this.isOpeningReadonly) {
-            const target = getOpeningCashPopupRoot();
+            const target = getOpeningCashPopupRoot() || this.el;
             const input = findOpeningCashInput(target);
             if (input) lockInput(input, this.state?.openingCash ?? input.value);
         }

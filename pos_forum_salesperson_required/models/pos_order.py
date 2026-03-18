@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from odoo import fields, models
+from odoo import api, fields, models
 
 
 class PosOrder(models.Model):
@@ -51,12 +51,13 @@ class PosOrder(models.Model):
 class PosOrderLine(models.Model):
     _inherit = "pos.order.line"
 
+    @api.model_create_multi
     def create(self, vals_list):
         """
         Asigna vendedor de la orden a líneas sin vendedor.
 
         Args:
-            vals_list (list): Lista de diccionarios de valores para crear líneas.
+            vals_list (list[dict]): Lista de diccionarios de valores para crear líneas.
 
         Returns:
             recordset: Líneas creadas.

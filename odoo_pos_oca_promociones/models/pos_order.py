@@ -110,6 +110,18 @@ class PosOrder(models.Model):
                     try:
                         complete_response = json.loads(oca_transaction.oca_complete_response or '{}')
                         promotion_info = complete_response.get('promotion_info', {})
+
+                        # Normalizar promotion_info para asegurar que sea un dict
+                        # En algunos escenarios puede haberse almacenado como string JSON.
+                        if isinstance(promotion_info, str):
+                            try:
+                                promotion_info = json.loads(promotion_info) or {}
+                            except Exception as norm_error:
+                                _logger.error(
+                                    'promotion_info almacenado como string no JSON para transacción %s: %s',
+                                    oca_transaction.oca_transaction_id, str(norm_error)
+                                )
+                                promotion_info = {}
                         
                         # Verificar que la promoción esté activa y tenga información válida
                         if promotion_info and promotion_info.get('is_promotion'):
@@ -319,71 +331,47 @@ class PosOrder(models.Model):
                     _logger.info('Descuento sin impuestos: price_unit=%s', price_unit)
                 
                 # Crear la línea usando new() primero para que Odoo calcule los campos automáticamente
-                # Esto es necesario porque price_subtotal es un campo calculado
+                # Esto es necesario porque en esta base de datos price_subtotal tiene NOT NULL a nivel SQL.
                 discount_line_new = self.env['pos.order.line'].new({
                     'order_id': self.id,
                     'product_id': product_id,
                     'qty': qty,
                     'price_unit': price_unit,
                     'name': description or f'Descuento Promoción - {product.name}',
-                    'tax_ids': [(6, 0, tax_ids)] if tax_ids else [(5, 0, 0)],  # Mismos impuestos que las otras líneas
+                    'tax_ids': [(6, 0, tax_ids)] if tax_ids else [(5, 0, 0)],
                     'full_product_name': description or f'Descuento Promoción - {product.name}',
-                    'discount': 0.0,  # Sin descuento adicional
+                    'discount': 0.0,
                 })
-                
+
                 # Forzar cálculo de campos calculados antes de crear
-                # Odoo calculará automáticamente price_subtotal y price_subtotal_incl
                 try:
-                    # Forzar recálculo de totales
                     discount_line_new._onchange_qty()
                 except AttributeError:
-                    pass  # El método puede no existir
-                
-                # Verificar que los campos calculados estén correctos
-                # Si no se calcularon, calcular manualmente
-                if not discount_line_new.price_subtotal or discount_line_new.price_subtotal is None:
+                    pass
+
+                # Asegurar que price_subtotal y price_subtotal_incl tengan valores
+                calculated_price_subtotal = price_unit * qty
+
+                if not discount_line_new.price_subtotal:
+                    discount_line_new.price_subtotal = calculated_price_subtotal
+
+                if not discount_line_new.price_subtotal_incl:
                     if tax_ids:
-                        # Con impuestos, Odoo debería calcularlo automáticamente
-                        # Pero si no, calcular manualmente
-                        discount_line_new.price_subtotal = price_unit * qty
-                    else:
-                        discount_line_new.price_subtotal = price_unit * qty
-                
-                if not discount_line_new.price_subtotal_incl or discount_line_new.price_subtotal_incl is None:
-                    if tax_ids:
-                        # Con impuestos, calcular el total con impuestos
                         taxes = self.env['account.tax'].browse(tax_ids)
                         total_tax_rate = sum(tax.amount for tax in taxes) / 100.0
-                        discount_line_new.price_subtotal_incl = price_unit * qty * (1.0 + total_tax_rate)
+                        discount_line_new.price_subtotal_incl = calculated_price_subtotal * (1.0 + total_tax_rate)
                     else:
-                        discount_line_new.price_subtotal_incl = price_unit * qty
-                
-                # Forzar recálculo de totales de la línea para asegurar que todos los campos estén calculados
-                try:
-                    discount_line_new._onchange_qty()
-                except AttributeError:
-                    pass  # El método puede no existir
-                
-                # Convertir a diccionario y crear la línea
-                # _convert_to_write() convierte el recordset temporal a valores para create()
+                        discount_line_new.price_subtotal_incl = calculated_price_subtotal
+
+                # Convertir a diccionario para create()
                 discount_line_vals = discount_line_new._convert_to_write(discount_line_new._cache)
-                
-                # Asegurar que price_subtotal esté presente y no sea NULL
-                # Esto es crítico porque el campo tiene restricción NOT NULL en la base de datos
-                # Calcular manualmente si no está presente
-                calculated_price_subtotal = price_unit * qty
-                if 'price_subtotal' not in discount_line_vals or discount_line_vals.get('price_subtotal') is None:
-                    discount_line_vals['price_subtotal'] = calculated_price_subtotal
-                if 'price_subtotal_incl' not in discount_line_vals or discount_line_vals.get('price_subtotal_incl') is None:
-                    discount_line_vals['price_subtotal_incl'] = calculated_price_subtotal
-                
-                # Asegurar que los valores no sean None (pueden ser 0.0 pero no None)
+
+                # Reforzar que nunca vayan NULL a la base
                 if discount_line_vals.get('price_subtotal') is None:
                     discount_line_vals['price_subtotal'] = calculated_price_subtotal
                 if discount_line_vals.get('price_subtotal_incl') is None:
                     discount_line_vals['price_subtotal_incl'] = calculated_price_subtotal
-                
-                # Crear la línea con los valores convertidos
+
                 discount_line = self.env['pos.order.line'].create(discount_line_vals)
                 line_id = discount_line.id
             
@@ -417,7 +405,14 @@ class PosOrder(models.Model):
             }
             
         except Exception as e:
+            # Log detallado del error para poder identificar el origen exacto
             _logger.error('Error al agregar línea de descuento a orden %s: %s', self.name, str(e))
+            try:
+                import traceback
+                _logger.error('Traceback al agregar línea de descuento: %s', traceback.format_exc())
+            except Exception:
+                # Si por algún motivo falla el log de traceback, no interrumpir el flujo
+                pass
             return {
                 'success': False,
                 'error': str(e)
@@ -480,6 +475,17 @@ class PosOrder(models.Model):
                         try:
                             complete_response = json.loads(transaction.oca_complete_response or '{}')
                             promotion_info = complete_response.get('promotion_info', {})
+
+                            # Normalizar promotion_info para asegurar que sea un dict
+                            if isinstance(promotion_info, str):
+                                try:
+                                    promotion_info = json.loads(promotion_info) or {}
+                                except Exception as norm_error:
+                                    _logger.error(
+                                        'promotion_info almacenado como string no JSON para transacción %s: %s',
+                                        transaction.oca_transaction_id, str(norm_error)
+                                    )
+                                    promotion_info = {}
                             
                             if promotion_info and promotion_info.get('is_promotion'):
                                 discount_amount = promotion_info.get('discount_amount', 0)

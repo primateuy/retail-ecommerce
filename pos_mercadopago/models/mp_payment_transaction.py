@@ -13,7 +13,7 @@ class MpPaymentTransaction(models.Model):
         string='Pago',
     )
     payment_method_id = fields.Many2one(
-        'account.payment.method',
+        'payment.method',
         string='Metodo de pago',
         required=True,
     )

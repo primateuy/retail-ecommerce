@@ -95,6 +95,17 @@ class PaymentTransaction(models.Model):
             import json
             complete_response = json.loads(self.oca_complete_response or '{}')
             promotion_info = complete_response.get('promotion_info', {})
+
+            # Normalizar promotion_info para asegurar que sea un dict
+            if isinstance(promotion_info, str):
+                try:
+                    promotion_info = json.loads(promotion_info) or {}
+                except Exception as norm_error:
+                    _logger.error(
+                        'promotion_info almacenado como string no JSON para transacción %s: %s',
+                        self.oca_transaction_id, str(norm_error)
+                    )
+                    promotion_info = {}
             
             if not promotion_info or not promotion_info.get('is_promotion'):
                 return

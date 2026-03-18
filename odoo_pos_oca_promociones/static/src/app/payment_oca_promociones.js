@@ -94,14 +94,14 @@ patch(PaymentOCA.prototype, {
 
         var data = this.get_base_data();
         data.Amount = `${amount_to_send_by_100}`;
-        data.Quotas = String(numCuotas);
+        data.Quotas = "0";
         data.Plan = "0";
         data.Currency = currency_code;
         data.TaxRefund = "99";
         data.TaxableAmount = `${total_order_amount_without_tax}`;
         data.InvoiceAmount = `${total_order_amount}`;
         data.InvoiceNumber = "1";
-        data.Installments = String(numCuotas);
+        data.Installments = "1";
         data.TicketNumber = "";
 
         // NO agregar NeedToReadCard aquí porque el backend ya lo agrega

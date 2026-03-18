@@ -556,6 +556,18 @@
                     <t t-if="props.data.adenda_data and props.data.adenda_data.points_policy">
                         <div>Sistema de puntos: <t t-esc="props.data.adenda_data.points_policy"/></div>
                     </t>
+                    <!-- Puntos de lealtad tomados directamente de loyaltyStats (pos_loyalty) -->
+                    <t t-if="props.data.loyaltyStats and props.data.loyaltyStats.length">
+                        <t t-set="loyalty" t-value="props.data.loyaltyStats[0]"/>
+                        <div>
+                            Puntos ganados en esta compra:
+                            <t t-esc="loyalty.points.won"/>
+                        </div>
+                        <div>
+                            Puntos acumulados:
+                            <t t-esc="loyalty.points.balance"/>
+                        </div>
+                    </t>
                     <t t-if="props.data.adenda_data and props.data.adenda_data.return_policy">
                         <div>Política de cambio: <t t-raw="props.data.adenda_data.return_policy"/></div>
                     </t>

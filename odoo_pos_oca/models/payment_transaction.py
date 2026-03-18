@@ -669,7 +669,7 @@ class PaymentTransaction(models.Model):
             'card_last_four': oca_response.get('CardNumber', '')[-4:] if oca_response.get('CardNumber') else '',
             'issuer_code': str(oca_response.get('Issuer', '')),
             'issuer_name': self._get_issuer_name(oca_response.get('Issuer')),
-            'installments': int(oca_response.get('Quota', 1)),
+            'installments': int(oca_response.get('Quota', 0)),
             'acquirer': str(oca_response.get('Acquirer', '')),
             'ticket_number': oca_response.get('Ticket', ''),
             'batch_number': oca_response.get('Batch', ''),

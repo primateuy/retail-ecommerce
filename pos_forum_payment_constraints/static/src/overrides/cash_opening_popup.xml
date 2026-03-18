@@ -1,9 +1,27 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <templates id="template" xml:space="preserve">
     <!--
-    No forzamos template propio para evitar "Missing template" (el bundle puede no cargar esta herencia a tiempo).
-    El readonly del efectivo de apertura se aplica por JS en cash_opening_popup.js (lockInput en mounted/patched).
-    Heredad vacía por si en el futuro se carga la plantilla; no modificamos el DOM aquí.
+    Cuando el método de efectivo tiene readonly_opening_cash, mostramos el monto en un span
+    en lugar del Input para que no sea editable (evita que OWL re-renderice y borre el bloqueo).
     -->
-    <t t-name="pos_forum_payment_constraints.CashOpeningPopup" t-inherit="point_of_sale.CashOpeningPopup" t-inherit-mode="extension" owl="1"/>
+    <t t-name="pos_forum_payment_constraints.CashOpeningPopup" t-inherit="point_of_sale.CashOpeningPopup" t-inherit-mode="extension" owl="1">
+        <xpath expr="//div[hasclass('cash-input-sub-section')]" position="replace">
+            <div class="cash-input-sub-section input-group">
+                <t t-if="!isOpeningReadonly">
+                    <Input tModel="[state, 'openingCash']"
+                        isValid.bind="env.utils.isValidFloat"
+                        callback.bind="handleInputChange"
+                        autofocus="true" />
+                    <div class="button icon btn btn-secondary" t-on-click="openDetailsPopup">
+                        <i class="fa fa-money fa-2x" role="img" title="Open the money details popup"/>
+                    </div>
+                </t>
+                <t t-else="">
+                    <span class="form-control d-flex align-items-center py-1 bg-view text-muted border-0"
+                        t-esc="state.openingCash"
+                        style="min-width: 60px; pointer-events: none; background-color: #e9ecef;"/>
+                </t>
+            </div>
+        </xpath>
+    </t>
 </templates>
