@@ -20,7 +20,12 @@ class MercadoPagoUser(models.Model):
         required=True,
     )
     user_id = fields.Char(string='User ID', required=True)
-    access_token = fields.Char(string='Access Token', required=True)
+    access_token = fields.Char(
+        string='Access Token',
+        required=True,
+        groups='base.group_system',
+        copy=False,
+    )
 
     token_refresh_hours = fields.Integer(
         string='Refresh Token cada (horas)',

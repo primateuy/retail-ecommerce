@@ -8,15 +8,12 @@ class PosPaymentMethod(models.Model):
 
     _inherit = 'pos.payment.method'
 
-    # use_terminal = fields.Boolean(
-    #     string="Use Terminal?"
-    # )
     qr_integration = fields.Boolean(default=False, string="QR Integration")
 
-    # Heredamos el metodo de actualizacion
-    def write(self,vals):
+    def write(self, vals):
         return super().write(vals)
-    
+
+
     def _find_terminal(self, token, point_smart):
         if self.mp_id_point_smart:
             mercado_pago = MercadoPagoPosRequest(token)
