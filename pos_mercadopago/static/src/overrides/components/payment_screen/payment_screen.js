@@ -67,7 +67,8 @@ export class PaymentMercadoPagoQR extends PaymentMercadoPago {
                 store_till_id: this.pos.store_till.id,
                 items: posOrders,
                 session_id: this.pos.pos_session.id,
-                user_id: this.pos.pos_session.user_id[0],
+                user_id: this.pos.get_cashier_user_id() || this.pos.user.id,
+                employee_id: this.pos.cashier?.id || false,
                 partner_id: orderFrontend.partner?.id || false,
                 cashier_id:
                     orderFrontend.order_salesperson?.id ||

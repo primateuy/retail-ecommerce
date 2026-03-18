@@ -1,4 +1,4 @@
-from odoo import http
+from odoo import http, SUPERUSER_ID
 from odoo.http import request, Response
 import requests
 import json
@@ -182,6 +182,7 @@ class MercadoPagoController(http.Controller):
             "pos_reference": external_reference,
             "session_id": session.id,
             "user_id": order_data.get('user_id'),
+            "employee_id": order_data.get('employee_id') or False,
             "partner_id": partner_id,
             "order_salesperson_id": order_data.get('cashier_id') or False,
             "amount_tax": order_data.get('amount_tax', 0),
@@ -199,6 +200,17 @@ class MercadoPagoController(http.Controller):
         })
 
         order.action_pos_order_paid()
+
+        if order.state == 'paid':
+            try:
+                su_order = request.env['pos.order'].with_user(SUPERUSER_ID).browse(order.id)
+                su_order._create_order_picking()
+                for picking in su_order.picking_ids.filtered(lambda p: p.state not in ('done', 'cancel')):
+                    for move_line in picking.move_line_ids:
+                        move_line.quantity = move_line.quantity_product_uom
+                    picking.with_context(skip_immediate=True, skip_backorder=True)._action_done()
+            except Exception as e:
+                _logger.error("Error al crear/validar picking para orden %s: %s", order.name, str(e))
 
         if order.to_invoice and order.partner_id and order.state == 'paid':
             try:
@@ -406,6 +418,7 @@ class MercadoPagoController(http.Controller):
                 'session_id': session.id,
                 'order_data': json.dumps({
                     "user_id": kwards["user_id"],
+                    "employee_id": kwards.get("employee_id") or False,
                     "partner_id": kwards.get("partner_id") or False,
                     "cashier_id": kwards.get("cashier_id") or False,
                     "company_id": kwards["company_id"],
