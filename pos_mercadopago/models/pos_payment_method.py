@@ -14,14 +14,6 @@ class PosPaymentMethod(models.Model):
         return super().write(vals)
 
 
-class PosSession(models.Model):
-    _inherit = 'pos.session'
-
-    def _loader_params_pos_payment_method(self):
-        result = super()._loader_params_pos_payment_method()
-        result['search_params']['fields'].append('qr_integration')
-        return result
-    
     def _find_terminal(self, token, point_smart):
         if self.mp_id_point_smart:
             mercado_pago = MercadoPagoPosRequest(token)

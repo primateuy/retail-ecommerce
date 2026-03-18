@@ -15,9 +15,7 @@ patch(PaymentScreen, {
 export class PaymentMercadoPagoQR extends PaymentMercadoPago {
     async setup() {
         super.setup(...arguments);
-        if (this.payment_method.qr_integration) {
-            this.set_store_till();
-        }
+        this.set_store_till();
     }
 
     async set_store_till() {
@@ -32,11 +30,6 @@ export class PaymentMercadoPagoQR extends PaymentMercadoPago {
 
     // override
     async send_payment_request(cid) {
-        
-        if (!this.payment_method.qr_integration) {
-            return super.send_payment_request(cid);
-        }
-
         const orderFrontend = this.pos.get_order();
 
         if (this.pos.qr_type === "dynamic" && orderFrontend.paymentlines.length > 1) {
