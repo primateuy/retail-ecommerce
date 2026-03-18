@@ -49,6 +49,12 @@ class ResConfigSettings(models.TransientModel):
         help='Lista de precios alternativa predeterminada para todos los productos Fenicio'
     )
 
+    cantidad_stock_bydefault = fields.Integer(
+        string='Cantidad de Stock a mostrar por defecto',
+        related='company_id.cantidad_stock_bydefault',
+        readonly=False,
+    )
+
     fenicio_stock_location_ids = fields.Many2many(
         'stock.location',
         string='Ubicaciones de Stock Fenicio',

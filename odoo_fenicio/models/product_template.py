@@ -79,6 +79,7 @@ class ProductTemplate(models.Model):
         readonly=True,
         help='Código de la guía de talles para integración con e-Fenicio'
     )
+
     
     guia_talle_image = fields.Binary(
         string='Imagen Guía Talle',

@@ -227,6 +227,12 @@ class SaleOrder(models.Model):
                 ('code', '=', 'fenv'),
                 ('company_id', '=', fenicio_compania.id)
             ], limit=1)
+
+
+            if not journal_id:
+                _logger.warning("No se encontró diario con código 'fenv' para la compañía %s. Se usará el diario por defecto.", fenicio_compania.name)
+                journal_id = self.env['account.journal'].search([('company_id', '=', fenicio_compania.id)], limit=1)
+                _logger.debug("Se utilizará el diario '%s' (ID: %s) para registrar la orden.", journal_id.name, journal_id.id)
             vals = {
                 'id_order_fenicio': json_data['idOrden'],
                 'estado': json_data['estado'],

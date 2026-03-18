@@ -71,12 +71,13 @@ class ApiController(http.Controller):
     @http.route('/productos', type='http', auth='public', cors="*", csrf=False, methods=['GET'])
     def listar_productos(self):
         id_solicitud = ''
+        token = request.httprequest.headers.get('Token-Autenticacion-Efenicio')
         json_data = {}
         try: 
             self._authenticate_and_setup_env()
             json_data = self.get_json_data()
             id_solicitud = json_data['_idSolicitud']
-            response_data = request.env['api.internal'].listar_productos(json_data)
+            response_data = request.env['api.internal'].listar_productos(json_data, token)
             return self.build_response(id_solicitud, response_data, endpoint='/productos', request_data=json_data)
         except Exception as e:
             return self.build_response(id_solicitud, None, status='ERROR', mensaje=str(e), endpoint='/productos', request_data=json_data)
@@ -98,11 +99,12 @@ class ApiController(http.Controller):
     def stock_producto(self):
         id_solicitud = ''
         json_data = {}
+        token = request.httprequest.headers.get('Token-Autenticacion-Efenicio')
         try:
             self._authenticate_and_setup_env()
             json_data = self.get_json_data()
             id_solicitud = json_data['_idSolicitud']
-            response_data, msg = request.env['api.internal'].stockporsku(json_data)
+            response_data, msg = request.env['api.internal'].stockporsku(json_data, token)
             return self.build_response(id_solicitud, response_data, mensaje=msg, endpoint='/stockporsku', request_data=json_data)
         except Exception as e:
             return self.build_response(id_solicitud, None, status='ERROR', mensaje=str(e), endpoint='/stockporsku', request_data=json_data)

@@ -22,12 +22,16 @@
                     </field> -->
                         <group>
                             <group>
+                                <field name="public_categ_ids" widget="many2many_tags"/>
+                                <field name="show_availability"/>
+                                <field name="available_threshold" invisible="not show_availability"/>
+
+
                                 <field name="product_e_fenicio"/>
-                                <!-- <field name="code_e_fenicio" invisible="not product_e_fenicio" required="product_e_fenicio"/> -->
                                 <field name="default_currency_id" invisible="not product_e_fenicio" required="product_e_fenicio"/>
-                                <!-- <field name="brand" invisible="not product_e_fenicio" required="product_e_fenicio"/> -->
-                                <!-- <field name="fenicio_check" invisible="not product_e_fenicio"/> -->
+                               
                                 <field name="priority_fenicio" invisible="not product_e_fenicio"/>
+
                                 <field name="guia_talle_id" invisible="not product_e_fenicio"/>
                                 <field name="descripcion_fenicio" invisible="not product_e_fenicio"/>
                             </group>

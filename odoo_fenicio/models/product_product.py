@@ -88,7 +88,7 @@ class ProductProduct(models.Model):
     precios_fenicio_ids = fields.One2many('fenicio.presentacion.price', 'product_id', 'Precios Fenicio')
     indentificadores_ids = fields.One2many('product.identificadores', 'product_id', 'Identificadores')
     precios_alternativos_fenicio_ids = fields.One2many('precios.alternativos', 'product_id', 'Precios Alternativos')
-
+    
 
     pricelist_relation_ids = fields.One2many(
         'product.product.pricelist.relation',

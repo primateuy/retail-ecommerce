@@ -32,12 +32,12 @@ class ApiInternal(models.Model):
     
 
     @api.model
-    def listar_productos(self, json_data):
+    def listar_productos(self, json_data, token):
         
         limit = json_data.get('total', 100)
         offset = json_data.get('desde', 0)
-        
-        currency_code = self.env.company.currency_id.name
+        empresa = self.verificar_token(token)
+        currency_code = empresa.currency_id.name
         
         product_template_ids = self.env['product.template'].search([
             ('product_e_fenicio', '=', True),
@@ -82,7 +82,14 @@ class ApiInternal(models.Model):
             }
 
             for atributos in product_template_id.product_settings_ids:
-                vals['atributos'][atributos.attribute_id.name] = atributos.value_id.name;
+                codigo_atributo = atributos.attribute_id.codigo if atributos.attribute_id.codigo else '000'
+
+                codigo_variante = atributos.value_id.fenicio_attribute_value_code if atributos.value_id.fenicio_attribute_value_code else '000'
+
+                vals['atributos'][codigo_atributo] = codigo_variante;
+
+
+            
 
             if len(product_template_id.product_variant_ids) > 1:
                 # Agrupar variantes por atributos de variante
@@ -102,23 +109,29 @@ class ApiInternal(models.Model):
                     nombre_parts = []
                     atributos = {}
                     
-
+                    
 
                     for attr_val in variant_attrs:
-                        
                         codigo_fenicio = attr_val.product_attribute_value_id.fenicio_attribute_value_code
-                        nombre_fenicio = attr_val.product_attribute_value_id.name
-
-
-                        codigo_parts.append(str(codigo_fenicio) if codigo_fenicio else '000');
                         
-                        nombre_parts.append(nombre_fenicio)
-                        
-                        # Atributos
-                        atributos[attr_val.attribute_id.name] = nombre_fenicio
-                    
-                    codigo_variante = ''.join(codigo_parts)
+                        # Todos los valores posibles del atributo en el template
+                        todos_los_valores = [
+                            v.name 
+                            for v in attr_val.attribute_id.value_ids
+                            if v.id in product_template_id.attribute_line_ids.filtered(
+                                lambda l: l.attribute_id.id == attr_val.attribute_id.id
+                            ).value_ids.ids
+                        ]
+
+                        codigo_parts.append(str(codigo_fenicio) if codigo_fenicio else '000')
+                        nombre_parts.append(', '.join(todos_los_valores))  # ← todos los valores
+
+                        clave = attr_val.attribute_id.name
+                        atributos[clave] = ', '.join(todos_los_valores) if len(todos_los_valores) > 1 else todos_los_valores[0]
+
                     nombre_variante = ' / '.join(nombre_parts)
+                    codigo_variante = ''.join(codigo_parts)
+
             
 
                     # Usar código de variante como clave para agrupar
@@ -139,7 +152,7 @@ class ApiInternal(models.Model):
                         codigo = variante.default_code or ''
                         nombre = variante.name
                         sku = variante.default_code or ''
-                        stock = self._get_fenicio_stock(variante)
+                        stock = self._get_fenicio_stock(variante, token)
 
                         precioVenta = 0.0
                         precioLista = 0.0
@@ -191,10 +204,10 @@ class ApiInternal(models.Model):
                         )
                     else:
                         for pres_attr_val in presentacion_attrs:
-                            codigo = str(pres_attr_val.attribute_id.codigo) if pres_attr_val.attribute_id.codigo else '000'
+                            codigo = pres_attr_val.product_attribute_value_id.fenicio_attribute_value_code if pres_attr_val.product_attribute_value_id.fenicio_attribute_value_code else '000'
                             nombre = pres_attr_val.product_attribute_value_id.name
                             sku = variante.default_code or ''
-                            stock = self._get_fenicio_stock(variante)
+                            stock = self._get_fenicio_stock(variante, token)
 
                             precioVenta = 0.0
                             precioLista = 0.0
@@ -263,7 +276,7 @@ class ApiInternal(models.Model):
                     'presentaciones': []
                 }
 
-                presentacion_data = self._build_presentacion_data(product_id, product_id.name, True, codigo_unico=True)
+                presentacion_data = self._build_presentacion_data(product_id, product_id.name, True, codigo_unico=True, token=token)
                 variante['presentaciones'].append(presentacion_data)
 
                 for attr_val in product_id.product_template_attribute_value_ids:
@@ -276,7 +289,7 @@ class ApiInternal(models.Model):
         return response
 
 
-    def _get_fenicio_stock(self, product_id):
+    def _get_fenicio_stock(self, product_id, token):
     # Obtener ubicaciones configuradas para la compañía
         fenicio_locations = self.env.company.fenicio_stock_location_ids
         
@@ -288,7 +301,16 @@ class ApiInternal(models.Model):
         # Obtener el tope máximo de stock a mostrar
         variante = self.env['product.product'].browse(product_id.id);
         
-        tope_maximo = variante.available_threshold if variante.show_availability and variante.available_threshold > 0 else 25;
+        empresa = self.verificar_token(token);
+
+        if not empresa or not empresa.cantidad_stock_bydefault:
+            cantidad_bydefault = 0
+        else:
+            cantidad_bydefault = empresa.cantidad_stock_bydefault
+
+        tope_maximo = variante.available_threshold if variante.show_availability and variante.available_threshold > 0 else cantidad_bydefault
+
+
 
         
         stock_atp = 0.0
@@ -296,7 +318,7 @@ class ApiInternal(models.Model):
             qty_atp = self.env['stock.quant']._get_available_quantity(product_id, location)
             stock_atp += qty_atp
         
-        
+        _logger.info(f"Stock por defecto {cantidad_bydefault}, stock ATP {stock_atp}, tope máximo {tope_maximo} para el producto {product_id.default_code} en la compañía {self.env.company.name}")
         
         stock_final = min(stock_atp, tope_maximo)
         
@@ -539,41 +561,29 @@ class ApiInternal(models.Model):
             return False
 
     @api.model
-    def stockporsku(self, json_data):
-        skus_pedido = json_data['skus']
-
-        productos = self.env['product.product']
+    def stockporsku(self, json_data, token):
+        skus_pedido = json_data.get('skus', [])
+        vals_list = []
+        sku_no_encontrados = []
 
         for sku in skus_pedido:
-            product_id = self.env['product.product'].search([('default_code', '=', sku)], limit=1)
-            if product_id:
-                productos += product_id
+            if not sku:
+                continue
+            
+            sku = str(sku).strip()
+            product_id = self.env['product.product'].search([
+                '|', '|', ('default_code', '=', sku), ('barcode', '=', sku), ('code_e_fenicio', '=', sku)
+            ], limit=1)
 
-        skus_encontrados = set(productos.mapped('default_code'))
-        sku_no_encontrados = set(skus_pedido) - set(skus_encontrados)
+            if not product_id:
+                sku_no_encontrados.append(sku)
+                continue
 
-        # Obtener ubicaciones configuradas para la compañía
-        fenicio_locations = self.env.company.fenicio_stock_location_ids
-
-        vals_list = []
-
-        for product_id in productos:
-            if fenicio_locations:
-                # Sumar stock de todas las ubicaciones configuradas en la empresa
-                stock_total = sum(
-                    self.env['stock.quant']._get_available_quantity(product_id, location)
-                    for location in fenicio_locations
-                )
-            else:
-                _logger.warning(
-                    "stockporsku: No hay ubicaciones Fenicio configuradas para la compañía %s. "
-                    "Retornando stock 0 para SKU %s.",
-                    self.env.company.name, product_id.default_code
-                )
-                stock_total = 0.0
-
+            stock_total = self._get_fenicio_stock(product_id, token)
+            _logger.info("SKU: %s - STOCK TOTAL %s", sku, stock_total)
+            
             vals_list.append({
-                "sku": product_id.default_code,
+                "sku": product_id.default_code or sku,
                 "stock": stock_total,
             })
 

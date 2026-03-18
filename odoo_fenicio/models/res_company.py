@@ -11,6 +11,7 @@ class ResCompany(models.Model):
     fenicio_pricelist_venta_id = fields.Many2one('product.pricelist', string='Lista de Precios de Venta Fenicio')
     fenicio_pricelist_lista_id = fields.Many2one('product.pricelist', string='Lista de Precios Lista Fenicio')
     fenicio_pricelist_alternativo_id = fields.Many2one('product.pricelist', string='Lista de Precios Alternativo Fenicio')
+    cantidad_stock_bydefault = fields.Integer(string='Cantidad de Stock a mostrar por defecto')
     fenicio_stock_location_ids = fields.Many2many(
         'stock.location', 
         relation='fenicio_res_company_stock_location_rel',
