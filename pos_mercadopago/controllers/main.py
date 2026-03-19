@@ -192,11 +192,16 @@ class MercadoPagoController(http.Controller):
             "company_id": order_data.get('company_id'),
             "to_invoice": bool(partner_id),
             "lines": order_lines,
-            "payment_ids": [(0, 0, {
-                "amount": amount_total,
-                "payment_method_id": payment_method.id,
-                "payment_date": payment_date,
-            })],
+            "payment_ids": [
+                (0, 0, {
+                    "amount": pline["amount"],
+                    "payment_method_id": pline["payment_method_id"],
+                    "payment_date": payment_date,
+                })
+                for pline in order_data.get("payment_lines", [
+                    {"amount": amount_total, "payment_method_id": payment_method.id}
+                ])
+            ],
         })
 
         order.action_pos_order_paid()
@@ -351,6 +356,10 @@ class MercadoPagoController(http.Controller):
             order_mp_lines = []
             amount_tax = 0
 
+            total_order_amount = sum(p["amount"] for p in kwards["paymentLines"])
+            mp_amount = next((p["amount"] for p in kwards["paymentLines"] if p["is_mercado_pago"]), total_order_amount)
+            mp_ratio = mp_amount / total_order_amount if total_order_amount else 1.0
+
             for item in kwards["items"]:
                 tax_ids = item.get('tax_ids_after_fiscal_position') or []
                 tax = request.env["account.tax"].search(
@@ -386,11 +395,7 @@ class MercadoPagoController(http.Controller):
                         "id": item["id"],
                         "title": item["title"],
                         "currency_id": currency_name,
-                        "unit_price": (
-                            self.get_price_product(kwards, item, tax)
-                            if len(kwards["paymentLines"]) == 1
-                            else self.get_price_product(kwards, item, tax) / len(kwards["paymentLines"])
-                        ),
+                        "unit_price": round(price_subtotal_incl * mp_ratio, 2),
                         "quantity": item["quantity"],
                         "description": item["description"],
                     })
@@ -425,6 +430,7 @@ class MercadoPagoController(http.Controller):
                     "amount_tax": amount_tax,
                     "amount_total": amount_total,
                     "lines": order_lines,
+                    "payment_lines": kwards["paymentLines"],
                 }),
             })
 
