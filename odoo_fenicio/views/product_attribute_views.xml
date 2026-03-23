@@ -15,6 +15,13 @@
 
                 <xpath expr="//field[@name='value_ids']//tree//field[@name='name']" position="after">
                     <field name="fenicio_attribute_value_code"/>
+                    
+                </xpath>
+
+                <xpath expr="//field[@name='value_ids']//tree//field[@name='is_custom']" position="after">
+                    
+                    <field name="excluir_valor_fenicio"/>
+
                 </xpath>
             </field>
         </record>
