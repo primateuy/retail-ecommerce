@@ -19,3 +19,8 @@ class ProductAttributeValue(models.Model):
     _inherit = "product.attribute.value"
 
     fenicio_attribute_value_code = fields.Char('Código Variante Fenicio')
+    excluir_valor_fenicio = fields.Boolean(
+        string='Excluir Valor Fenicio',
+        default=False,
+        help='Si está activo, este valor no se incluye en el nombre de la variante enviada a Fenicio.'
+    )
