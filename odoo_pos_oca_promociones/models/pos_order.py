@@ -131,20 +131,27 @@ class PosOrder(models.Model):
                             promotion_id = promotion_info.get('promotion_id', False)
                             
                             if discount_amount > 0 and product_id:
-                                # Verificar incompatibilidades antes de agregar la línea de descuento
+                                # Verificar incompatibilidades antes de agregar la línea de descuento.
+                                # Si existe incompatibilidad con promociones estándar (ej. cupones / lealtad),
+                                # se lanza ValidationError para impedir que la orden y el flujo de pago
+                                # continúen con una combinación inválida.
                                 should_apply = True
                                 if promotion_id:
                                     promotion = self.env['payment.method.promotion'].browse(promotion_id)
                                     if promotion.exists():
-                                        # Verificar si hay promociones incompatibles ya aplicadas
+                                        # Verificar si hay promociones incompatibles ya aplicadas en la orden POS.
                                         is_incompatible, incompatible_promotions, incompat_msg = promotion._check_incompatibilities(order)
                                         if is_incompatible:
-                                            _logger.warning('No se puede aplicar promoción %s (ID: %s) porque es incompatible con: %s. %s', 
-                                                          promotion.name, promotion.id, 
-                                                          ', '.join([p.name for p in incompatible_promotions]),
-                                                          incompat_msg)
-                                            # No agregar la línea de descuento
-                                            should_apply = False
+                                            _logger.warning(
+                                                'No se puede aplicar promoción %s (ID: %s) porque es incompatible con: %s. %s',
+                                                promotion.name,
+                                                promotion.id,
+                                                ', '.join([p.name for p in incompatible_promotions]),
+                                                incompat_msg,
+                                            )
+                                            # Lanzar error de validación para que el POS no complete
+                                            # la creación de la orden ni el proceso de pago.
+                                            raise ValidationError(incompat_msg or 'Promoción incompatible aplicada en la orden.')
                                 
                                 if should_apply:
                                     # Agregar línea de descuento a la orden
@@ -491,20 +498,44 @@ class PosOrder(models.Model):
                                 discount_amount = promotion_info.get('discount_amount', 0)
                                 product_id = promotion_info.get('product_id', False)
                                 description = promotion_info.get('description', 'Descuento Promoción')
-                                
+                                promotion_id = promotion_info.get('promotion_id', False)
+
                                 # Verificar si ya existe una línea de descuento en la orden
                                 existing_discount_line = self.lines.filtered(
                                     lambda l: l.product_id.id == product_id and l.price_unit < 0
                                 )
-                                
+
+                                # Si no existe aún la línea de descuento y los datos de la promoción son válidos,
+                                # se vuelve a verificar incompatibilidades ANTES de generar la factura.
+                                # Si hay incompatibilidad, se lanza ValidationError para bloquear la
+                                # generación de la factura y que el POS reciba la validación.
                                 if not existing_discount_line and discount_amount > 0 and product_id:
+                                    if promotion_id:
+                                        promotion = self.env['payment.method.promotion'].browse(promotion_id)
+                                        if promotion.exists():
+                                            is_incompatible, incompatible_promotions, incompat_msg = promotion._check_incompatibilities(self)
+                                            if is_incompatible:
+                                                _logger.warning(
+                                                    'No se puede aplicar promoción %s (ID: %s) antes de facturar porque es incompatible con: %s. %s',
+                                                    promotion.name,
+                                                    promotion.id,
+                                                    ', '.join([p.name for p in incompatible_promotions]),
+                                                    incompat_msg,
+                                                )
+                                                # Bloquear generación de factura para no combinar descuentos incompatibles.
+                                                raise ValidationError(incompat_msg or 'Promoción incompatible aplicada en la orden.')
+
                                     # Agregar el descuento ANTES de generar la factura
-                                    _logger.info('Agregando descuento de promoción a orden %s ANTES de generar factura (Descuento: %s)', 
-                                               self.name, discount_amount)
+                                    _logger.info(
+                                        'Agregando descuento de promoción a orden %s ANTES de generar factura (Descuento: %s)',
+                                        self.name,
+                                        discount_amount,
+                                    )
                                     discount_result = self.add_promotion_discount_line(
                                         discount_amount,
                                         product_id,
-                                        description
+                                        description,
+                                        promotion_id=promotion_id,
                                     )
                                     
                                     if discount_result.get('success'):

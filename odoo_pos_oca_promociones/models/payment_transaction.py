@@ -11,6 +11,7 @@ import json
 import logging
 
 from odoo import models, api
+from odoo.exceptions import ValidationError
 
 _logger = logging.getLogger(__name__)
 
@@ -116,17 +117,26 @@ class PaymentTransaction(models.Model):
             promotion_id = promotion_info.get('promotion_id', False)
             
             if discount_amount > 0 and product_id:
-                # Verificar incompatibilidades antes de agregar la línea de descuento
+                # Verificar incompatibilidades antes de agregar la línea de descuento.
+                # Si se detecta incompatibilidad, se lanza ValidationError para bloquear
+                # el flujo de creación/validación de la orden POS y que el POS muestre
+                # la validación al usuario sin continuar el proceso de pago.
                 if promotion_id:
                     promotion = self.env['payment.method.promotion'].browse(promotion_id)
                     if promotion.exists():
                         is_incompatible, incompatible_promotions, incompat_msg = promotion._check_incompatibilities(self.pos_order_id)
                         if is_incompatible:
-                            _logger.warning('No se puede aplicar promoción %s (ID: %s) porque es incompatible con: %s. %s', 
-                                          promotion.name, promotion.id, 
-                                          ', '.join([p.name for p in incompatible_promotions]),
-                                          incompat_msg)
-                            return
+                            # Log de diagnóstico detallado manteniendo el warning existente.
+                            _logger.warning(
+                                'No se puede aplicar promoción %s (ID: %s) porque es incompatible con: %s. %s',
+                                promotion.name,
+                                promotion.id,
+                                ', '.join([p.name for p in incompatible_promotions]),
+                                incompat_msg,
+                            )
+                            # Lanzar error de validación para impedir que la orden
+                            # continúe su flujo normal con combinaciones inválidas.
+                            raise ValidationError(incompat_msg or 'Promoción incompatible aplicada en la orden.')
                 
                 # Agregar línea de descuento a la orden
                 discount_result = self.pos_order_id.add_promotion_discount_line(
