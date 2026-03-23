@@ -63,7 +63,13 @@ class ApiInternal(models.Model):
                 
             
 
-            impuesto = product_template_id.taxes_id and product_template_id.taxes_id[0].amount or 'Sin Impuesto'
+            impuesto = product_template_id.taxes_id and product_template_id.taxes_id[0].amount or 0;
+
+            if impuesto % 1 != 0:
+                _logger.info("El impuesto para el producto %s no es un número entero: %s. Se redondeará al entero más cercano.", product_template_id.name, impuesto)
+                impuesto = round(impuesto, 2)
+
+                _logger.info(f"IMPUESTO REDONDEADO => {impuesto}")
 
             vals = {
                 'codigo': str(product_template_id.code_e_fenicio or product_template_id.id),
@@ -72,7 +78,7 @@ class ApiInternal(models.Model):
                 'prioridad': product_template_id.priority_fenicio or 1,
                 'guiaTalles': product_template_id.guia_talle_code or '',
                 'monedaPredeterminada': self.env.company.currency_id.name,
-                'impuesto': impuesto,
+                'impuesto': int(impuesto) if isinstance(impuesto, (int, float)) else '0',
                 'atributos': {
                     'categoria': listaCategoria,
                     'marca': product_template_id.product_brand_id.fenicio_brand_id if product_template_id.product_brand_id and product_template_id.product_brand_id.fenicio_brand_id else '0',
@@ -107,34 +113,42 @@ class ApiInternal(models.Model):
                     
                     codigo_parts = []
                     nombre_parts = []
-                    atributos = {}
-                    
-                    
+                    colores = {}
+                    otros_atributos = {}
 
                     for attr_val in variant_attrs:
                         codigo_fenicio = attr_val.product_attribute_value_id.fenicio_attribute_value_code
+                        lang = 'es_UY'
+                        nombre_valor = attr_val.product_attribute_value_id.with_context(lang=lang).name
+                        excluir = attr_val.product_attribute_value_id.excluir_valor_fenicio
+                        attribute_code = attr_val.attribute_id.codigo.lower() if attr_val.attribute_id.codigo else ''
+
+                        codigo_parts.append(
+                            codigo_fenicio if codigo_fenicio
+                            else str(attr_val.product_attribute_value_id.id)
+                        )
+
+                        if not excluir and attr_val.attribute_id.fenicio_type == 'variante':
+                            if 'color' in attribute_code:
+                                colores[attribute_code] = nombre_valor
+                            else:
+                                nombre_parts.append(nombre_valor)
+                                otros_atributos[attr_val.attribute_id.name] = nombre_valor
+
+                    if colores:
+                        lista_colores = list(colores.values())
+                        if len(lista_colores) == 1:
+                            color_combinado = lista_colores[0]
+                        else:
+                            color_combinado = '\/ '.join(lista_colores)
                         
-                        # Todos los valores posibles del atributo en el template
-                        todos_los_valores = [
-                            v.name 
-                            for v in attr_val.attribute_id.value_ids
-                            if v.id in product_template_id.attribute_line_ids.filtered(
-                                lambda l: l.attribute_id.id == attr_val.attribute_id.id
-                            ).value_ids.ids
-                        ]
+                        nombre_parts.append(color_combinado)
+                        otros_atributos['color'] = color_combinado
 
-                        codigo_parts.append(str(codigo_fenicio) if codigo_fenicio else '000')
-                        nombre_parts.append(', '.join(todos_los_valores))  # ← todos los valores
-
-                        clave = attr_val.attribute_id.name
-                        atributos[clave] = ', '.join(todos_los_valores) if len(todos_los_valores) > 1 else todos_los_valores[0]
-
-                    nombre_variante = ' / '.join(nombre_parts)
+                    atributos = otros_atributos
+                    nombre_variante = '\/ '.join(nombre_parts) if nombre_parts else ''
                     codigo_variante = ''.join(codigo_parts)
 
-            
-
-                    # Usar código de variante como clave para agrupar
                     if codigo_variante not in variantes_map:
                         variantes_map[codigo_variante] = {
                             'codigo': codigo_variante,
