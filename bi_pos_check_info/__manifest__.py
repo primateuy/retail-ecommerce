@@ -11,7 +11,13 @@
     'website': 'https://www.browseinfo.com/demo-request?app=bi_pos_check_info&version=17&edition=Community',
     "price": 20,
     "currency": 'EUR',
-    'depends': ['base', 'sale', 'point_of_sale'],
+    'depends': [
+        'base',
+        'sale',
+        'point_of_sale',
+        'account_check_printing',
+        'l10n_latam_check',
+    ],
     'data': [
         'views/pos_config_view.xml',
         'views/pos_payment_method_view.xml',
