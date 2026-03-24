@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Extensión de vista de transacciones de pago para datos manuales POS -->
+    <record id="view_payment_transaction_form_pos_manual" model="ir.ui.view">
+        <field name="name">payment.transaction.form.pos.manual</field>
+        <field name="model">payment.transaction</field>
+        <field name="inherit_id" ref="payment.payment_transaction_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//group[@name='transaction_details']" position="after">
+                <group string="POS Manual" name="pos_manual_info" invisible="not is_pos_manual">
+                    <group>
+                        <field name="is_pos_manual"/>
+                        <field name="manual_ticket_number"/>
+                        <field name="manual_batch_number"/>
+                        <field name="manual_auth_code"/>
+                    </group>
+                    <group>
+                        <field name="manual_card_bin"/>
+                        <field name="manual_last_four"/>
+                        <field name="manual_holder_name"/>
+                        <field name="manual_stamp"/>
+                    </group>
+                </group>
+            </xpath>
+        </field>
+    </record>
+</odoo>
+

@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Vista árbol para la tabla de configuración de campos manuales -->
+    <record id="view_manual_payment_field_config_tree" model="ir.ui.view">
+        <field name="name">manual.payment.field.config.tree</field>
+        <field name="model">manual.payment.field.config</field>
+        <field name="arch" type="xml">
+            <tree>
+                <field name="sequence"/>
+                <field name="provider_id"/>
+                <field name="request_field_id"/>
+                <field name="transaction_field_mapping"/>
+                <field name="request_field_type"/>
+                <field name="required"/>
+                <field name="default_char_value"/>
+                <field name="default_reference"/>
+            </tree>
+        </field>
+    </record>
+
+    <!-- Vista formulario para la tabla de configuración de campos manuales -->
+    <record id="view_manual_payment_field_config_form" model="ir.ui.view">
+        <field name="name">manual.payment.field.config.form</field>
+        <field name="model">manual.payment.field.config</field>
+        <field name="arch" type="xml">
+            <form>
+                <sheet>
+                    <group>
+                        <group>
+                            <field name="provider_id"/>
+                            <field name="request_field_id"/>
+                            <field name="transaction_field_mapping"/>
+                            <field name="request_field_type" readonly="1"/>
+                            <field name="sequence"/>
+                        </group>
+                        <group>
+                            <field name="required"/>
+                            <field name="default_char_value" invisible="request_field_type != 'char'"/>
+                            <field name="default_reference" invisible="request_field_type != 'many2one'"/>
+                        </group>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+</odoo>
+

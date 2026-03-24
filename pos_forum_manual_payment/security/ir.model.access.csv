@@ -1,0 +1,7 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_payment_transaction_pos_manual,payment.transaction.pos.manual,model_payment_transaction,,1,0,0,0
+access_payment_provider_pos_manual,payment.provider.pos.manual,model_payment_provider,,1,1,1,0
+access_pos_payment_method_pos_manual,pos.payment.method.pos.manual,model_pos_payment_method,,1,1,1,0
+access_manual_payment_request_field,manual.payment.request.field,model_manual_payment_request_field,,1,1,1,1
+access_manual_payment_field_config,manual.payment.field.config,model_manual_payment_field_config,,1,1,1,1
+

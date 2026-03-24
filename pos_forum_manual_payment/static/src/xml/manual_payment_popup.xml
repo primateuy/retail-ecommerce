@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates id="template" xml:space="preserve">
+    <t t-name="pos_forum_manual_payment.ManualPaymentPopup">
+        <div class="popup popup-confirm manual-payment-popup">
+            <div class="modal-header">
+                <h4 class="modal-title title drag-handle">
+                    <t t-esc="props.title"/>
+                </h4>
+            </div>
+            <main class="modal-body">
+                <t t-if="state.fields.length === 0">
+                    <p class="text-muted">No hay campos configurados para este método de pago.</p>
+                </t>
+                <t t-foreach="state.fields" t-as="field" t-key="field.code">
+                    <div class="mb-2">
+                        <label class="form-label d-block" t-esc="field.label"/>
+                        <input
+                            t-if="field.field_type === 'char'"
+                            class="form-control"
+                            type="text"
+                            t-att-value="state.values[field.code] || ''"
+                            t-on-input="(ev) => this.updateCharValue(field.code, ev)"
+                        />
+                        <select
+                            t-if="field.field_type === 'many2one'"
+                            class="form-select"
+                            t-att-value="this.getSelectStringValue(field.code)"
+                            t-on-change="(ev) => this.updateMany2oneValue(field.code, ev)"
+                        >
+                            <option value="">--</option>
+                            <t t-foreach="field.options || []" t-as="opt" t-key="opt.id">
+                                <option
+                                    t-att-value="opt.id"
+                                    t-att-selected="this.isOptionSelected(field.code, opt.id)"
+                                    t-esc="opt.name"
+                                />
+                            </t>
+                        </select>
+                    </div>
+                </t>
+            </main>
+            <footer class="footer modal-footer">
+                <div class="button confirm btn btn-lg btn-primary" t-on-click="confirm">
+                    <t t-esc="props.confirmText"/>
+                </div>
+                <div class="button cancel btn btn-lg btn-secondary" t-on-click="cancel">
+                    <t t-esc="props.cancelText"/>
+                </div>
+            </footer>
+        </div>
+    </t>
+</templates>

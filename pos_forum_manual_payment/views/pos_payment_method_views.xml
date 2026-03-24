@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Extensión de vista de métodos de pago POS para pagos manuales -->
+    <record id="view_pos_payment_method_form_pos_manual" model="ir.ui.view">
+        <field name="name">pos.payment.method.form.pos.manual</field>
+        <field name="model">pos.payment.method</field>
+        <field name="inherit_id" ref="point_of_sale.pos_payment_method_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//sheet/group" position="inside">
+                <group string="Pagos manuales POS">
+                    <field name="manual_transaction_enabled"/>
+                    <field name="manual_provider_id" invisible="not manual_transaction_enabled"/>
+                    <field name="manual_create_checks"/>
+                </group>
+            </xpath>
+        </field>
+    </record>
+</odoo>
+

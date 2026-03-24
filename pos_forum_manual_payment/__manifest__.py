@@ -1,0 +1,41 @@
+{
+    "name": "POS Pagos Manuales (FORUM)",
+    "summary": "Transacciones de pago manual en POS integradas con payment.transaction",
+    "version": "17.0.1.0.0",
+    "author": "PRIMATE",
+    "website": "https://www.primate.uy",
+    "category": "Point of Sale",
+    "license": "LGPL-3",
+    "depends": [
+        "base",
+        "point_of_sale",
+        "payment",
+        "account",
+        "l10n_latam_check",
+        "bi_pos_check_info",
+        "odoo_pos_oca",
+        "odoo_pos_oca_multiple",
+    ],
+    "data": [
+        "security/ir.model.access.csv",
+        "views/manual_payment_request_field_views.xml",
+        "views/manual_payment_field_config_views.xml",
+        "views/payment_provider_views.xml",
+        "views/pos_payment_method_views.xml",
+        "views/payment_transaction_views.xml",
+    ],
+    "assets": {
+        "point_of_sale._assets_pos": [
+            "pos_forum_manual_payment/static/src/js/models_payment_manual.js",
+            "pos_forum_manual_payment/static/src/js/manual_payment_popup.js",
+            "pos_forum_manual_payment/static/src/overrides/paymentlines_manual_popup.js",
+            "pos_forum_manual_payment/static/src/overrides/payment_screen_manual_validation.js",
+            "pos_forum_manual_payment/static/src/xml/manual_payment_popup.xml",
+            "pos_forum_manual_payment/static/src/xml/payment_screen_line_manual.xml",
+        ],
+    },
+    "post_init_hook": "post_init_hook",
+    "installable": True,
+    "application": False,
+}
+
