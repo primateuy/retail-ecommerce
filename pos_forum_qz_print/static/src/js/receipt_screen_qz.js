@@ -113,14 +113,36 @@ patch(ReceiptScreen.prototype, {
                 "get_change_ticket_html_for_pos_print",
                 [orderId, reportId]
             );
-            console.info(
-                `${LOG} Ticket cambio: HTML recibido (${html ? String(html).length : 0} caracteres); enviando a QZ.`
-            );
-            await qzPrint.printHtml(cfg.qz_tray_printer_name.trim(), html);
-            console.info(`${LOG} Ticket cambio: flujo QZ completado con éxito.`);
-            this.env.services.notification.add("Ticket de cambio enviado a la impresora (QZ Tray).", {
-                type: "success",
+
+            // Bloque: desde el botón "Ticket de cambio" imprimir 2 reportes:
+            // 1) recibo de pago (OrderReceipt)
+            // 2) corte ESC/POS
+            // 3) ticket de cambio (QWeb)
+            console.info(`${LOG} Ticket cambio: preparando recibo de pago para impresión doble con corte.`);
+            const receiptEl = await this.renderer.toHtml(OrderReceipt, {
+                data: {
+                    ...this.pos.get_order().export_for_printing(),
+                    isBill: this.isBill,
+                },
+                formatCurrency: this.env.utils.formatCurrency,
             });
+            const receiptHtml = receiptEl.outerHTML;
+            console.info(
+                `${LOG} Ticket cambio: HTMLs listos | recibo_len=${receiptHtml.length} | cambio_len=${
+                    html ? String(html).length : 0
+                }`
+            );
+
+            await qzPrint.printTwoHtmlWithEscPosCutBetween(
+                cfg.qz_tray_printer_name.trim(),
+                receiptHtml,
+                html
+            );
+            console.info(`${LOG} Ticket cambio: impresión doble con corte completada.`);
+            this.env.services.notification.add(
+                "Recibo y ticket de cambio enviados a la impresora (QZ Tray).",
+                { type: "success" }
+            );
         } catch (error) {
             console.error(
                 `${LOG} Ticket cambio: error en ruta QZ; se delega al método estándar.`,

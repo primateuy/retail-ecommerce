@@ -146,6 +146,61 @@ export const qzPrintService = {
                     )}`
                 );
             },
+
+            /**
+             * Imprime dos documentos HTML en un único trabajo, agregando un corte ESC/POS entre ambos.
+             *
+             * Requisitos/limitaciones:
+             * - El corte solo funciona si la impresora soporta ESC/POS y QZ la imprime en modo RAW.
+             * - Si la impresora no soporta corte, imprimirá sin cortar (o ignorará el comando).
+             *
+             * @param {string} printerName - Nombre exacto de la cola de impresión.
+             * @param {string} firstHtml - Primer documento HTML (p. ej. recibo de pago).
+             * @param {string} secondHtml - Segundo documento HTML (p. ej. ticket de cambio).
+             */
+            async printTwoHtmlWithEscPosCutBetween(printerName, firstHtml, secondHtml) {
+                if (!printerName || !String(printerName).trim()) {
+                    console.error(`${LOG} printTwoHtmlWithEscPosCutBetween abortado: impresora vacía.`);
+                    throw new Error("Falta el nombre de impresora QZ en la configuración del POS.");
+                }
+                const name = String(printerName).trim();
+                const len1 = firstHtml ? String(firstHtml).length : 0;
+                const len2 = secondHtml ? String(secondHtml).length : 0;
+                console.info(
+                    `${LOG} Enviando 2 HTML + corte ESC/POS | impresora=${JSON.stringify(name)} | ` +
+                        `len1=${len1} len2=${len2}`
+                );
+
+                const qz = await connectIfNeeded();
+                const html1 = injectBaseHref(firstHtml, window.location.origin);
+                const html2 = injectBaseHref(secondHtml, window.location.origin);
+
+                // GS V 0  ->  1D 56 00  (corte completo)
+                const escposCutHex = "1D5600";
+
+                const config = qz.configs.create(name, {
+                    margins: { top: 0, right: 0, bottom: 0, left: 0 },
+                });
+
+                const printData = [
+                    { type: "html", format: "plain", data: html1 },
+                    { type: "raw", format: "hex", data: escposCutHex },
+                    { type: "html", format: "plain", data: html2 },
+                ];
+
+                try {
+                    await qz.print(config, printData);
+                } catch (err) {
+                    console.error(
+                        `${LOG} qz.print() falló en impresión doble con corte (impresora=${JSON.stringify(
+                            name
+                        )}).`,
+                        err
+                    );
+                    throw err;
+                }
+                console.info(`${LOG} Impresión doble con corte: trabajo enviado OK.`);
+            },
         };
     },
 };
