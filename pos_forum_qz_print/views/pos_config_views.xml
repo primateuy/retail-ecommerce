@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="pos_config_view_form_inherit_qz_tray" model="ir.ui.view">
+        <field name="name">pos.config.form.inherit.qz.tray</field>
+        <field name="model">pos.config</field>
+        <field name="inherit_id" ref="odoo_pos_oca.pos_config_view_form_inherit_change_ticket"/>
+        <field name="arch" type="xml">
+            <!-- No usar @string en xpath: Odoo lo traduce y prohíbe ese selector en herencias. -->
+            <xpath expr="//field[@name='change_ticket_note']/parent::group" position="after">
+                <group string="QZ Tray (impresión directa)" col="2">
+                    <field name="use_qz_tray"/>
+                    <field name="qz_tray_printer_name"
+                           invisible="not use_qz_tray"
+                           placeholder="Ej: EPSON TM-T20"/>
+                    <field name="qz_tray_print_pos_receipt" invisible="not use_qz_tray"/>
+                </group>
+            </xpath>
+        </field>
+    </record>
+</odoo>
