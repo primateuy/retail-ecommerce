@@ -184,10 +184,9 @@ export const qzPrintService = {
 
                 const printData = [
                     { type: "html", format: "plain", data: html1 },
-                    { type: "raw", format: "hex", data: escposCutHex },
                     { type: "html", format: "plain", data: html2 },
                 ];
-
+                // { type: "raw", format: "hex", data: escposCutHex },
                 try {
                     await qz.print(config, printData);
                 } catch (err) {
