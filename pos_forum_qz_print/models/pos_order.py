@@ -1,11 +1,36 @@
 # -*- coding: utf-8 -*-
 
 import logging
+import re
 
 from odoo import api, models, _
 from odoo.exceptions import UserError
 
 _logger = logging.getLogger(__name__)
+
+
+def _sanitize_pos_html_remove_odoo_web_assets(html_str):
+    """
+    Quita <link> y <script> que apuntan a /web/assets/ del HTML de reportes QWeb.
+
+    QZ Tray y contextos sin sesión web suelen recibir 404 en esas URLs (hash de
+    assets distinto o sin autenticación); el contenido del cupón sigue imprimiéndose.
+    """
+    if not html_str:
+        return html_str
+    out = re.sub(
+        r'<link[^>]+href=[\'"][^\'"]*?/web/assets/[^\'"]+[\'"][^>]*/?>',
+        "",
+        html_str,
+        flags=re.IGNORECASE,
+    )
+    out = re.sub(
+        r'<script[^>]+src=[\'"][^\'"]*?/web/assets/[^\'"]+[\'"][^>]*>\s*</script>',
+        "",
+        out,
+        flags=re.IGNORECASE,
+    )
+    return out
 
 
 class PosOrder(models.Model):
@@ -78,3 +103,118 @@ class PosOrder(models.Model):
             len(html_str),
         )
         return html_str
+
+    @api.model
+    def get_loyalty_coupon_code_print_data(self, order_id, loyalty_card_ids=None):
+        """
+        Devuelve datos para imprimir el reporte «Código de cupón» (loyalty.card)
+        de las tarjetas/cupones generados por la orden POS (programas de lealtad
+        distintos de gift_card y ewallet).
+
+        Requiere el módulo ``pos_loyalty`` (loyalty.card con source_pos_order_id).
+
+        :param int order_id: ID de ``pos.order``.
+        :param list loyalty_card_ids: ids opcionales enviados por el POS (claves de
+            ``couponPointChanges`` en el cliente). No aplica puntos; solo selecciona
+            tarjetas ya existentes en el servidor, validando que el cliente coincida
+            con la orden (para promociones que no enlazan ``source_pos_order_id``).
+        Returns:
+            dict: ``{'card_ids': [int, ...], 'report_xml_id': str}`` o ``{}`` si no aplica.
+        """
+        order = self.browse(order_id)
+        if not order.exists():
+            _logger.warning(
+                "pos_forum_qz_print: get_loyalty_coupon_code_print_data | orden inexistente id=%s",
+                order_id,
+            )
+            return {}
+        CardModel = self.env["loyalty.card"]
+        if "source_pos_order_id" not in CardModel._fields:
+            _logger.info(
+                "pos_forum_qz_print: pos_loyalty no instalado; sin source_pos_order_id en loyalty.card"
+            )
+            return {}
+        Card = CardModel.sudo()
+        # Bloque: cupones creados en esta orden (promociones que emiten tarjeta nueva).
+        cards = Card.search([("source_pos_order_id", "=", order.id)])
+        # Bloque: cupones aplicados en líneas de recompensa (reward) de la misma orden.
+        if "coupon_id" in self.env["pos.order.line"]._fields:
+            line_coupons = order.lines.mapped("coupon_id").filtered(lambda c: bool(c))
+            cards |= line_coupons
+        # Bloque: tarjetas indicadas por el POS (mismo criterio que las claves de
+        # coupon_point_changes en el cliente; sin tocar puntos en el servidor).
+        partner = order.partner_id
+        if loyalty_card_ids:
+            for raw_id in loyalty_card_ids:
+                try:
+                    cid = int(raw_id)
+                except (TypeError, ValueError):
+                    continue
+                card = Card.browse(cid)
+                if not card.exists():
+                    continue
+                if partner and card.partner_id != partner:
+                    continue
+                if not partner and card.partner_id:
+                    continue
+                cards |= card
+        cards = cards.sudo()
+        # Bloque: excluir gift card y monedero; el usuario pide cupón de promoción / código.
+        cards = cards.filtered(
+            lambda c: c.program_id
+            and c.program_id.program_type not in ("gift_card", "ewallet")
+        )
+        if not cards:
+            _logger.info(
+                "pos_forum_qz_print: sin cupón de promoción para orden %s (id=%s) "
+                "(source_pos_order_id, líneas coupon_id ni loyalty_card_ids del POS)",
+                order.display_name,
+                order.id,
+            )
+            return {}
+        # Reporte: copia de loyalty.loyalty_report + marco tipo ticket de cambio (QWeb en XML).
+        report = self.env.ref(
+            "pos_forum_qz_print.report_loyalty_card_pos_thermal", raise_if_not_found=False
+        )
+        if not report:
+            _logger.warning("pos_forum_qz_print: no se encontró report_loyalty_card_pos_thermal")
+            return {}
+        xml_id = "pos_forum_qz_print.report_loyalty_card_pos_thermal"
+        try:
+            data = self.env["ir.model.data"].sudo().search_read(
+                [("model", "=", "ir.actions.report"), ("res_id", "=", report.id)],
+                ["module", "name"],
+                limit=1,
+            )
+            if data:
+                xml_id = f"{data[0]['module']}.{data[0]['name']}"
+        except Exception as err:
+            _logger.debug("pos_forum_qz_print: fallback xml_id loyalty report: %s", err)
+        return {
+            "card_ids": cards.ids,
+            "report_xml_id": xml_id,
+        }
+
+    @api.model
+    def get_loyalty_coupon_html_for_pos_print(self, order_id, loyalty_card_ids=None):
+        """
+        Renderiza el mismo QWeb que el PDF «Código de cupón» para impresión HTML (QZ).
+
+        :param int order_id: ID de ``pos.order``.
+        :param list loyalty_card_ids: ids opcionales desde el POS (ver ``get_loyalty_coupon_code_print_data``).
+        Returns:
+            str: HTML o cadena vacía si no hay cupones aplicables.
+        """
+        data = self.get_loyalty_coupon_code_print_data(order_id, loyalty_card_ids=loyalty_card_ids)
+        if not data.get("card_ids"):
+            return ""
+        report = self.env.ref(
+            "pos_forum_qz_print.report_loyalty_card_pos_thermal", raise_if_not_found=False
+        )
+        if not report:
+            return ""
+        html_result, _mime = self.env["ir.actions.report"].sudo()._render_qweb_html(
+            report.report_name, data["card_ids"]
+        )
+        raw = html_result.decode("utf-8") if isinstance(html_result, bytes) else str(html_result)
+        return _sanitize_pos_html_remove_odoo_web_assets(raw)

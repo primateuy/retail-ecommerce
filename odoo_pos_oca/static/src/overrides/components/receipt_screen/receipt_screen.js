@@ -6,269 +6,341 @@ import { useService } from "@web/core/utils/hooks";
 import { onMounted, onWillUnmount } from "@odoo/owl";
 
 /**
- * Extensión de ReceiptScreen para agregar funcionalidad de Ticket de Cambio
- * 
- * Este módulo agrega un botón "Ticket de cambio" que permite imprimir
- * un reporte configurable desde la configuración del POS.
- * 
- * El botón se agrega dinámicamente desde JavaScript después de que todo esté renderizado
- * para evitar interferir con el sistema de impresión que usa cloneNode.
+ * Extensión de ReceiptScreen: ticket de cambio y fila de acciones (Rutina, T-Cambio,
+ * Voucher, Cupon PC). La impresión QZ detallada la aporta pos_forum_qz_print.
  */
 patch(ReceiptScreen.prototype, {
     setup() {
         super.setup(...arguments);
         this.orm = useService("orm");
         this.report = useService("report");
-        
-        // Agregar el botón después de que el componente esté completamente montado
-        // Usamos un delay largo para asegurar que el sistema de impresión esté completamente inicializado
+
         onMounted(() => {
-            // Delay largo para asegurar que el botón de imprimir esté completamente renderizado
-            // y que el sistema de impresión haya terminado de inicializarse
             setTimeout(() => {
                 this._addChangeTicketButtonSafely();
             }, 500);
         });
-        
+
         onWillUnmount(() => {
             this._removeChangeTicketButton();
         });
     },
 
     /**
-     * Agrega el botón de ticket de cambio de manera segura sin interferir con la impresión
-     * 
-     * Este método busca el contenedor del botón de imprimir recibo y agrega
-     * el botón de ticket de cambio justo después, sin tocar el botón de imprimir.
+     * Inserta una fila con 4 botones compactos debajo de «Imprimir recibo».
      */
     _addChangeTicketButtonSafely() {
-        // Verificar que haya un reporte configurado
         if (!this.pos.config.change_ticket_report_id) {
             return;
         }
 
-        // Verificar si el botón ya existe
-        if (document.querySelector('.print-change-ticket-button')) {
+        if (document.querySelector(".change-ticket-actions-row")) {
             return;
         }
 
-        // Buscar el área de acciones
-        const screenContent = this.el?.querySelector('.screen-content') ||
-                             document.querySelector('.receipt-screen .screen-content');
-        
+        const screenContent =
+            this.el?.querySelector(".screen-content") ||
+            document.querySelector(".receipt-screen .screen-content");
         if (!screenContent) {
             return;
         }
 
-        const actionsArea = screenContent.querySelector('.actions');
-        
+        const actionsArea = screenContent.querySelector(".actions");
         if (!actionsArea) {
             return;
         }
 
-        // Buscar el contenedor del botón de imprimir recibo
-        // El botón de imprimir está dentro de un div.buttons
-        const printButtonContainer = actionsArea.querySelector('.buttons');
-        
-        if (!printButtonContainer) {
-            // Si no encontramos el contenedor, agregar al final del área de acciones
-            // como fallback
-            const newButtonContainer = document.createElement('div');
-            newButtonContainer.className = 'change-ticket-container mt-3';
-            newButtonContainer.style.marginTop = '1rem';
-            
-            const changeTicketButton = document.createElement('button');
-            changeTicketButton.className = 'button print-change-ticket-button btn btn-secondary w-100 py-3';
-            changeTicketButton.innerHTML = '<i class="fa fa-exchange-alt ms-2"></i><span>Ticket de cambio</span>';
-            changeTicketButton.onclick = (e) => {
+        const printButtonContainer = actionsArea.querySelector(".buttons");
+        const newButtonContainer = document.createElement("div");
+        newButtonContainer.className = "change-ticket-container mt-2 w-100";
+        newButtonContainer.style.marginTop = "0.5rem";
+
+        const row = document.createElement("div");
+        row.className = "change-ticket-actions-row d-flex flex-wrap justify-content-stretch w-100";
+        row.style.gap = "0.5rem";
+
+        /**
+         * Botón compacto con icono FontAwesome y etiqueta en negrita (mejor lectura en caja).
+         */
+        const mkBtn = (label, title, iconClass, handler) => {
+            const b = document.createElement("button");
+            b.type = "button";
+            b.className = "btn btn-secondary btn-sm flex-fill";
+            b.style.minWidth = "4.75rem";
+            b.style.flex = "1 1 22%";
+            b.style.maxWidth = "none";
+            b.style.padding = "0.5rem 0.4rem";
+            b.style.lineHeight = "1.2";
+            b.title = title;
+            b.innerHTML = `
+                <span class="d-flex flex-column align-items-center justify-content-center gap-1" style="gap: 0.2rem;">
+                    <i class="fa ${iconClass}" style="font-size: 1.05rem; opacity: 0.95;" aria-hidden="true"></i>
+                    <strong style="font-weight: 700; font-size: 0.82rem; letter-spacing: 0.02em;">${label}</strong>
+                </span>
+            `;
+            b.onclick = (e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                this.printChangeTicket();
+                handler();
             };
-            
-            newButtonContainer.appendChild(changeTicketButton);
-            actionsArea.appendChild(newButtonContainer);
-            return;
-        }
-
-        // Crear un contenedor nuevo para nuestro botón
-        // Lo insertamos justo después del contenedor del botón de imprimir
-        const newButtonContainer = document.createElement('div');
-        newButtonContainer.className = 'change-ticket-container';
-        newButtonContainer.style.marginTop = '0.5rem';
-        
-        // Crear el botón
-        const changeTicketButton = document.createElement('button');
-        changeTicketButton.className = 'button print-change-ticket-button btn btn-secondary w-100 py-3';
-        changeTicketButton.innerHTML = '<i class="fa fa-exchange-alt ms-2"></i><span>Ticket de cambio</span>';
-        changeTicketButton.onclick = (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            this.printChangeTicket();
+            return b;
         };
-        
-        // Agregar el botón al contenedor
-        newButtonContainer.appendChild(changeTicketButton);
-        
-        // Insertar el contenedor justo después del contenedor del botón de imprimir
-        // Esto lo coloca debajo del botón "Imprimir recibo" sin tocar ese botón
-        if (printButtonContainer.nextSibling) {
-            printButtonContainer.parentNode.insertBefore(newButtonContainer, printButtonContainer.nextSibling);
+
+        row.appendChild(
+            mkBtn(
+                "Rutina",
+                "Recibo + ticket de cambio + voucher empresa (flujo completo)",
+                "fa-tasks",
+                () => this.printChangeTicketRoutine()
+            )
+        );
+        row.appendChild(
+            mkBtn("T-Cambio", "Solo ticket de cambio", "fa-exchange", () =>
+                this.printChangeTicketDocumentOnly()
+            )
+        );
+        row.appendChild(
+            mkBtn("Voucher", "Solo voucher tarjeta OCA", "fa-credit-card", () =>
+                this.printOcaVoucherOnly()
+            )
+        );
+        row.appendChild(
+            mkBtn("Cupón PC", "Código de cupón de promoción (lealtad)", "fa-tag", () =>
+                this.printLoyaltyCouponCode()
+            )
+        );
+
+        newButtonContainer.appendChild(row);
+
+        if (printButtonContainer) {
+            if (printButtonContainer.nextSibling) {
+                printButtonContainer.parentNode.insertBefore(newButtonContainer, printButtonContainer.nextSibling);
+            } else {
+                printButtonContainer.parentNode.appendChild(newButtonContainer);
+            }
         } else {
-            printButtonContainer.parentNode.appendChild(newButtonContainer);
+            actionsArea.appendChild(newButtonContainer);
         }
     },
 
-    /**
-     * Remueve el botón de ticket de cambio del DOM
-     */
     _removeChangeTicketButton() {
-        const container = document.querySelector('.change-ticket-container');
+        const container = document.querySelector(".change-ticket-container");
         if (container) {
             container.remove();
         }
     },
 
     /**
-     * Imprime el ticket de cambio usando el reporte configurado en pos.config
-     * 
-     * Este método obtiene el reporte configurado en change_ticket_report_id
-     * y lo imprime para la orden actual.
-     * 
-     * @returns {Promise} Promesa que se resuelve cuando se completa la impresión
+     * Resuelve el ID backend de la orden POS para RPC e informes.
      */
-    async printChangeTicket() {
-        try {
-            // Verificar que haya un reporte configurado
-            if (!this.pos.config.change_ticket_report_id) {
-                // Mostrar mensaje de error si no hay reporte configurado
-                // Usar el servicio de notificaciones del entorno
-                this.env.services.notification.add(
-                    'No hay un reporte de ticket de cambio configurado. Por favor, configure uno en la configuración del POS.',
-                    { type: 'warning' }
-                );
-                return;
-            }
-
-            // Obtener la orden actual usando el método estándar de POS
-            // En ReceiptScreen, la orden se obtiene con this.pos.get_order()
-            const order = this.pos.get_order();
-            if (!order) {
-                this.env.services.notification.add(
-                    'No se encontró la orden para imprimir el ticket de cambio.',
-                    { type: 'warning' }
-                );
-                return;
-            }
-
-            // Obtener el ID de la orden desde el backend
-            // La orden puede tener server_id (ID del servidor cuando está guardada) o id (ID local)
-            // Priorizamos server_id porque es el ID real en el servidor
-            let orderId = order.server_id || order.id;
-            
-            // Si no tenemos server_id, intentar obtenerlo desde los datos exportados
-            // que contienen la información de la orden guardada
-            if (!orderId) {
-                try {
-                    const orderData = order.export_for_printing();
-                    if (orderData && orderData.id) {
-                        orderId = orderData.id;
-                    }
-                } catch (e) {
-                    console.warn('No se pudo obtener ID desde export_for_printing:', e);
-                }
-            }
-            
-            // Si aún no tenemos ID, buscar la orden en el servidor por su referencia
-            if (!orderId && (order.name || order.pos_reference)) {
-                try {
-                    const orderRef = order.name || order.pos_reference;
-                    const searchResult = await this.orm.searchRead(
-                        'pos.order',
-                        [
-                            '|',
-                            ['name', '=', orderRef],
-                            ['pos_reference', '=', orderRef]
-                        ],
-                        ['id'],
-                        { limit: 1 }
-                    );
-                    
-                    if (searchResult && searchResult.length > 0) {
-                        orderId = searchResult[0].id;
-                    }
-                } catch (e) {
-                    console.warn('Error al buscar orden en servidor:', e);
-                }
-            }
-
-            if (!orderId) {
-                this.env.services.notification.add(
-                    'La orden aún no ha sido guardada en el servidor. Por favor, espere un momento e intente nuevamente.',
-                    { type: 'warning' }
-                );
-                return;
-            }
-
-            // Obtener el ID del reporte configurado
-            // Many2one puede retornar [id, name] o solo el id
-            const reportId = Array.isArray(this.pos.config.change_ticket_report_id) 
-                ? this.pos.config.change_ticket_report_id[0] 
-                : this.pos.config.change_ticket_report_id;
-
-            // Obtener el XML ID completo de la acción de reporte desde el servidor
-            // El servicio de reporte en POS necesita el XML ID completo de la acción
-            let reportXmlId = null;
+    async _getBackendOrderIdForChangeTicket() {
+        const order = this.pos.get_order();
+        if (!order) {
+            return null;
+        }
+        let orderId = order.server_id || order.id;
+        if (!orderId) {
             try {
-                // Obtener el XML ID desde ir.model.data usando el ID del reporte
-                const modelData = await this.orm.searchRead(
-                    'ir.model.data',
-                    [
-                        ['model', '=', 'ir.actions.report'],
-                        ['res_id', '=', reportId]
-                    ],
-                    ['module', 'name'],
-                    { limit: 1 }
-                );
-                
-                if (modelData && modelData.length > 0) {
-                    // Construir el XML ID completo: module.name
-                    reportXmlId = `${modelData[0].module}.${modelData[0].name}`;
-                } else {
-                    // Fallback: usar el XML ID esperado según el archivo de datos
-                    reportXmlId = 'odoo_pos_oca.action_report_pos_order_change_ticket';
+                const orderData = order.export_for_printing();
+                if (orderData?.id) {
+                    orderId = orderData.id;
                 }
             } catch (e) {
-                console.error('Error al obtener XML ID del reporte:', e);
-                // Fallback: usar el XML ID esperado directamente
-                reportXmlId = 'odoo_pos_oca.action_report_pos_order_change_ticket';
+                console.warn("odoo_pos_oca: export_for_printing sin id:", e);
+            }
+        }
+        if (!orderId && (order.name || order.pos_reference)) {
+            try {
+                const orderRef = order.name || order.pos_reference;
+                const searchResult = await this.orm.searchRead(
+                    "pos.order",
+                    [
+                        "|",
+                        ["name", "=", orderRef],
+                        ["pos_reference", "=", orderRef],
+                    ],
+                    ["id"],
+                    { limit: 1 }
+                );
+                if (searchResult?.length) {
+                    orderId = searchResult[0].id;
+                }
+            } catch (e) {
+                console.warn("odoo_pos_oca: búsqueda orden por referencia:", e);
+            }
+        }
+        return orderId || null;
+    },
+
+    /**
+     * Rutina (sin QZ): PDF del ticket de cambio. Con QZ lo redefine pos_forum_qz_print.
+     */
+    async printChangeTicketRoutine() {
+        try {
+            if (!this.pos.config.change_ticket_report_id) {
+                this.env.services.notification.add(
+                    "No hay reporte de ticket de cambio configurado en el POS.",
+                    { type: "warning" }
+                );
+                return;
+            }
+            const order = this.pos.get_order();
+            if (!order) {
+                this.env.services.notification.add("No se encontró la orden.", { type: "warning" });
+                return;
+            }
+
+            const orderId = await this._getBackendOrderIdForChangeTicket();
+            if (!orderId) {
+                this.env.services.notification.add(
+                    "La orden aún no está en el servidor. Intente en unos segundos.",
+                    { type: "warning" }
+                );
+                return;
+            }
+
+            const reportId = Array.isArray(this.pos.config.change_ticket_report_id)
+                ? this.pos.config.change_ticket_report_id[0]
+                : this.pos.config.change_ticket_report_id;
+
+            let reportXmlId = null;
+            try {
+                const modelData = await this.orm.searchRead(
+                    "ir.model.data",
+                    [
+                        ["model", "=", "ir.actions.report"],
+                        ["res_id", "=", reportId],
+                    ],
+                    ["module", "name"],
+                    { limit: 1 }
+                );
+                if (modelData?.length) {
+                    reportXmlId = `${modelData[0].module}.${modelData[0].name}`;
+                } else {
+                    reportXmlId = "odoo_pos_oca.action_report_pos_order_change_ticket";
+                }
+            } catch (e) {
+                console.error("Error al obtener XML ID del reporte:", e);
+                reportXmlId = "odoo_pos_oca.action_report_pos_order_change_ticket";
             }
 
             if (!reportXmlId) {
-                this.env.services.notification.add(
-                    'No se pudo obtener el identificador del reporte configurado.',
-                    { type: 'warning' }
-                );
+                this.env.services.notification.add("No se pudo resolver el reporte del ticket de cambio.", {
+                    type: "warning",
+                });
                 return;
             }
 
-            // Llamar al servicio de reporte para imprimir usando doAction
-            // El formato correcto es: doAction(reportXmlId, [array_de_ids])
             await this.report.doAction(reportXmlId, [orderId]);
-
-            // Notificación de éxito
-            this.env.services.notification.add(
-                'Ticket de cambio impreso correctamente.',
-                { type: 'success' }
-            );
+            this.env.services.notification.add("Ticket de cambio (PDF) generado.", { type: "success" });
         } catch (error) {
-            // Manejar errores durante la impresión
-            console.error('Error al imprimir ticket de cambio:', error);
-            const errorMessage = error?.message || error?.toString() || String(error);
+            console.error("printChangeTicketRoutine:", error);
             this.env.services.notification.add(
-                `Error al imprimir ticket de cambio: ${errorMessage}`,
-                { type: 'danger' }
+                `Error: ${error?.message || error?.toString() || String(error)}`,
+                { type: "danger" }
             );
+        }
+    },
+
+    /**
+     * Compatibilidad: botones encadenados y código antiguo llaman a `printChangeTicket`.
+     */
+    async printChangeTicket() {
+        return this.printChangeTicketRoutine();
+    },
+
+    /**
+     * Solo documento de ticket de cambio (PDF en flujo sin QZ).
+     */
+    async printChangeTicketDocumentOnly() {
+        return this.printChangeTicketRoutine();
+    },
+
+    /**
+     * Solo voucher OCA (PDF del reporte de payment.transaction).
+     */
+    async printOcaVoucherOnly() {
+        try {
+            const order = this.pos.get_order();
+            if (!order) {
+                this.env.services.notification.add("No se encontró la orden.", { type: "warning" });
+                return;
+            }
+            const orderId = await this._getBackendOrderIdForChangeTicket();
+            const orderRef = order.pos_reference || order.name || false;
+            if (!orderId && !orderRef) {
+                this.env.services.notification.add("La orden aún no está en el servidor.", {
+                    type: "warning",
+                });
+                return;
+            }
+            const txId = await this.orm.call('pos.order', 'get_oca_voucher_transaction_id_for_pos_print', [
+                orderId || false,
+                orderRef || false,
+            ]);
+            if (!txId) {
+                this.env.services.notification.add(
+                    "No hay transacción OCA / voucher para esta venta.",
+                    { type: "info" }
+                );
+                return;
+            }
+            await this.report.doAction("odoo_pos_oca.action_report_payment_transaction_oca_voucher", [txId]);
+            this.env.services.notification.add("Voucher OCA (PDF) generado.", { type: "success" });
+        } catch (error) {
+            console.error("printOcaVoucherOnly:", error);
+            this.env.services.notification.add(
+                `Error al imprimir voucher: ${error?.message || String(error)}`,
+                { type: "danger" }
+            );
+        }
+    },
+
+    /**
+     * Reporte «Código de cupón» (loyalty.card) si existe promoción en la orden.
+     */
+    async printLoyaltyCouponCode() {
+        try {
+            const orderId = await this._getBackendOrderIdForChangeTicket();
+            if (!orderId) {
+                this.env.services.notification.add("La orden aún no está en el servidor.", {
+                    type: "warning",
+                });
+                return;
+            }
+            const posOrder = this.pos.get_order();
+            let loyaltyCardIds = [];
+            if (posOrder?.couponPointChanges && typeof posOrder.couponPointChanges === "object") {
+                loyaltyCardIds = Object.keys(posOrder.couponPointChanges)
+                    .map((k) => parseInt(k, 10))
+                    .filter((n) => !Number.isNaN(n));
+            }
+            const data = await this.orm.call(
+                "pos.order",
+                "get_loyalty_coupon_code_print_data",
+                [orderId],
+                { loyalty_card_ids: loyaltyCardIds }
+            );
+            if (!data?.card_ids?.length || !data.report_xml_id) {
+                this.env.services.notification.add(
+                    "No hay cupón de promoción aplicado a esta venta.",
+                    { type: "info" }
+                );
+                return;
+            }
+            await this.report.doAction(data.report_xml_id, data.card_ids);
+            this.env.services.notification.add("Código de cupón enviado a impresión.", { type: "success" });
+        } catch (error) {
+            console.error("printLoyaltyCouponCode:", error);
+            const msg = error?.message || error?.data?.message || String(error);
+            if (msg.includes("get_loyalty_coupon_code_print_data") || msg.includes("404")) {
+                this.env.services.notification.add(
+                    "No está disponible el módulo de cupón (pos_forum_qz_print + pos_loyalty).",
+                    { type: "warning" }
+                );
+            } else {
+                this.env.services.notification.add(`Error: ${msg}`, { type: "danger" });
+            }
         }
     },
 });

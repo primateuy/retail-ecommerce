@@ -7,12 +7,18 @@
  * 
  * Los datos del CFE se obtienen directamente desde el servidor cuando se renderiza
  * el recibo, ya que la orden local puede no tener los datos sincronizados aún.
+ *
+ * El bundle POS debe cargar este archivo después de custom_receipts_for_pos para que
+ * este patch de templateProps reemplace al de receipt_design.js (ver __manifest__.py).
  */
 
 import { OrderReceipt } from "@point_of_sale/app/screens/receipt_screen/receipt/order_receipt";
 import { patch } from "@web/core/utils/patch";
 import { useState, onMounted } from "@odoo/owl";
 import { useService } from "@web/core/utils/hooks";
+
+/** Prefijo fijo para filtrar en consola (F12) al depurar el bloque voucher OCA en el recibo. */
+const OCA_VOUCHER_LOG = "[odoo_pos_no_invoice][oca_voucher]";
 
 patch(OrderReceipt.prototype, {
     /**
@@ -27,6 +33,7 @@ patch(OrderReceipt.prototype, {
         this.state = useState({
             cfeData: {},
             receiptData: null,
+            ocaVoucher: {},
         });
         
         // Cargar datos del recibo y CFE sin bloquear el render del ticket.
@@ -135,6 +142,30 @@ patch(OrderReceipt.prototype, {
         } else {
             console.log('No se encontró account_move para la orden');
         }
+
+        // Bloque: datos del voucher OCA para el recibo «FORUM» (copia cliente en el ticket de compra).
+        try {
+            const ocaVoucher = await this.orm.call(
+                "pos.order",
+                "get_oca_voucher_dict_for_pos_receipt",
+                [orderServerId || false, orderReference || false],
+            );
+            this.state.ocaVoucher =
+                ocaVoucher && typeof ocaVoucher === "object" ? ocaVoucher : {};
+            // Log: trazar respuesta RPC para ver si el backend devuelve {} (sin transacción) o datos.
+            console.info(
+                `${OCA_VOUCHER_LOG} _loadReceiptData RPC OK | orderServerId=${orderServerId} ` +
+                    `orderReference=${JSON.stringify(orderReference)} | keys=${Object.keys(
+                        this.state.ocaVoucher
+                    ).join(",")} | has_voucher=${this.state.ocaVoucher.has_voucher} ` +
+                    `show_client_copy=${this.state.ocaVoucher.show_client_copy} | payload=${JSON.stringify(
+                        this.state.ocaVoucher
+                    )}`
+            );
+        } catch (e) {
+            console.warn(`${OCA_VOUCHER_LOG} _loadReceiptData RPC error`, e);
+            this.state.ocaVoucher = {};
+        }
     },
 
     /**
@@ -224,6 +255,29 @@ patch(OrderReceipt.prototype, {
             ? receiptData.paymentlines
             : this.props.data.paymentlines;
 
+        // Bloque: voucher OCA — marcar show_client_copy si hay datos (evita t-if que falle con JSON).
+        const mergedOcaVoucher = {
+            ...(this.props.data?.oca_voucher || {}),
+            ...(this.state.ocaVoucher || {}),
+        };
+        if (
+            mergedOcaVoucher &&
+            (mergedOcaVoucher.has_voucher ||
+                mergedOcaVoucher.show_client_copy ||
+                mergedOcaVoucher.ticket_number ||
+                typeof mergedOcaVoucher.amount === "number")
+        ) {
+            mergedOcaVoucher.show_client_copy = true;
+        }
+
+        // Log: comprobar si props.data lleva oca_voucher al diseño QWeb del recibo (condición t-if).
+        console.info(
+            `${OCA_VOUCHER_LOG} templateProps | mergedKeys=${Object.keys(mergedOcaVoucher).length} ` +
+                `show_client_copy=${mergedOcaVoucher.show_client_copy} | fromProps=${JSON.stringify(
+                    this.props.data?.oca_voucher || {}
+                )} | fromState=${JSON.stringify(this.state.ocaVoucher || {})}`
+        );
+
         // Construir objeto final de props para el template del recibo.
         const props = {
             pos: this.pos,
@@ -236,6 +290,7 @@ patch(OrderReceipt.prototype, {
                 legal_data: legalData,
                 adenda_data: adendaData,
                 cfe_data: cfeData, // Agregar datos del CFE directamente a props.data
+                oca_voucher: mergedOcaVoucher,
             },
             order: order,
             receipt: this.props.data,

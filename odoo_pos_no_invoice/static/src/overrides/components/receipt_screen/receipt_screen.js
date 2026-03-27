@@ -11,6 +11,9 @@ import { ReceiptScreen } from "@point_of_sale/app/screens/receipt_screen/receipt
 import { OrderReceipt } from "@point_of_sale/app/screens/receipt_screen/receipt/order_receipt";
 import { patch } from "@web/core/utils/patch";
 
+/** Mismo prefijo que en receipt_cfe_data.js para filtrar trazas del voucher en impresión. */
+const OCA_VOUCHER_LOG = "[odoo_pos_no_invoice][oca_voucher]";
+
 patch(ReceiptScreen.prototype, {
     /**
      * Imprime el recibo respetando la configuración de descarga.
@@ -67,10 +70,36 @@ patch(ReceiptScreen.prototype, {
         }
 
         const baseReceiptData = this.pos.get_order().export_for_printing();
+
+        // Bloque: voucher OCA (id backend y/o referencia si aún no hay server_id).
+        let ocaVoucher = {};
+        try {
+            ocaVoucher =
+                (await orm.call("pos.order", "get_oca_voucher_dict_for_pos_receipt", [
+                    orderServerId || false,
+                    orderReference || false,
+                ])) || {};
+            if (!ocaVoucher || typeof ocaVoucher !== "object") {
+                ocaVoucher = {};
+            }
+        } catch (e) {
+            console.warn(`${OCA_VOUCHER_LOG} printReceipt RPC error`, e);
+        }
+
+        console.info(
+            `${OCA_VOUCHER_LOG} printReceipt antes de printer.print | orderServerId=${orderServerId} ` +
+                `orderReference=${JSON.stringify(orderReference)} | oca_keys=${Object.keys(
+                    ocaVoucher
+                ).join(",")} | show_client_copy=${ocaVoucher.show_client_copy} | payload=${JSON.stringify(
+                    ocaVoucher
+                )}`
+        );
+
         const receiptData = {
             ...baseReceiptData,
             ...(receiptServerData || {}),
             isBill: this.isBill,
+            oca_voucher: ocaVoucher,
         };
         if (!receiptServerData?.orderlines?.length) {
             receiptData.orderlines = baseReceiptData.orderlines;

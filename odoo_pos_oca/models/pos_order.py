@@ -3,8 +3,11 @@
 Modelo para extender pos.order con funcionalidades básicas
 """
 
-from odoo import models, api
+import base64
 import logging
+
+from odoo import models, fields, api, _
+from odoo.exceptions import UserError
 
 _logger = logging.getLogger(__name__)
 
@@ -14,7 +17,287 @@ class PosOrder(models.Model):
     Extensión básica del modelo pos.order
     """
     _inherit = 'pos.order'
-    
+
+    oca_voucher_transaction_id = fields.Many2one(
+        'payment.transaction',
+        string='Transacción OCA (voucher tarjeta)',
+        compute='_compute_oca_voucher_transaction_id',
+        help='Transacción OCA más reciente asociada a la orden (p. ej. reporte PDF de voucher).',
+    )
+
+    @api.depends('state', 'payment_ids', 'payment_ids.payment_transaction_id')
+    def _compute_oca_voucher_transaction_id(self):
+        """
+        Resuelve la misma transacción que get_oca_voucher_html_for_pos_print para poder
+        renderizar el voucher en reportes QWeb sin duplicar lógica en plantillas.
+        """
+        # Bloque: búsqueda por orden y proveedor OCA (alineado con get_oca_voucher_html_for_pos_print).
+        PaymentTransaction = self.env['payment.transaction'].sudo()
+        for order in self:
+            transaction = PaymentTransaction.search(
+                [
+                    ('pos_order_id', '=', order.id),
+                    ('provider_id.code', '=', 'oca'),
+                ],
+                order='id desc',
+                limit=1,
+            )
+            order.oca_voucher_transaction_id = transaction
+
+    @api.model
+    def get_oca_voucher_html_for_pos_print(self, order_id, raise_on_missing=True):
+        """
+        Obtiene el HTML del voucher OCA para una orden POS.
+
+        Este método está pensado para el flujo de impresión desde POS (QZ Tray):
+        localiza la transacción OCA más reciente asociada a la orden y renderiza
+        el reporte QWeb del voucher.
+
+        Args:
+            order_id (int): ID de la orden POS en el backend.
+
+        Args:
+            raise_on_missing (bool): Si False, ante ausencia de transacción OCA o
+                configuración de reporte devuelve string vacío (para que el POS
+                pueda seguir imprimiendo otros documentos).
+
+        Returns:
+            str: HTML del voucher OCA listo para impresión, o '' si no corresponde.
+        """
+        # Bloque: validar orden para evitar errores de render con IDs inválidos.
+        order = self.browse(order_id)
+        if not order.exists():
+            _logger.warning(
+                "Voucher OCA: orden no encontrada para impresión | order_id=%s",
+                order_id,
+            )
+            if raise_on_missing:
+                raise UserError(_("No se encontró la orden para imprimir el voucher OCA."))
+            return ''
+
+        # Bloque: localizar la transacción OCA más reciente asociada a la orden.
+        transaction = self.env['payment.transaction'].sudo().search(
+            [
+                ('pos_order_id', '=', order.id),
+                ('provider_id.code', '=', 'oca'),
+            ],
+            order='id desc',
+            limit=1,
+        )
+        if not transaction:
+            _logger.warning(
+                "Voucher OCA: no hay transacción OCA asociada a la orden | order=%s (id=%s)",
+                order.name,
+                order.id,
+            )
+            if raise_on_missing:
+                raise UserError(
+                    _("No se encontró una transacción OCA para generar el voucher de esta orden.")
+                )
+            return ''
+
+        # Bloque: obtener acción de reporte y renderizar QWeb HTML del voucher.
+        report_action = self.env.ref(
+            'odoo_pos_oca.action_report_payment_transaction_oca_voucher',
+            raise_if_not_found=False,
+        )
+        if not report_action:
+            _logger.error("Voucher OCA: no se encontró la acción de reporte del voucher.")
+            if raise_on_missing:
+                raise UserError(_("No se encontró la configuración del reporte de voucher OCA."))
+            return ''
+
+        html_result, _mime = self.env['ir.actions.report'].sudo()._render_qweb_html(
+            report_action.report_name, transaction.ids
+        )
+        html_str = html_result.decode('utf-8') if isinstance(html_result, bytes) else str(html_result)
+        _logger.info(
+            "Voucher OCA: HTML generado correctamente | order=%s | tx=%s | html_len=%s",
+            order.name,
+            transaction.reference or transaction.id,
+            len(html_str),
+        )
+        return html_str
+
+    def _find_payment_transaction_for_pos_receipt(self, order):
+        """
+        Localiza la transacción de tarjeta asociada a la orden POS.
+
+        Orden de búsqueda: por orden+proveedor OCA, por líneas de pago con
+        payment_transaction_id, luego cualquier transacción enlazada a la orden.
+        """
+        PaymentTransaction = self.env['payment.transaction'].sudo()
+        oca_provider = self.env['payment.provider'].sudo().search([('code', '=', 'oca')], limit=1)
+        # Bloque: caso ideal — transacción OCA con pos_order_id.
+        transaction = PaymentTransaction.search(
+            [
+                ('pos_order_id', '=', order.id),
+                ('provider_id.code', '=', 'oca'),
+            ],
+            order='id desc',
+            limit=1,
+        )
+        if transaction:
+            return transaction
+        # Bloque: transacción enlazada al pago POS (a veces pos_order_id se asocia después).
+        for pay in order.payment_ids:
+            if pay.payment_transaction_id:
+                t = pay.payment_transaction_id.sudo()
+                if oca_provider and t.provider_id == oca_provider:
+                    return t
+        for pay in order.payment_ids:
+            if pay.payment_transaction_id:
+                return pay.payment_transaction_id.sudo()
+        # Bloque: último recurso — cualquier transacción con pos_order_id.
+        return PaymentTransaction.search(
+            [('pos_order_id', '=', order.id)],
+            order='id desc',
+            limit=1,
+        )
+
+    @api.model
+    def get_oca_voucher_dict_for_pos_receipt(self, order_id=False, pos_reference=False):
+        """
+        Devuelve un diccionario con los datos del voucher OCA para el diseño de recibo POS
+        (p. ej. «Recibo con CFE (FORUM)»). Si no hay transacción, devuelve {}.
+
+        Args:
+            order_id (int|bool): ID backend de pos.order (False si solo se usa referencia).
+            pos_reference (str|bool): pos_reference o name de la orden si aún no hay server_id.
+
+        Returns:
+            dict: Campos listos para el template del recibo; vacío si no aplica.
+        """
+        # Bloque: resolver orden por id o por referencia (impresión sin server_id sincronizado).
+        order = self.sudo().browse(int(order_id)) if order_id else self.env['pos.order'].sudo().browse()
+        if order_id and not order.exists():
+            _logger.warning(
+                "Voucher recibo POS: orden id=%s no existe; se intenta por referencia=%r",
+                order_id,
+                pos_reference,
+            )
+            order = self.sudo().browse()
+        if (not order or not order.exists()) and pos_reference:
+            order = self.sudo().search([('pos_reference', '=', pos_reference)], limit=1)
+            if not order:
+                order = self.sudo().search([('name', '=', pos_reference)], limit=1)
+        if not order.exists():
+            _logger.warning(
+                "Voucher recibo POS: sin orden resuelta | order_id=%s | pos_reference=%r",
+                order_id,
+                pos_reference,
+            )
+            return {}
+        transaction = self._find_payment_transaction_for_pos_receipt(order)
+        if not transaction:
+            _logger.warning(
+                "Voucher recibo POS: sin payment.transaction | orden=%s (id=%s) | pagos=%s",
+                order.name,
+                order.id,
+                len(order.payment_ids),
+            )
+            return {}
+        # Bloque: sucursal / RUT (misma prioridad que en reportes QWeb).
+        branch_partner = False
+        if (
+            order.config_id
+            and order.config_id.picking_type_id
+            and order.config_id.picking_type_id.warehouse_id
+            and order.config_id.picking_type_id.warehouse_id.partner_id
+        ):
+            branch_partner = order.config_id.picking_type_id.warehouse_id.partner_id
+        elif order.config_id and order.config_id.company_id and order.config_id.company_id.partner_id:
+            branch_partner = order.config_id.company_id.partner_id
+        elif order.company_id and order.company_id.partner_id:
+            branch_partner = order.company_id.partner_id
+        # Bloque: máscara de tarjeta y fechas en zona horaria del usuario.
+        card_bin = transaction.card_bin or ''
+        card_last = transaction.card_last_four or ''
+        card_masked = f'{card_bin}******{card_last}' if (card_bin or card_last) else '************'
+        # Bloque: fechas en TZ del usuario (usar fields.Datetime.context_timestamp: pos.order no siempre expone context_timestamp).
+        create_local = False
+        if transaction.create_date:
+            create_local = fields.Datetime.context_timestamp(order, transaction.create_date)
+        date_str = create_local.strftime('%d/%m/%Y') if create_local else ''
+        time_str = create_local.strftime('%H:%M') if create_local else ''
+        datetime_str = create_local.strftime('%d/%m/%Y %H:%M:%S') if create_local else ''
+        result = {
+            'has_voucher': True,
+            'show_client_copy': True,
+            'issuer_name': transaction.issuer_name or '',
+            'acquirer': transaction.acquirer or '',
+            'merchant_number': transaction.merchant_number or '',
+            'pos_id': transaction.pos_id or '',
+            'ticket_number': transaction.ticket_number or '',
+            'batch_number': transaction.batch_number or '',
+            'authorization_code': transaction.authorization_code or '',
+            'invoice_number': transaction.invoice_number or '',
+            'installments': transaction.installments or 0,
+            'issuer_code': transaction.issuer_code or '',
+            'card_masked': card_masked,
+            'amount': transaction.amount,
+            'date_str': date_str,
+            'time_str': time_str,
+            'datetime_str': datetime_str,
+            'partner_name': order.partner_id.name or '',
+            'company_name': order.company_id.name or '',
+            'branch_street': branch_partner.street or '' if branch_partner else '',
+            'branch_vat': branch_partner.vat or '' if branch_partner else '',
+            'voucher_ref': transaction.ticket_number or transaction.reference or '',
+        }
+        _logger.info(
+            "Voucher recibo POS: OK | orden=%s (id=%s) | tx_id=%s | ticket=%s | show_client_copy=%s",
+            order.name,
+            order.id,
+            transaction.id,
+            result.get('ticket_number'),
+            result.get('show_client_copy'),
+        )
+        return result
+
+    @api.model
+    def get_oca_voucher_transaction_id_for_pos_print(self, order_id=False, pos_reference=False):
+        """
+        Devuelve el id de ``payment.transaction`` OCA asociado al recibo, o False.
+        Usado desde el POS para imprimir solo el PDF/HTML del voucher sin duplicar lógica.
+        """
+        order = self.sudo().browse(int(order_id)) if order_id else self.env['pos.order'].sudo().browse()
+        if order_id and not order.exists():
+            order = self.sudo().browse()
+        if (not order or not order.exists()) and pos_reference:
+            order = self.sudo().search([('pos_reference', '=', pos_reference)], limit=1)
+            if not order:
+                order = self.sudo().search([('name', '=', pos_reference)], limit=1)
+        if not order.exists():
+            return False
+        transaction = self._find_payment_transaction_for_pos_receipt(order)
+        return transaction.id if transaction else False
+
+    def get_change_ticket_barcode_data_uri(self):
+        """
+        Genera un data URI PNG (Code128) con el nº de orden para el reporte PDF/HTML.
+
+        El ``<img src="/report/barcode/...">`` no siempre se renderiza en PDF (wkhtmltopdf
+        sin URL absoluta); embeber base64 garantiza que el código de barras se vea.
+        """
+        self.ensure_one()
+        value = (self.pos_reference or self.name or "").strip()
+        if not value:
+            return False
+        try:
+            png = self.env["ir.actions.report"].barcode(
+                "Code128", value, width=300, height=80
+            )
+        except Exception as err:
+            _logger.debug(
+                "Ticket cambio: no se generó Code128 | orden=%s | valor=%r | %s",
+                self.id,
+                value,
+                err,
+            )
+            return False
+        return "data:image/png;base64," + base64.b64encode(png).decode("ascii")
+
     @api.model
     def create(self, vals):
         """

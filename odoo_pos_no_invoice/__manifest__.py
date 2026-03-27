@@ -11,14 +11,19 @@
     """,
     'category': 'Localization',
     'version': '17.0.0.1',
-    'depends': ['base', 'point_of_sale', 'custom_receipts_for_pos'],
+    'depends': ['base', 'point_of_sale', 'custom_receipts_for_pos', 'odoo_pos_oca'],
     'data': [
         'views/pos_config_views.xml',
         'data/pos_receipt_cfe_data.xml',
     ],
     'assets': {
+        # Orden explícito: receipt_cfe_data.js debe ir al final para que el patch de
+        # OrderReceipt (CFE + voucher OCA) sobrescriba al de custom_receipts_for_pos.
         'point_of_sale._assets_pos': [
-            'odoo_pos_no_invoice/static/**/*',
+            'odoo_pos_no_invoice/static/src/overrides/components/payment_screen/payment_screen.js',
+            'odoo_pos_no_invoice/static/src/overrides/components/receipt_screen/receipt_screen.js',
+            'odoo_pos_no_invoice/static/src/overrides/printer/pos_printer_service.js',
+            'odoo_pos_no_invoice/static/src/js/receipt_cfe_data.js',
         ],
     },
     'license': 'LGPL-3',

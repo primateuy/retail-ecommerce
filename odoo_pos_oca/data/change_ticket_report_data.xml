@@ -1,6 +1,131 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
     <data>
+        <!--
+            Fragmento QWeb reutilizable: voucher tarjeta estilo ticket térmico (Uruguay).
+            Se usa en el reporte PDF de voucher OCA (copia empresa).
+        -->
+        <record id="oca_card_voucher_snippet" model="ir.ui.view">
+            <field name="name">odoo_pos_oca.oca_card_voucher_snippet</field>
+            <field name="type">qweb</field>
+            <field name="arch" type="xml">
+                <t t-name="odoo_pos_oca.oca_card_voucher_snippet">
+                    <!-- Bloque: variables de apoyo (etiqueta copia, orden POS, máscara tarjeta). -->
+                    <t t-set="cl" t-value="copy_label or 'COPIA EMPRESA'"/>
+                    <t t-set="order" t-value="tx.pos_order_id"/>
+                    <t t-set="branch_partner"
+                       t-value="order and (order.config_id.picking_type_id.warehouse_id.partner_id if order.config_id and order.config_id.picking_type_id and order.config_id.picking_type_id.warehouse_id and order.config_id.picking_type_id.warehouse_id.partner_id else (order.config_id.company_id.partner_id if order.config_id and order.config_id.company_id else order.company_id.partner_id))"/>
+                    <t t-set="card_masked"
+                       t-value="(tx.card_bin or '******') + '******' + (tx.card_last_four or '****')"/>
+                    <t t-set="voucher_ref" t-value="tx.ticket_number or tx.reference or ''"/>
+
+                    <div class="oca-thermal-voucher"
+                         style="font-family: 'Courier New', Courier, monospace; font-size: 13px; line-height: 1.4; max-width: 80mm; margin: 0 auto; color: #000; padding: 4px 0;">
+
+                        <!-- Bloque: cabecera (fecha/hora, marca OCA, tipo de operación, comercio) -->
+                        <!-- No usar widget "time" con t-field sobre Datetime: en 17.x dispara conversor incorrecto. -->
+                        <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
+                            <span t-if="tx.create_date" t-out="context_timestamp(tx.create_date).strftime('%d/%m/%Y')"/>
+                            <span t-if="tx.create_date" t-out="context_timestamp(tx.create_date).strftime('%H:%M')"/>
+                        </div>
+                        <div style="text-align:center; font-weight:bold; font-size:15px; margin-bottom:4px;">
+                            OCA Comercios
+                        </div>
+                        <div style="text-align:center; margin-bottom:2px;">
+                            <span t-esc="tx.issuer_name or 'TARJETA'"/> ONLINE
+                        </div>
+                        <div style="text-align:center; font-weight:bold; font-size:14px; margin-bottom:8px;">
+                            <span t-if="order and order.company_id" t-field="order.company_id.name"/>
+                            <span t-if="not order or not order.company_id" t-field="tx.company_id.name"/>
+                        </div>
+
+                        <!-- Bloque: sucursal / RUT (dos columnas como en vouchers reales) -->
+                        <div style="display:flex; justify-content:space-between; gap:8px; margin-bottom:8px;">
+                            <div style="flex:1;">
+                                <span t-if="branch_partner and branch_partner.street" t-field="branch_partner.street"/>
+                            </div>
+                            <div style="text-align:right; flex:1;">
+                                <span t-if="branch_partner and branch_partner.vat">RUT <span t-field="branch_partner.vat"/></span>
+                            </div>
+                        </div>
+
+                        <!-- Bloque: título sección “Voucher de Tarjeta” (últimas imágenes de referencia) -->
+                        <div style="text-align:center; font-weight:bold; margin-bottom:8px;">
+                            Voucher de Tarjeta <span t-if="voucher_ref" t-esc="voucher_ref"/>
+                        </div>
+
+                        <!-- Bloque: filas izquierda / derecha -->
+                        <div style="display:flex; justify-content:space-between; margin-bottom:2px;">
+                            <span>TARJETA: <span t-esc="tx.issuer_name or '-'"/></span>
+                            <span>Online <span t-esc="tx.acquirer or 'OCA'"/></span>
+                        </div>
+                        <div style="display:flex; justify-content:space-between; margin-bottom:2px;">
+                            <span>Comercio: <span t-esc="tx.merchant_number or '-'"/></span>
+                            <span>Terminal: <span t-esc="tx.pos_id or '-'"/></span>
+                        </div>
+                        <div style="display:flex; justify-content:space-between; margin-bottom:2px;">
+                            <span>Operacion: Venta</span>
+                            <span t-if="tx.create_date" t-out="context_timestamp(tx.create_date).strftime('%d/%m/%Y %H:%M:%S')"/>
+                        </div>
+                        <div style="display:flex; justify-content:space-between; margin-bottom:2px;">
+                            <span>Producto: <span t-esc="tx.acquirer or '-'"/></span>
+                            <span>Ticket: <span t-esc="tx.ticket_number or '-'"/></span>
+                        </div>
+                        <div style="display:flex; justify-content:space-between; margin-bottom:2px;">
+                            <span>LOTE: <span t-esc="tx.batch_number or '-'"/></span>
+                            <span>Ingreso: NFC</span>
+                        </div>
+                        <div style="display:flex; justify-content:space-between; margin-bottom:2px;">
+                            <span>Tarjeta: <span t-esc="card_masked"/></span>
+                            <span>Exp: xx/xx</span>
+                        </div>
+                        <div style="display:flex; justify-content:space-between; margin-bottom:2px;">
+                            <span>Cuotas: <span t-esc="tx.installments or 0"/></span>
+                            <span>Plan: <span t-esc="tx.issuer_code or '0'"/></span>
+                        </div>
+                        <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
+                            <span>Autorizacion: <span t-esc="tx.authorization_code or '-'"/></span>
+                            <span>No.FACT: <span t-esc="tx.invoice_number or '-'"/></span>
+                        </div>
+
+                        <!-- Bloque: importe / total destacado -->
+                        <div style="display:flex; justify-content:space-between; font-weight:bold; margin:6px 0 4px 0;">
+                            <span>IMPORTE</span>
+                            <span t-field="tx.amount" t-options='{"widget":"monetary","display_currency": tx.currency_id}'/>
+                        </div>
+                        <div style="display:flex; justify-content:space-between; font-weight:bold; font-size:15px; margin-bottom:8px;">
+                            <span>TOTAL A PAGAR</span>
+                            <span t-field="tx.amount" t-options='{"widget":"monetary","display_currency": tx.currency_id}'/>
+                        </div>
+                        <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
+                            <span t-if="order and order.partner_id" t-field="order.partner_id.name"/>
+                        </div>
+
+                        <div style="text-align:center; font-size:11px; margin:6px 0;">
+                            NO REQUIERE PIN NI OTROS DATOS
+                        </div>
+                        <div style="text-align:center; font-size:11px; margin-bottom:4px;">
+                            NO APLICA Ley
+                        </div>
+                        <div style="text-align:center; font-size:11px; margin-bottom:6px;">
+                            Adq: <span t-esc="tx.acquirer or '-'"/>
+                        </div>
+                        <div style="font-size:11px; margin-bottom:8px; text-align:center;">
+                            Aplica dev. IVA-Ley 19210 Sin nro. factura no aplica ley
+                        </div>
+                        <div style="text-align:center; font-size:12px; font-weight:bold; margin-bottom:10px;">
+                            MUCHAS GRACIAS
+                        </div>
+
+                        <!-- Bloque: pie copia empresa (barra negra; sustituye “copia cliente”) -->
+                        <div style="background:#000; color:#fff; text-align:center; font-weight:bold; padding:6px 4px; margin-top:4px; letter-spacing:0.5px;">
+                            *** <span t-esc="cl"/> ***
+                        </div>
+                    </div>
+                </t>
+            </field>
+        </record>
+
         <!-- 
         Reporte de ejemplo para Ticket de Cambio
         Este es un reporte básico que puede ser personalizado según las necesidades
@@ -25,79 +150,140 @@
             <field name="arch" type="xml">
                 <t t-call="web.html_container">
                     <t t-foreach="docs" t-as="o">
-                        <t t-call="web.external_layout">
-                            <div class="page">
-                                <div class="oe_structure"/>
-                                
-                                <!-- Encabezado del Ticket -->
-                                <div class="row mt16 mb16">
-                                    <div class="col-12 text-center">
-                                        <h2>TICKET DE CAMBIO</h2>
-                                        <t t-set="ticket_number" t-value="o.pos_reference or o.name"/>
-                                        <t t-set="order_number" t-value="o.name or o.pos_reference"/>
-                                        <p><strong>Número de ticket:</strong> <span t-esc="ticket_number"/></p>
-                                        <p><strong>Orden asociada:</strong> <span t-esc="order_number"/></p>
-                                        <p><strong>Fecha:</strong> <span t-field="o.date_order" t-options='{"widget": "datetime"}'/></p>
-                                    </div>
-                                </div>
+                        <t t-set="ticket_number" t-value="o.pos_reference or o.name"/>
+                        <!-- Nº de orden para texto bajo el código (prioridad: pos_reference). -->
+                        <t t-set="order_number" t-value="o.pos_reference or o.name"/>
+                        <!-- PNG Code128 embebido en base64 (PDF no resuelve bien /report/barcode/...). -->
+                        <t t-set="barcode_data_uri" t-value="o.get_change_ticket_barcode_data_uri()"/>
+                        <t t-set="branch_partner"
+                           t-value="(o.config_id.picking_type_id.warehouse_id.partner_id if o.config_id and o.config_id.picking_type_id and o.config_id.picking_type_id.warehouse_id and o.config_id.picking_type_id.warehouse_id.partner_id else (o.config_id.company_id.partner_id if o.config_id and o.config_id.company_id else o.company_id.partner_id))"/>
+                        <t t-set="cfe_serie_num" t-value="o.account_move and o.account_move.cfe_serie_num or ''"/>
+                        <t t-set="cfe_type_code" t-value="cfe_serie_num.split('-')[0] if cfe_serie_num and '-' in cfe_serie_num else (o.account_move.cfe_type if o.account_move and o.account_move.cfe_type else '')"/>
+                        <t t-set="cfe_type_name" t-value="('eTicket' if cfe_type_code in ['101', '111'] else ('eFactura' if cfe_type_code in ['112'] else cfe_type_code))"/>
+                        <t t-set="cfe_parts" t-value="cfe_serie_num.split('-') if cfe_serie_num and '-' in cfe_serie_num else []"/>
+                        <t t-set="cfe_joined" t-value="' '.join(cfe_parts) if cfe_parts else (cfe_serie_num or cfe_type_code or '')"/>
 
-                                <!-- Información de la Sucursal -->
-                                <t t-set="branch_partner"
-                                   t-value="(o.config_id.picking_type_id.warehouse_id.partner_id if o.config_id and o.config_id.picking_type_id and o.config_id.picking_type_id.warehouse_id and o.config_id.picking_type_id.warehouse_id.partner_id else (o.config_id.company_id.partner_id if o.config_id and o.config_id.company_id else o.company_id.partner_id))"/>
-                                <div class="row mb16" t-if="branch_partner">
-                                    <div class="col-12">
-                                        <h4 t-if="o.config_id" t-esc="o.config_id.name"/>
-                                        <p t-if="branch_partner.street"><span t-field="branch_partner.street"/></p>
-                                        <p t-if="branch_partner.city">
-                                            <span t-field="branch_partner.city"/>
-                                            <t t-if="branch_partner.state_id">, <span t-field="branch_partner.state_id.name"/></t>
-                                        </p>
-                                        <p t-if="branch_partner.vat">RUT: <span t-field="branch_partner.vat"/></p>
-                                    </div>
-                                </div>
+                        <!-- Diseño tipo ticket térmico (referencia retail Uruguay) -->
+                        <div class="page" style="max-width: 80mm; margin: 0 auto; padding: 8px 6px; font-family: Arial, Helvetica, sans-serif; font-size: 10px; color: #000; text-transform: uppercase;">
 
-                                <!-- Datos del comprobante electrónico -->
-                                <t t-set="cfe_serie_num" t-value="o.account_move and o.account_move.cfe_serie_num or ''"/>
-                                <t t-set="cfe_type_code" t-value="cfe_serie_num.split('-')[0] if cfe_serie_num and '-' in cfe_serie_num else (o.account_move.cfe_type if o.account_move and o.account_move.cfe_type else '')"/>
-                                <t t-set="cfe_type_name" t-value="('eTicket' if cfe_type_code in ['101', '111'] else ('eFactura' if cfe_type_code in ['112'] else cfe_type_code))"/>
-                                <div class="row mb16" t-if="cfe_type_name or cfe_serie_num">
-                                    <div class="col-12">
-                                        <p><strong>Tipo de comprobante electrónico:</strong> <span t-esc="cfe_type_name"/></p>
-                                        <p t-if="cfe_serie_num"><strong>CFE:</strong> <span t-esc="cfe_serie_num"/></p>
-                                    </div>
-                                </div>
+                            <!-- Bloque: marca / nombre comercial (sucursal o compañía) 
+                            <div style="text-align:center; font-weight: bold; font-size: 18px; letter-spacing: 1px; margin-bottom: 10px;">
+                                <span t-if="o.config_id" t-field="o.config_id.name"/>
+                                <span t-if="not o.config_id" t-field="o.company_id.name"/>
+                            </div>-->
 
-                                <!-- Código de barras de la orden asociada -->
-                                <div class="row mb16" t-if="order_number">
-                                    <div class="col-12 text-center">
-                                        <img t-att-src="'/report/barcode/Code128/%s?width=300&amp;height=80' % (order_number.replace(' ', '%20'))"
-                                             style="max-width:100%; height:auto;"/>
-                                        <div style="font-size:11px; margin-top:4px;">
-                                            <span t-esc="order_number"/>
-                                        </div>
-                                    </div>
+                            <!-- Bloque: datos fiscales en recuadro (razón social) -->
+                            <div style="border: 1px solid #000; padding: 8px 6px; text-align: center; margin-bottom: 10px; line-height: 1.35;">
+                                <div style="font-weight: bold; font-size: 11px;">
+                                    <span t-field="o.company_id.name"/>
                                 </div>
-
-                                <!-- Pie de página -->
-                                <div class="row mt16">
-                                    <div class="col-12 text-center">
-                                        <p class="text-muted">Gracias por su compra</p>
-                                        <p class="text-muted" t-if="o.session_id">
-                                            Sesión: <span t-field="o.session_id.name"/>
-                                        </p>
-                                    </div>
+                                <div t-if="branch_partner and branch_partner.vat">
+                                    RUT: <span t-field="branch_partner.vat"/>
                                 </div>
-
-                                <!-- Texto final configurable -->
-                                <div class="row mt16" t-if="o.config_id and o.config_id.change_ticket_note">
-                                    <div class="col-12 text-center">
-                                        <div t-raw="o.config_id.change_ticket_note"/>
-                                    </div>
+                                <div t-if="branch_partner and branch_partner.phone">
+                                    Teléfono: <span t-field="branch_partner.phone"/>
                                 </div>
-
-                                <div class="oe_structure"/>
+                                <div t-if="branch_partner and (branch_partner.street or branch_partner.city)">
+                                    <span t-if="branch_partner.street" t-field="branch_partner.street"/>
+                                    <t t-if="branch_partner.street and branch_partner.city"> - </t>
+                                    <span t-if="branch_partner.city" t-field="branch_partner.city"/>
+                                </div>
                             </div>
-                        </t>
+
+                            <!-- Bloque: metadatos CFE / factura / fecha (referencia ticket físico) -->
+                            <div style="width: 100%; margin-bottom: 8px; font-size: 9px; overflow: hidden;">
+                                <div style="float: left; max-width: 55%;">
+                                    <span t-if="cfe_joined" t-esc="cfe_joined"/>
+                                </div>
+                                <div style="float: right; text-align: right; max-width: 45%;">
+                                    <div t-if="o.account_move and o.account_move.name">
+                                        <span t-field="o.account_move.name"/>
+                                    </div>
+                                    <div t-if="o.date_order">
+                                        <span t-field="o.date_order" t-options='{"widget": "date"}'/>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div style="margin-bottom: 8px; font-size: 10px;">
+                                <strong>TICKET DE CAMBIO</strong> — <span t-esc="ticket_number"/>
+                            </div>
+                            <div style="margin-bottom: 10px; font-size: 9px;">
+                                <span t-if="cfe_type_name">Tipo CFE: <span t-esc="cfe_type_name"/></span>
+                                <span t-if="cfe_serie_num"> | CFE: <span t-esc="cfe_serie_num"/></span>
+                            </div>
+
+                            <!-- Bloque: vendedor (sin listado de productos ni precios en ticket de cambio) -->
+                            <div style="margin-bottom: 8px; font-size: 10px;">
+                                VENDEDOR: <span t-if="o.user_id" t-field="o.user_id.name"/>
+                            </div>
+
+                            <!-- Código de barras nº de orden (entre vendedor y PDV / sucursal) -->
+                            <div t-if="barcode_data_uri" style="text-align: center; margin: 10px 0 12px 0;">
+                                <img t-att-src="barcode_data_uri" alt="Orden"
+                                     style="max-width: 100%; height: auto;"/>
+                                <div style="font-size: 9px; margin-top: 4px; text-transform: none;">
+                                    <span t-esc="order_number"/>
+                                </div>
+                            </div>
+
+                            <!-- PDV / sucursal (debajo del código de barras) -->
+                            <div style="margin-bottom: 12px; font-size: 10px; text-align: center; line-height: 1.35;">
+                                <div t-if="o.config_id">
+                                    <span>PDV — </span><span t-field="o.config_id.name"/>
+                                </div>
+                                <div t-if="o.config_id and o.config_id.picking_type_id and o.config_id.picking_type_id.warehouse_id"
+                                     style="margin-top: 4px;">
+                                    <span>SUCURSAL: </span>
+                                    <span t-field="o.config_id.picking_type_id.warehouse_id.name"/>
+                                    <span t-if="o.config_id.picking_type_id.warehouse_id.code">
+                                        (<span t-field="o.config_id.picking_type_id.warehouse_id.code"/>)
+                                    </span>
+                                </div>
+                            </div>
+
+                            <!-- Política de cambios (destacada) -->
+                            <div style="text-align: center; font-weight: bold; font-size: 13px; margin: 14px 0 8px 0; line-height: 1.25;">
+                                LOS CAMBIOS SE PODRAN REALIZAR DENTRO DE UN PLAZO DE 30 DIAS
+                            </div>
+
+                            <!-- Nota HTML opcional desde configuración POS -->
+                            <div t-if="o.config_id and o.config_id.change_ticket_note" style="text-align: center; font-size: 9px; margin-top: 8px; text-transform: none;">
+                                <div t-field="o.config_id.change_ticket_note"/>
+                            </div>
+
+                            <div style="text-align: center; font-size: 9px; margin-top: 12px; color: #555;">
+                                <span t-if="o.session_id">Sesión: <span t-field="o.session_id.name"/></span>
+                            </div>
+                        </div>
+                    </t>
+                </t>
+            </field>
+        </record>
+
+        <!-- Reporte de voucher OCA (payment.transaction) -->
+        <record id="action_report_payment_transaction_oca_voucher" model="ir.actions.report">
+            <field name="name">Voucher OCA POS</field>
+            <field name="model">payment.transaction</field>
+            <field name="report_type">qweb-pdf</field>
+            <field name="report_name">odoo_pos_oca.payment_transaction_oca_voucher_report</field>
+            <field name="report_file">odoo_pos_oca.payment_transaction_oca_voucher_report</field>
+            <field name="print_report_name">'Voucher OCA - %s' % (object.reference or object.id)</field>
+            <field name="binding_model_id" ref="payment.model_payment_transaction"/>
+            <field name="binding_type">report</field>
+        </record>
+
+        <record id="payment_transaction_oca_voucher_report" model="ir.ui.view">
+            <field name="name">odoo_pos_oca.payment_transaction_oca_voucher_report</field>
+            <field name="model">payment.transaction</field>
+            <field name="type">qweb</field>
+            <field name="arch" type="xml">
+                <t t-call="web.html_container">
+                    <t t-foreach="docs" t-as="tx">
+                        <div class="article o_report_layout_standard" style="padding: 8px;">
+                            <t t-set="copy_label" t-value="'COPIA EMPRESA'"/>
+                            <t t-call="odoo_pos_oca.oca_card_voucher_snippet"/>
+                        </div>
                     </t>
                 </t>
             </field>

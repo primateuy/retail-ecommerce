@@ -317,6 +317,79 @@
                     </t>
                 </t>
             </div>
+
+            <!-- Voucher tarjeta OCA (mismo bloque que FORUM; recibo Bantey) -->
+            <t t-if="props.data.oca_voucher and props.data.oca_voucher.show_client_copy">
+                <div style="font-family: 'Courier New', Courier, monospace; font-size: 13px; line-height: 1.4; border-top: 1px dashed #000; margin-top: 12px; padding-top: 10px;">
+                    <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
+                        <span t-esc="props.data.oca_voucher.date_str"/>
+                        <span t-esc="props.data.oca_voucher.time_str"/>
+                    </div>
+                    <div style="text-align:center; font-weight:bold; font-size:15px; margin-bottom:4px;">OCA Comercios</div>
+                    <div style="text-align:center; margin-bottom:2px;">
+                        <t t-esc="props.data.oca_voucher.issuer_name || 'TARJETA'"/> ONLINE
+                    </div>
+                    <div style="text-align:center; font-weight:bold; font-size:14px; margin-bottom:8px;">
+                        <t t-esc="props.data.oca_voucher.company_name"/>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; gap:8px; margin-bottom:8px;">
+                        <div style="flex:1;"><t t-esc="props.data.oca_voucher.branch_street"/></div>
+                        <div style="text-align:right; flex:1;">RUT <t t-esc="props.data.oca_voucher.branch_vat"/></div>
+                    </div>
+                    <div style="text-align:center; font-weight:bold; margin-bottom:8px;">
+                        Voucher de Tarjeta <t t-esc="props.data.oca_voucher.voucher_ref"/>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; margin-bottom:2px;">
+                        <span>TARJETA: <t t-esc="props.data.oca_voucher.issuer_name"/></span>
+                        <span>Online <t t-esc="props.data.oca_voucher.acquirer || 'OCA'"/></span>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; margin-bottom:2px;">
+                        <span>Comercio: <t t-esc="props.data.oca_voucher.merchant_number"/></span>
+                        <span>Terminal: <t t-esc="props.data.oca_voucher.pos_id"/></span>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; margin-bottom:2px;">
+                        <span>Operacion: Venta</span>
+                        <span t-esc="props.data.oca_voucher.datetime_str"/>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; margin-bottom:2px;">
+                        <span>Producto: <t t-esc="props.data.oca_voucher.acquirer"/></span>
+                        <span>Ticket: <t t-esc="props.data.oca_voucher.ticket_number"/></span>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; margin-bottom:2px;">
+                        <span>LOTE: <t t-esc="props.data.oca_voucher.batch_number"/></span>
+                        <span>Ingreso: NFC</span>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; margin-bottom:2px;">
+                        <span>Tarjeta: <t t-esc="props.data.oca_voucher.card_masked"/></span>
+                        <span>Exp: xx/xx</span>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; margin-bottom:2px;">
+                        <span>Cuotas: <t t-esc="props.data.oca_voucher.installments"/></span>
+                        <span>Plan: <t t-esc="props.data.oca_voucher.issuer_code || '0'"/></span>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
+                        <span>Autorizacion: <t t-esc="props.data.oca_voucher.authorization_code"/></span>
+                        <span>No.FACT: <t t-esc="props.data.oca_voucher.invoice_number"/></span>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; font-weight:bold; margin:6px 0 4px 0;">
+                        <span>IMPORTE</span>
+                        <span t-if="typeof props.data.oca_voucher.amount === 'number'" t-esc="props.pos.env.utils.formatCurrency(props.data.oca_voucher.amount)"/>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; font-weight:bold; font-size:15px; margin-bottom:8px;">
+                        <span>TOTAL A PAGAR</span>
+                        <span t-if="typeof props.data.oca_voucher.amount === 'number'" t-esc="props.pos.env.utils.formatCurrency(props.data.oca_voucher.amount)"/>
+                    </div>
+                    <div style="margin-bottom:6px;"><t t-esc="props.data.oca_voucher.partner_name"/></div>
+                    <div style="text-align:center; font-size:11px; margin:6px 0;">NO REQUIERE PIN NI OTROS DATOS</div>
+                    <div style="text-align:center; font-size:11px;">NO APLICA Ley</div>
+                    <div style="text-align:center; font-size:11px; margin:6px 0;">Adq: <t t-esc="props.data.oca_voucher.acquirer"/></div>
+                    <div style="font-size:11px; text-align:center; margin-bottom:8px;">Aplica dev. IVA-Ley 19210 Sin nro. factura no aplica ley</div>
+                    <div style="text-align:center; font-size:12px; font-weight:bold; margin-bottom:10px;">MUCHAS GRACIAS</div>
+                    <div style="background:#000; color:#fff; text-align:center; font-weight:bold; padding:6px 4px; margin-top:4px;">
+                        *** COPIA CLIENTE ***
+                    </div>
+                </div>
+            </t>
             
             <br/><br/>
             <div style="font-size:12px; text-align:center;">
@@ -653,6 +726,79 @@
                     </t>
                 </t>
             </div>
+
+            <!-- Voucher tarjeta OCA al final del recibo de compra (copia cliente) -->
+            <t t-if="props.data.oca_voucher and props.data.oca_voucher.show_client_copy">
+                <div style="font-family: 'Courier New', Courier, monospace; font-size: 13px; line-height: 1.4; border-top: 1px dashed #000; margin-top: 12px; padding-top: 10px;">
+                    <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
+                        <span t-esc="props.data.oca_voucher.date_str"/>
+                        <span t-esc="props.data.oca_voucher.time_str"/>
+                    </div>
+                    <div style="text-align:center; font-weight:bold; font-size:15px; margin-bottom:4px;">OCA Comercios</div>
+                    <div style="text-align:center; margin-bottom:2px;">
+                        <t t-esc="props.data.oca_voucher.issuer_name || 'TARJETA'"/> ONLINE
+                    </div>
+                    <div style="text-align:center; font-weight:bold; font-size:14px; margin-bottom:8px;">
+                        <t t-esc="props.data.oca_voucher.company_name"/>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; gap:8px; margin-bottom:8px;">
+                        <div style="flex:1;"><t t-esc="props.data.oca_voucher.branch_street"/></div>
+                        <div style="text-align:right; flex:1;">RUT <t t-esc="props.data.oca_voucher.branch_vat"/></div>
+                    </div>
+                    <div style="text-align:center; font-weight:bold; margin-bottom:8px;">
+                        Voucher de Tarjeta <t t-esc="props.data.oca_voucher.voucher_ref"/>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; margin-bottom:2px;">
+                        <span>TARJETA: <t t-esc="props.data.oca_voucher.issuer_name"/></span>
+                        <span>Online <t t-esc="props.data.oca_voucher.acquirer || 'OCA'"/></span>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; margin-bottom:2px;">
+                        <span>Comercio: <t t-esc="props.data.oca_voucher.merchant_number"/></span>
+                        <span>Terminal: <t t-esc="props.data.oca_voucher.pos_id"/></span>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; margin-bottom:2px;">
+                        <span>Operacion: Venta</span>
+                        <span t-esc="props.data.oca_voucher.datetime_str"/>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; margin-bottom:2px;">
+                        <span>Producto: <t t-esc="props.data.oca_voucher.acquirer"/></span>
+                        <span>Ticket: <t t-esc="props.data.oca_voucher.ticket_number"/></span>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; margin-bottom:2px;">
+                        <span>LOTE: <t t-esc="props.data.oca_voucher.batch_number"/></span>
+                        <span>Ingreso: NFC</span>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; margin-bottom:2px;">
+                        <span>Tarjeta: <t t-esc="props.data.oca_voucher.card_masked"/></span>
+                        <span>Exp: xx/xx</span>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; margin-bottom:2px;">
+                        <span>Cuotas: <t t-esc="props.data.oca_voucher.installments"/></span>
+                        <span>Plan: <t t-esc="props.data.oca_voucher.issuer_code || '0'"/></span>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
+                        <span>Autorizacion: <t t-esc="props.data.oca_voucher.authorization_code"/></span>
+                        <span>No.FACT: <t t-esc="props.data.oca_voucher.invoice_number"/></span>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; font-weight:bold; margin:6px 0 4px 0;">
+                        <span>IMPORTE</span>
+                        <span t-if="typeof props.data.oca_voucher.amount === 'number'" t-esc="props.pos.env.utils.formatCurrency(props.data.oca_voucher.amount)"/>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; font-weight:bold; font-size:15px; margin-bottom:8px;">
+                        <span>TOTAL A PAGAR</span>
+                        <span t-if="typeof props.data.oca_voucher.amount === 'number'" t-esc="props.pos.env.utils.formatCurrency(props.data.oca_voucher.amount)"/>
+                    </div>
+                    <div style="margin-bottom:6px;"><t t-esc="props.data.oca_voucher.partner_name"/></div>
+                    <div style="text-align:center; font-size:11px; margin:6px 0;">NO REQUIERE PIN NI OTROS DATOS</div>
+                    <div style="text-align:center; font-size:11px;">NO APLICA Ley</div>
+                    <div style="text-align:center; font-size:11px; margin:6px 0;">Adq: <t t-esc="props.data.oca_voucher.acquirer"/></div>
+                    <div style="font-size:11px; text-align:center; margin-bottom:8px;">Aplica dev. IVA-Ley 19210 Sin nro. factura no aplica ley</div>
+                    <div style="text-align:center; font-size:12px; font-weight:bold; margin-bottom:10px;">MUCHAS GRACIAS</div>
+                    <div style="background:#000; color:#fff; text-align:center; font-weight:bold; padding:6px 4px; margin-top:4px;">
+                        *** COPIA CLIENTE ***
+                    </div>
+                </div>
+            </t>
 
             <br/><br/>
             <div style="font-size:12px; text-align:center;">
