@@ -832,6 +832,10 @@ class AccountMove(models.Model):
             serieCFE = "PRU"
             numeroCFE = str(random.randint(1, 1000))
 
+        # Obtener secuencial (se incrementará después de envío exitoso)
+        secuencial = self.journal_id.secuencial_ventas or 1
+        caja = self.journal_id.caja or 1
+
         try:
             fecha_emision = self._format_fecha_emision_cfe()
             fecha_transferencia = fields.Date.today().isoformat() 
@@ -845,20 +849,16 @@ class AccountMove(models.Model):
             else:
                 hora_transferencia = self._now_uruguay().strftime('%H:%M')
 
-            secuencial = self.journal_id.secuencial_ventas or 1
-            caja = self.journal_id.caja or 1
-
             request_data = {
-                'wsDeclaVtas': {
+                'wsDeclaVtas2': {
                     'General': {
                         'Cab': {
                             'NumeroRUT': rut,
                             'CodigoShopping': codigoShopping,
                             'NumeroContrato': numeroContrato,
                             'CodigoCanal': codigoCanal,
-                            'Secuencial': secuencial,
-                            'CodigoFormaPago': codigoFormaPago,
-                            'Caja': caja,
+                            'Secuencial': str(secuencial + 1),
+                            'Caja': str(caja),
                             'CodigoCFE': codigoCFE,
                             'NumeroCFE': numeroCFE,
                             'SerieCFE': serieCFE,
@@ -866,9 +866,13 @@ class AccountMove(models.Model):
                             'FechaEmisionCFE': fecha_emision,
                             'TotalMOCIVA': str(round(pagoTotalConIva, 2)),
                             'TotalMNSIVA': str(round(pagoTotalSinIva, 2)),
+                            'CodigoFormaPago': codigoFormaPago,
                             'FechaTransferencia': fecha_transferencia,
                             'Horatransferencia': hora_transferencia,
-                            'CantidadCuotas': 1
+                            'CantidadCuotas': '1',
+                            'Total1': '0',
+                            'Total2': '0',
+                            'Total3': '0',
                         },
                         'Det': {
                             'CodRubro': codigoRubro,
@@ -881,7 +885,7 @@ class AccountMove(models.Model):
                 }
             }
 
-            _logger.info("REQUEST COSTA URBANA (wsDeclaVtas): %s", request_data)
+            _logger.info("REQUEST: %s", request_data)
 
 
             response = client.service.procesarAlta(**request_data)
@@ -899,6 +903,9 @@ class AccountMove(models.Model):
                     self.write({
                         'estadoEnvio': 'enviado'
                     })
+                    
+                    # Incrementar secuencial en el diario
+                    self.journal_id.write({'secuencial_ventas': secuencial + 1})
 
                     self.env['ventas.log'].sudo().create({
                         'account_move_id': self.id,
@@ -906,8 +913,6 @@ class AccountMove(models.Model):
                         'estado': 'exito',
                         'texto': f'Venta declarada correctamente en Costa Urbana. ID: {identificador}'
                     })
-
-                    self.journal_id.write({'secuencial_ventas': secuencial + 1})
 
                     self.env.cr.commit()
 
@@ -917,16 +922,14 @@ class AccountMove(models.Model):
                     _logger.info("=== DECLARACIÓN PRE-GRABADA COSTA URBANA ===")
                     _logger.info(f"Identificador: {identificador}")
                     
+                    self.journal_id.write({'secuencial_ventas': secuencial + 1})
+                    
                     self.env['ventas.log'].create({
                         'account_move_id': self.id,
                         'fecha_declaracion': fields.Datetime.now(),
                         'estado': 'warning',
                         'texto': f'Venta pre-grabada en Costa Urbana. ID: {identificador}'
                     })
-
-
-
-                    self.journal_id.write({'secuencial_ventas': secuencial + 1})
 
                     self.write({
                         'estadoEnvio': 'error'
@@ -1330,7 +1333,7 @@ class AccountMove(models.Model):
 
     def declararVentaVariosMetodosCostaUrbana(self):
         """
-        Declara una venta con múltiples métodos de pago en Costa Urbana usando wsDeclaVtas
+        Declara una venta con múltiples métodos de pago en Costa Urbana usando wsDeclaVtas2
         """
         url = self.journal_id.url;
 
@@ -1375,6 +1378,7 @@ class AccountMove(models.Model):
 
         _logger.info("Distribución de pagos (CON IVA): %s", distribuido)
 
+        # Procesar distribución
         if distribuido:
             total_distribuido = sum(d.get('amount', 0.0) for d in distribuido)
             _logger.info("Total distribuido (CON IVA): %s vs Total factura (CON IVA): %s", 
@@ -1384,7 +1388,7 @@ class AccountMove(models.Model):
                 _logger.warning("La distribución no coincide con el total. Recalculando proporcionalmente")
                 _logger.warning("Distribución suma: %s, Total factura: %s", total_distribuido, pagoTotalConIva)
                 
-                
+                # Recalcular distribución usando porcentajes originales sobre el total real
                 distribuido_recalculado = []
                 for distribucion in distribuido:
                     if total_distribuido > 0:
@@ -1453,6 +1457,10 @@ class AccountMove(models.Model):
             serieCFE = "PRU"
             numeroCFE = str(random.randint(1, 1000))
 
+        # Obtener secuencial y caja
+        secuencial = self.journal_id.secuencial_ventas or 1
+        caja = self.journal_id.caja or 1
+
         try:
             # Preparar datos de fecha/hora
             fecha_emision = self._format_fecha_emision_cfe()
@@ -1468,61 +1476,113 @@ class AccountMove(models.Model):
             else:
                 hora_transferencia = self._now_uruguay().strftime('%H:%M')
 
-            secuencial = self.journal_id.secuencial_ventas or 1;
-
-            # Construir diccionario de cabecera para wsDeclaVtas (Costa Urbana)
+            # Construir diccionario de cabecera
             cab_data = {
                 'NumeroRUT': rut,
                 'CodigoShopping': codigoShopping,
                 'NumeroContrato': numeroContrato,
                 'CodigoCanal': codigoCanal,
-                'Secuencial': secuencial,
-                'Caja': self.journal_id.caja or 1,
+                'Secuencial': str(secuencial + 1),
+                'Caja': str(caja),
                 'CodigoCFE': codigoCFE,
                 'NumeroCFE': numeroCFE,
                 'SerieCFE': serieCFE,
                 'MonedaCFE': 'UYU',
-                'FechaEmisionCFE': fecha_emision,
+                'FechaEmisionCFE': self._format_fecha_emision_cfe(),
                 'TotalMOCIVA': str(round(pagoTotalConIva, 2)),
                 'TotalMNSIVA': str(round(pagoTotalSinIva, 2)),
                 'FechaTransferencia': fecha_transferencia,
                 'Horatransferencia': hora_transferencia,
-                'CantidadCuotas': 1
+                'CantidadCuotas': '1'
             }
             
-            # Ajustar discrepancia por redondeos si la hay
+            monto_contado = 0.0
+            monto_credito = 0.0
+            monto_debito = 0.0
+            
+            metodos_con_monto = []
+            for pago in metodosPago:
+                asignado_sin_iva = 0.0
+                
+                if distribuido:
+                    # Buscar en la distribución (ya recalculada si era necesario)
+                    for distribucion in distribuido:
+                        if distribucion.get('payment_method_id') == pago.id:
+                            asignado_con_iva = float(distribucion.get('amount', 0.0))
+                            asignado_sin_iva = asignado_con_iva * (pagoTotalSinIva / pagoTotalConIva) if pagoTotalConIva > 0 else 0.0
+                            break
+                else:
+                    # Sin distribución: usar primer método con todo
+                    if pago == metodosPago[0]:
+                        asignado_sin_iva = pagoTotalSinIva
+                
+                if asignado_sin_iva > 0:
+                    # Determinar código de forma de pago
+                    if pago.esContado():
+                        codigo_forma = '00'
+                        monto_contado += asignado_sin_iva
+                    elif pago.esCredito():
+                        codigo_forma = '17'
+                        monto_credito += asignado_sin_iva
+                    elif pago.esDebito():
+                        codigo_forma = '91'
+                        monto_debito += asignado_sin_iva
+                    else:
+                        continue
+                    
+                    metodos_con_monto.append({
+                        'codigo': codigo_forma,
+                        'monto': str(round(asignado_sin_iva, 2))
+                    })
+            
+            # Ajustar discrepancia por redondeos
             suma_actual = monto_contado + monto_credito + monto_debito
             discrepancia = pagoTotalSinIva - suma_actual
             
             if abs(discrepancia) > 0.01:
                 _logger.warning(f"Discrepancia detectada: {pagoTotalSinIva} vs {suma_actual}, diferencia: {discrepancia}")
                 
-                # Ajustar al mayor monto
-                if monto_contado >= monto_credito and monto_contado >= monto_debito and monto_contado > 0:
-                    monto_contado += discrepancia
-                elif monto_credito >= monto_debito and monto_credito > 0:
-                    monto_credito += discrepancia
-                elif monto_debito > 0:
-                    monto_debito += discrepancia
-                    
-                _logger.info(f"Ajuste ({discrepancia}) aplicado")
+                # Ajustar al último monto que sea > 0
+                for item in reversed(metodos_con_monto):
+                    if float(item['monto']) > 0:
+                        if item['codigo'] == '00':
+                            monto_contado += discrepancia
+                        elif item['codigo'] == '17':
+                            monto_credito += discrepancia
+                        elif item['codigo'] == '91':
+                            monto_debito += discrepancia
+                        _logger.info(f"Ajuste ({discrepancia}) aplicado a código {item['codigo']}")
+                        break
+            
+            # Agregar campos de métodos de pago dinámicamente
+            if len(metodos_con_monto) >= 1:
+                cab_data['CodigoFormaPago'] = metodos_con_monto[0]['codigo']
+                cab_data['Total1'] = metodos_con_monto[0]['monto']
+            
+            if len(metodos_con_monto) >= 2:
+                cab_data['CodigoFormaPago2'] = metodos_con_monto[1]['codigo']
+                cab_data['Total2'] = metodos_con_monto[1]['monto']
+            
+            if len(metodos_con_monto) >= 3:
+                cab_data['CodigoFormaPago3'] = metodos_con_monto[2]['codigo']
+                cab_data['Total3'] = metodos_con_monto[2]['monto']
             
             request_data = {
-                'wsDeclaVtas': {
+                'wsDeclaVtas2': {
                     'General': {
                         'Cab': cab_data,
-                        'Det': {
+                        'Det': [{
                             'CodRubro': codigoRubro,
                             'ContadoMNSIVA': str(round(monto_contado, 2)),
                             'CreditoMNSIVA': str(round(monto_credito, 2)),
                             'DebitoMNSIVA': str(round(monto_debito, 2)),
                             'IncluirenPromo': self._obtener_incluir_promo()
-                        }
+                        }]
                     }
                 }
             }
 
-            _logger.info("REQUEST COSTA URBANA (wsDeclaVtas) => %s", request_data)
+            _logger.info("REQUEST COSTA URBANA (MÚLTIPLES MÉTODOS) => %s", request_data)
 
             response = client.service.procesarAlta(**request_data)
 
@@ -1654,10 +1714,451 @@ class AccountMove(models.Model):
 
             self.env.cr.commit()
             raise
+            # """
+            # Declara una venta con múltiples métodos de pago (crédito, débito, contado)
+            # Distribuye el monto según el JSON de payment_distribution (que incluye IVA) 
+            # pero convierte a SIN IVA para el envío al servicio
+            # """
+            # url = self.journal_id.url;
+            
+            # client = self.get_zeep_client(url)
+            # _logger.info("Cliente Zeep creado exitosamente para múltiples métodos")
+
+            # if not url:
+            #     raise UserError("Falta URL de declaración de ventas en la configuración")
+
+            # rut = self.env['res.company'].browse(self.journal_id.company_id.id).vat;
+
+            # if not rut:
+            #     raise UserError("Falta RUT en la configuración")
+
+            # codigoShopping = self.journal_id.codigoShopping
+            # numeroContrato = self.journal_id.nroContrato
+            # codigoCanal = self.journal_id.codigoCanal
+            # codigoRubro = self.journal_id.codigoRubro
+
+            # if not codigoShopping or not numeroContrato or not codigoCanal or not codigoRubro:
+            #     raise UserError("Faltan datos del punto de venta del shopping en el diario asociado")
+
+            # # Obtener los métodos de pago configurados
+            # metodosPago = self.journal_id.shopping_payment_method_ids
+            # if not metodosPago or len(metodosPago) == 0:
+            #     raise UserError("Debe haber al menos un método de pago configurado en el diario")
+            
+            # # Calcular TOTALES REALES (sin IVA y con IVA) PRIMERO
+            # pagoTotalSinIva = 0.0
+            # pagoTotalConIva = 0.0
+            # distribucion_sin_iva = {}  # Para guardar montos sin IVA por método
+
+            # for linea in self.invoice_line_ids:
+            #     _logger.info("Línea: %s - Cantidad: %s - Precio Unitario: %s", linea.name, linea.quantity, linea.price_unit)
+                
+            #     subtotal = linea.quantity * linea.price_unit
+                
+            #     # Calcular impuestos
+            #     if linea.tax_ids:
+            #         tasa_impuesto = sum(tax.amount for tax in linea.tax_ids)
+            #         subtotal_con_iva = subtotal * (1 + (tasa_impuesto / 100.0))
+            #     else:
+            #         subtotal_con_iva = subtotal
+                
+            #     _logger.info("Subtotal sin IVA: %s - Subtotal con IVA: %s", subtotal, subtotal_con_iva)
+
+            #     pagoTotalSinIva += subtotal
+            #     pagoTotalConIva += subtotal_con_iva
+
+            # _logger.info("=== TOTALES CALCULADOS ===")
+            # _logger.info("Total sin IVA: %s", pagoTotalSinIva)
+            # _logger.info("Total con IVA: %s", pagoTotalConIva)
+
+            # # Inicializar montos por tipo de pago
+            # monto_contado = 0.0
+            # monto_credito = 0.0
+            # monto_debito = 0.0
+
+            # # Obtener distribución de pagos
+            # try:
+            #     distribuido = json.loads(self.payment_distribution) if self.payment_distribution else []
+            # except:
+            #     distribuido = []
+
+            # _logger.info("Distribución de pagos (CON IVA): %s", distribuido)
+
+            # # Procesar distribución
+            # if distribuido:
+            #     # Validar que la distribución suma aproximadamente el total con IVA
+            #     total_distribuido = sum(d.get('amount', 0.0) for d in distribuido)
+            #     _logger.info("Total distribuido (CON IVA): %s vs Total factura (CON IVA): %s", total_distribuido, pagoTotalConIva)
+                
+            #     if abs(total_distribuido - pagoTotalConIva) > 25.0:
+            #         _logger.warning("La distribución no coincide con el total de la factura. Diferencia: %s", 
+            #                     total_distribuido - pagoTotalConIva)
+                
+            #     # Convertir distribución CON IVA a SIN IVA proporcionalmente
+            #     if pagoTotalConIva > 0:
+            #         factor_sin_iva = pagoTotalSinIva / pagoTotalConIva
+                    
+            #         for pago in metodosPago:
+            #             asignado_con_iva = 0.0
+                        
+            #             # Buscar el monto asignado a este método en el JSON (CON IVA)
+            #             for distribucion in distribuido:
+            #                 if distribucion.get('payment_method_id') == pago.id:
+            #                     asignado_con_iva = float(distribucion.get('amount', 0.0))
+            #                     break
+                        
+            #             # Convertir a SIN IVA
+            #             asignado_sin_iva = asignado_con_iva * factor_sin_iva
+                        
+            #             _logger.info(f"Método {pago.name}: {asignado_con_iva} (CON IVA) → {asignado_sin_iva} (SIN IVA)")
+
+            #             if pago.esContado():
+            #                 monto_contado += asignado_sin_iva
+            #             elif pago.esCredito():
+            #                 monto_credito += asignado_sin_iva
+            #             elif pago.esDebito():
+            #                 monto_debito += asignado_sin_iva
+            # else:
+            #     # Si no hay distribución específica, usar el total si es un único método
+            #     if len(metodosPago) == 1:
+            #         monto_asignado = pagoTotalSinIva
+            #         pago = metodosPago[0]
+                    
+            #         if pago.esContado():
+            #             monto_contado = monto_asignado
+            #         elif pago.esCredito():
+            #             monto_credito = monto_asignado
+            #         elif pago.esDebito():
+            #             monto_debito = monto_asignado
+                    
+            #         _logger.info(f"Método único {pago.name}: {monto_asignado} (SIN IVA)")
+            #     else:
+            #         raise UserError("Debe definir la distribución de pagos cuando hay múltiples métodos de pago")
+
+            
+            # codigoCFE, serieCFE, numeroCFE = '', '', '';
+
+            # if self.cfe_serie_num:
+            #     codigoCFE, serieCFE, numeroCFE = self.cfe_serie_num.split('-');
+
+            # if self.journal_id.homologacion:
+            #     _logger.info("Modo homologación activo");
+            #     codigoCFE = "101"
+            #     serieCFE = "PRU"
+            #     numeroCFE = str(random.randint(1, 1000))  # Usar el número de factura de prueba
+
+            
+            # _logger.info(f"{codigoCFE} - {serieCFE} - {numeroCFE}");
+
+            # try:
+            #     request_data = {
+            #         'wsDeclaVtas': {
+            #             'General': {
+            #                 'Cab': {
+            #                     'NumeroRUT': rut,
+            #                     'CodigoShopping': codigoShopping,
+            #                     'NumeroContrato': numeroContrato,
+            #                     'CodigoCanal': codigoCanal,
+            #                     'CodigoCFE': codigoCFE,
+            #                     'NumeroCFE': numeroCFE,
+            #                     'SerieCFE': serieCFE,
+            #                     'MonedaCFE': 'UYU',
+            #                     'FechaEmisionCFE': fields.Date.today().strftime('%Y-%m-%d'),
+            #                     'TotalMOCIVA': str(pagoTotalConIva),
+            #                     'TotalMNSIVA': str(pagoTotalSinIva),
+            #                     'TipodeCambio': '1'
+            #                 },
+            #                 'Det': {
+            #                     'CodRubro': codigoRubro,
+            #                     'ContadoMNSIVA': str(round(monto_contado, 2)),
+            #                     'CreditoMNSIVA': str(round(monto_credito, 2)),
+            #                     'DebitoMNSIVA': str(round(monto_debito, 2)),
+            #                     'IncluirenPromo': 'S'
+            #                 }
+            #             }
+            #         }
+            #     }
+
+            #     _logger.info("Preparando para enviar request: %s", request_data)
+
+            #     response = client.service.procesarAlta(**request_data)
+
+            #     _logger.info("=== RESPUESTA RECIBIDA ===")
+            #     _logger.info("Tipo: %s", type(response))
+            #     response_dict = serialize_object(response)
+            #     _logger.info("Datos: %s", response_dict)
+
+            #     if isinstance(response_dict, list) and len(response_dict) > 0:
+            #         primer_resultado = response_dict[0]
+            #         estado = primer_resultado.get('estado')
+            #         mensaje = primer_resultado.get('mensaje', '')
+            #         identificador = primer_resultado.get('identificador')
+
+            #         if estado == 0:
+            #             _logger.info("=== DECLARACIÓN EXITOSA ===")
+            #             _logger.info(f"Identificador: {identificador}")
+                        
+            #             # Guardar que la venta fue enviada
+            #             self.write({'ventaEnviada': True})
+                        
+            #             self.env['ventas.log'].sudo().create({
+            #                 'account_move_id': self.id,
+            #                 'fecha_declaracion': fields.Datetime.now(),
+            #                 'estado': 'exito',
+            #                 'texto': f'Venta declarada correctamente. ID: {identificador}'
+            #             })
+
+            #             self.env.cr.commit()
+
+            #             message_id = self.env['message.wizard'].create({'message': "Venta declarada correctamente. ID: %s" % identificador})
+            #             return {
+            #                 'name': 'Resultado Declaración Venta',
+            #                 'type': 'ir.actions.act_window',
+            #                 'view_mode': 'form',
+            #                 'res_model': 'message.wizard',
+            #                 'res_id': message_id.id,
+            #                 'target': 'new'
+            #             }
+                    
+            #         if estado == 1:
+            #             _logger.info("=== DECLARACIÓN PRE-GRABADA ===")
+            #             _logger.info(f"Identificador: {identificador}")
+                        
+            #             self.env['ventas.log'].create({
+            #                 'account_move_id': self.id,
+            #                 'fecha_declaracion': fields.Datetime.now(),
+            #                 'estado': 'warning',
+            #                 'texto': f'Venta pre-grabada. ID: {identificador}'
+            #             })
+
+            #             self.env.cr.commit()
+                        
+            #             return {
+            #                 'type': 'ir.actions.client',
+            #                 'tag': 'display_notification',
+            #                 'params': {
+            #                     'title': 'Éxito',
+            #                     'message': f'Venta pre-grabada correctamente. ID: {identificador}',
+            #                     'type': 'warning',
+            #                     'sticky': False,
+            #                 }
+            #             }
+                    
+            #         if estado == 2:
+            #             try:
+            #                 log = self.env['ventas.log'].sudo().create({
+            #                     'account_move_id': self.id,
+            #                     'fecha_declaracion': fields.Datetime.now(),
+            #                     'estado': 'error',
+            #                     'texto': f'Error al grabar: {mensaje}'
+            #                 })
+
+            #                 self.env.cr.commit()
+
+            #                 _logger.info(f"Log creado con ID: {log.id}")
+            #             except Exception as e:
+            #                 _logger.info(f"{e}")
+
+            #             raise UserError(f"Error al procesar el archivo (Estado {estado}): {mensaje}")
+                    
+            #         if estado == 3:
+            #             _logger.error("=== ERROR AL PROCESAR ===")
+            #             _logger.error(f"Mensaje: {mensaje}")
+
+            #             self.env['ventas.log'].create({
+            #                 'account_move_id': self.id,
+            #                 'fecha_declaracion': fields.Datetime.now(),
+            #                 'estado': 'error',
+            #                 'texto': f'Error al procesar: {mensaje}'
+            #             })
+
+            #             self.env.cr.commit()
+                        
+            #             raise UserError(f"Error al procesar la venta (Estado {estado}): {mensaje}")
+
+            #         else:
+            #             _logger.error("=== DECLARACIÓN FALLIDA ===")
+            #             _logger.error(f"Estado: {estado}")
+            #             _logger.error(f"Mensaje: {mensaje}")
+
+            #             self.env['ventas.log'].create({
+            #                 'account_move_id': self.id,
+            #                 'fecha_declaracion': fields.Datetime.now(),
+            #                 'estado': 'error',
+            #                 'texto': f'Error al declarar la venta: {mensaje}'
+            #             })
+
+            #             self.env.cr.commit()
+                        
+            #             raise UserError(f"Error al declarar la venta (Estado {estado}): {mensaje}")
+            #     else:
+            #         raise UserError("Respuesta del servicio web no válida")
+
+            # except Exception as e:
+            #     _logger.error("Error completo: %s", str(e), exc_info=True)
+            #     raise
+
+    def llamadoPruebaZeep3(self):
+        # Declarar ventas
+        url = 'https://portal.trescruces.com.uy/soap/portal/services/forms/v1.3/wsDeclaVtas?wsdl'
+
+        client = self.get_zeep_client(url)
+
+        try:
+            request_data = {
+                'wsDeclaVtas': {
+                    'General': {
+                        'Cab': {
+                            'NumeroRUT': '212062150010',
+                            'CodigoShopping': 'TCS',
+                            'NumeroContrato': '959',
+                            'CodigoCanal': '1',
+                            'CodigoCFE': '101',
+                            'NumeroCFE': '231',
+                            'SerieCFE': 'A',
+                            'MonedaCFE': 'UYU',
+                            'FechaEmisionCFE': '2025-12-12 15:30',
+                            'TotalMOCIVA': '1220.00',
+                            'TotalMNSIVA': '1000.00',
+                            'TipodeCambio': '1'
+                        },
+                        'Det': {
+                            'CodRubro': 'TCS43',
+                            'ContadoMNSIVA': '1000',
+                            'CreditoMNSIVA': '0',
+                            'DebitoMNSIVA': '0',
+                            'IncluirenPromo': self._obtener_incluir_promo()
+                        }
+                    }
+                }
+            }
+
+            _logger.info("Preparando para enviar request: %s", request_data)
+
+            response = client.service.procesarAlta(**request_data)
+
+            _logger.info("=== RESPUESTA EXITOSA ===")
+            _logger.info("Tipo: %s", type(response))
+            response_dict = serialize_object(response)
+            _logger.info("Datos: %s", response_dict)
+
+        except Exception as e:
+            _logger.error("Error completo: %s", str(e), exc_info=True)
+            raise
+
+    def llamadoPruebaZeep2(self):
+        url = 'https://portal.trescruces.com.uy/soap/portal/services/sim/v1.3/wsConsxCont?wsdl'
+        client = self.get_zeep_client(url)
+        
+        try:
+            # Opción 1: Diccionario anidado (más simple)
+            request_data = {
+                'wsConsxCont': {
+                    'General': {
+                        'Cab': {
+                            'NumeroRUT': '212062150010',
+                            'CodigoShopping': 'TCS',
+                            'NumeroContrato': '959'
+                        }
+                    }
+                }
+            }
+            
+            _logger.info("Enviando request: %s", request_data)
+            
+            response = client.service.simular(**request_data)
+            
+            _logger.info("=== RESPUESTA EXITOSA ===")
+            _logger.info("Tipo: %s", type(response))
+            
+            
+            response_dict = serialize_object(response)
+            _logger.info("Datos: %s", response_dict)
+            
+            return response_dict
+            
+        except Exception as e:
+            _logger.error("Error completo: %s", str(e), exc_info=True)
+            
+            
+            try:
+                operation = client.service._binding._operations['simular']
+                _logger.info("Firma esperada: %s", operation.input.signature())
+            except:
+                pass
+                
+            raise
+
+    def llamadoPruebaZeep(self):
+        url = 'https://portal.trescruces.com.uy/soap/portal/services/sim/v1.3/wsConsxRUT?wsdl'
+        client = self.get_zeep_client(url)
+        
+        try:
+            # Opción 1: Diccionario anidado (más simple)
+            request_data = {
+                'wsConsxRUT': {
+                    'General': {
+                        'Cab': {
+                            'NumeroRUT': '212062150010'
+                        }
+                    }
+                }
+            }
+            
+            _logger.info("Enviando request: %s", request_data)
+            
+            response = client.service.simular(**request_data)
+            
+            _logger.info("=== RESPUESTA EXITOSA ===")
+            _logger.info("Tipo: %s", type(response))
+            
+            
+            response_dict = serialize_object(response)
+            _logger.info("Datos: %s", response_dict)
+            
+            return response_dict
+            
+        except Exception as e:
+            _logger.error("Error completo: %s", str(e), exc_info=True)
+            
+            # Mostrar la firma esperada
+            try:
+                operation = client.service._binding._operations['simular']
+                _logger.info("Firma esperada: %s", operation.input.signature())
+            except:
+                pass
+                
+            raise
+
+    def llamadoPruebaXML(self):
+        url = 'https://portal.trescruces.com.uy/soap/portal/services/sim/v1.3/wsConsxRUT';
 
 
+        xml = """<soapenv:Envelope
+            xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/"
+            xmlns:sim="http://nodum.com.uy/soap/portal/schemas/sim/v1.3/wsConsxRUT">
+
+            <soapenv:Header/>
+
+            <soapenv:Body>
+                <sim:simular>
+                    <sim:wsConsxRUT>
+                        <sim:General>
+                            <sim:Cab>
+                                <sim:NumeroRUT>212062150010</sim:NumeroRUT>
+                            </sim:Cab>
+                        </sim:General>
+                    </sim:wsConsxRUT>
+                </sim:simular>
+            </soapenv:Body>
+
+        </soapenv:Envelope>
+        """
+
+        response = self.post_soap_xml(url, xml);
     
-   
+        _logger.info("Respuesta SOAP recibida: %s", response.text);
+
     
     def post_soap_xml(self, url, xml):
         rut, password = self.get_credentials();
@@ -1679,4 +2180,141 @@ class AccountMove(models.Model):
 
         return response
 
-    
+    def llamadaPruebaConsultaRUTCostaUrbana(self):
+        """
+        Prueba de consulta por RUT en Costa Urbana
+        URL: http://ventas.costaurbana.com.uy/soap/NodumLocales/services/sim/v1.3/wsConsxRUT?wsdl
+        """
+        url = 'http://ventas.costaurbana.com.uy/soap/NodumLocales/services/sim/v1.3/wsConsxRUT?wsdl'
+        client = self.get_zeep_client(url)
+        
+        rut = self.env['res.company'].browse(self.journal_id.company_id.id).vat
+        
+        try:
+            request_data = {
+                'wsConsxRUT': {
+                    'General': {
+                        'Cab': {
+                            'NumeroRUT': rut
+                        }
+                    }
+                }
+            }
+            
+            _logger.info("Enviando consulta RUT Costa Urbana: %s", request_data)
+            
+            response = client.service.simular(**request_data)
+            
+            _logger.info("=== RESPUESTA CONSULTA RUT COSTA URBANA ===")
+            _logger.info("Tipo: %s", type(response))
+            
+            response_dict = serialize_object(response)
+            _logger.info("Datos: %s", response_dict)
+            
+            return response_dict
+            
+        except Exception as e:
+            _logger.error("Error en consulta RUT Costa Urbana: %s", str(e), exc_info=True)
+            raise
+
+    def llamadaPruebaConsultaContratoCostaUrbana(self):
+        """
+        Prueba de consulta por Contrato en Costa Urbana
+        URL: http://ventas.costaurbana.com.uy/soap/NodumLocales/services/sim/v1.3/wsConsxCont?wsdl
+        """
+        url = 'http://ventas.costaurbana.com.uy/soap/NodumLocales/services/sim/v1.3/wsConsxCont?wsdl'
+        client = self.get_zeep_client(url)
+        
+        rut = self.env['res.company'].browse(self.journal_id.company_id.id).vat
+        codigoShopping = self.journal_id.codigoShopping
+        numeroContrato = self.journal_id.nroContrato
+        
+        try:
+            request_data = {
+                'wsConsxCont': {
+                    'General': {
+                        'Cab': {
+                            'NumeroRUT': rut,
+                            'CodigoShopping': codigoShopping,
+                            'NumeroContrato': numeroContrato
+                        }
+                    }
+                }
+            }
+            
+            _logger.info("Enviando consulta Contrato Costa Urbana: %s", request_data)
+            
+            response = client.service.simular(**request_data)
+            
+            _logger.info("=== RESPUESTA CONSULTA CONTRATO COSTA URBANA ===")
+            _logger.info("Tipo: %s", type(response))
+            
+            response_dict = serialize_object(response)
+            _logger.info("Datos: %s", response_dict)
+            
+            return response_dict
+            
+        except Exception as e:
+            _logger.error("Error en consulta Contrato Costa Urbana: %s", str(e), exc_info=True)
+            raise
+
+    def llamadaPruebaDeclaracionCostaUrbana(self):
+        """
+        Prueba de declaración de venta en Costa Urbana
+        """
+        url = 'http://ventas.costaurbana.com.uy/soap/NodumLocales/services/forms/v1.3/wsDeclaVtas?wsdl'
+        client = self.get_zeep_client(url)
+
+        rut = self.env['res.company'].browse(self.journal_id.company_id.id).vat
+        
+        try:
+            fecha_emision = self._now_uruguay()
+            fecha_str = fecha_emision.isoformat()  # Formato: 2026-01-30T15:30:45.123456-03:00
+            fecha_transferencia = fecha_emision.strftime('%Y-%m-%d')  # Formato: 2026-01-30 en hora Uruguay
+            hora_transferencia = fecha_emision.strftime('%H:%M')
+
+            request_data = {
+                'wsDeclaVtas': {
+                    'General': {
+                        'Cab': {
+                            'NumeroRUT': rut,
+                            'CodigoShopping': '02',
+                            'NumeroContrato': '101292',
+                            'CodigoCanal': '1',
+                            'Secuencial': '4872221',
+                            'Caja': '1',
+                            'CodigoCFE': '101',
+                            'NumeroCFE': '100',
+                            'SerieCFE': 'PRU',
+                            'MonedaCFE': 'UYU',
+                            'FechaEmisionCFE': self._format_fecha_emision_cfe(),
+                            'TotalMOCIVA': '1000',
+                            'TotalMNSIVA': '820',
+                            'CodigoFormaPago': '00',
+                            'FechaTransferencia': fecha_transferencia,
+                            'Horatransferencia': hora_transferencia,
+                            'CantidadCuotas': '1'
+                        },
+                        'Det': {
+                            'CodRubro': '67',
+                            'ContadoMNSIVA': '820',
+                            'CreditoMNSIVA': '0',
+                            'DebitoMNSIVA': '0',
+                            'IncluirenPromo': self._obtener_incluir_promo()
+                        }
+                    }
+                }
+            }
+
+            _logger.info("Preparando prueba declaración Costa Urbana: %s", request_data)
+
+            response = client.service.procesarAlta(**request_data)
+
+            _logger.info("=== RESPUESTA PRUEBA DECLARACIÓN COSTA URBANA ===")
+            _logger.info("Tipo: %s", type(response))
+            response_dict = serialize_object(response)
+            _logger.info("Datos: %s", response_dict)
+
+        except Exception as e:
+            _logger.error("Error en prueba declaración Costa Urbana: %s", str(e), exc_info=True)
+            raise
