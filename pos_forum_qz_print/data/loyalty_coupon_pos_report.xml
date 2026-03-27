@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <!--
+            Layout mínimo sin cabecera: evita web.internal_layout (fecha, empresa, “página / total”
+            que en térmico se ven como basura y tres puntos raros).
+        -->
+        <template id="forum_minimal_report_layout">
+            <t t-if="not o" t-set="o" t-value="doc"/>
+            <div class="article o_forum_loyalty_coupon_thermal"
+                 style="max-width: 80mm; margin: 0 auto; padding: 4px 6px; font-family: Arial, Helvetica, sans-serif; font-size: 10px; color: #000;">
+                <t t-out="0"/>
+            </div>
+        </template>
+
+        <!--
+            Copia primaria de loyalty.loyalty_report: mismos textos y bloques que el estándar.
+            - Sin web.internal_layout (sustituido por forum_minimal_report_layout).
+            - Recuadro fiscal tipo ticket de cambio arriba.
+            - Centrado y tamaños razonables para 80 mm; barcode PNG embebido para QZ.
+        -->
+        <template id="loyalty_report_pos_thermal" inherit_id="loyalty.loyalty_report" primary="True">
+            <!-- Bloque: quitar internal_layout (cabecera PDF con fecha y numeración). -->
+            <xpath expr="//t[@t-call='web.internal_layout']" position="attributes">
+                <attribute name="t-call">pos_forum_qz_print.forum_minimal_report_layout</attribute>
+            </xpath>
+
+            <!-- Bloque: cabecera tipo ticket de cambio. -->
+            <xpath expr="//div[contains(@class,'card')][1]" position="before">
+                <t t-set="pos_o" t-value="o.source_pos_order_id"/>
+                <t t-set="branch_partner"
+                   t-value="(pos_o and (pos_o.config_id.picking_type_id.warehouse_id.partner_id if pos_o.config_id and pos_o.config_id.picking_type_id and pos_o.config_id.picking_type_id.warehouse_id and pos_o.config_id.picking_type_id.warehouse_id.partner_id else (pos_o.config_id.company_id.partner_id if pos_o.config_id and pos_o.config_id.company_id else pos_o.company_id.partner_id))) or (o.program_id.company_id.partner_id if o.program_id and o.program_id.company_id else False)"/>
+                <t t-set="comp" t-value="pos_o.company_id if pos_o else (o.program_id.company_id if o.program_id else o.env.company)"/>
+                <div style="border: 1px solid #000; padding: 8px 6px; text-align: center; margin-bottom: 10px; line-height: 1.35;">
+                    <div style="font-weight: bold; font-size: 11px;">
+                        <span t-field="comp.name"/>
+                    </div>
+                    <div t-if="branch_partner and branch_partner.vat">
+                        RUT: <span t-field="branch_partner.vat"/>
+                    </div>
+                    <div t-if="branch_partner and branch_partner.phone">
+                        Teléfono: <span t-field="branch_partner.phone"/>
+                    </div>
+                    <div t-if="branch_partner and (branch_partner.street or branch_partner.city)">
+                        <span t-if="branch_partner.street" t-field="branch_partner.street"/>
+                        <t t-if="branch_partner.street and branch_partner.city"> - </t>
+                        <span t-if="branch_partner.city" t-field="branch_partner.city"/>
+                    </div>
+                </div>
+            </xpath>
+
+            <!-- Bloque: ancho térmico en el contenedor interior. -->
+            <xpath expr="//div[contains(@class,'page')][1]" position="attributes">
+                <attribute name="style">max-width: 80mm; margin: 0 auto; padding: 4px 0; text-align: center;</attribute>
+            </xpath>
+
+            <!-- Bloque: fila Bootstrap a ancho completo y centrada. -->
+            <xpath expr="//div[contains(@class,'row') and contains(@class,'text-center')][1]" position="attributes">
+                <attribute name="style">width: 100%; margin: 0; text-align: center; display: block;</attribute>
+            </xpath>
+
+            <xpath expr="//div[contains(@class,'o_offer')][1]" position="attributes">
+                <attribute name="style">width: 100%; max-width: 100%; padding: 0; margin: 0 auto; text-align: center;</attribute>
+            </xpath>
+
+            <!-- Bloque: título grande más legible en rollo (mismo texto). -->
+            <xpath expr="//h1[contains(@class,'fw-bold')]" position="attributes">
+                <attribute name="style">font-size: 16px; font-weight: bold; margin: 8px 0; line-height: 1.2;</attribute>
+            </xpath>
+
+            <!-- Bloque: barcode embebido (QZ / impresión sin /report/barcode/). -->
+            <xpath expr="//span[@t-field='o.code'][contains(@t-options,'barcode')]" position="replace">
+                <t t-set="coupon_barcode_uri" t-value="o.get_pos_coupon_barcode_data_uri()"/>
+                <div t-if="coupon_barcode_uri" style="text-align: center; margin: 10px 0;">
+                    <img t-att-src="coupon_barcode_uri" alt="Code" style="max-width: 100%; height: auto;"/>
+                </div>
+                <div t-if="not coupon_barcode_uri" style="text-align: center;">
+                    <span t-field="o.code" t-options="{'widget': 'barcode', 'width': 600, 'height': 100}"/>
+                </div>
+            </xpath>
+
+            <!-- Bloque: pie: nombre de compañía del programa (evita widget contact con datos demo). -->
+            <xpath expr="//span[@t-field='o.program_id.company_id.partner_id']" position="replace">
+                <div class="text-center" style="font-size: 9px; margin-top: 6px;">
+                    <span t-field="o.program_id.company_id.name"/>
+                </div>
+            </xpath>
+        </template>
+
+        <template id="loyalty_report_pos_thermal_i18n">
+            <t t-call="web.html_container">
+                <t t-foreach="docs" t-as="o">
+                    <t t-set="o" t-value="o.with_context(lang=o._get_mail_partner().lang or o.env.lang)"/>
+                    <t t-call="pos_forum_qz_print.loyalty_report_pos_thermal" t-lang="o._get_mail_partner().lang or o.env.lang"/>
+                </t>
+            </t>
+        </template>
+
+        <record id="report_loyalty_card_pos_thermal" model="ir.actions.report">
+            <field name="name">Código de cupón (POS térmico)</field>
+            <field name="model">loyalty.card</field>
+            <field name="report_type">qweb-pdf</field>
+            <field name="report_name">pos_forum_qz_print.loyalty_report_pos_thermal_i18n</field>
+            <field name="report_file">pos_forum_qz_print.loyalty_report_pos_thermal_i18n</field>
+            <field name="print_report_name">'Cupón - %s' % (object.code or object.id)</field>
+            <field name="binding_model_id" ref="loyalty.model_loyalty_card"/>
+            <field name="binding_type">report</field>
+        </record>
+    </data>
+</odoo>
