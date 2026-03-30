@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="pos_config_view_form_forum_birthday" model="ir.ui.view">
+        <field name="name">pos.config.form.forum.birthday.promo</field>
+        <field name="model">pos.config</field>
+        <field name="inherit_id" ref="point_of_sale.pos_config_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//sheet" position="inside">
+                <group
+                    string="Forum — Promoción cumpleaños (POS)"
+                    name="forum_birthday_promo_group"
+                >
+                    <field name="forum_birthday_promo_active"/>
+                    <field
+                        name="forum_birthday_discount_percent"
+                        invisible="not forum_birthday_promo_active"
+                    />
+                    <field
+                        name="forum_birthday_tolerance_days"
+                        invisible="not forum_birthday_promo_active"
+                    />
+                    <field
+                        name="forum_birthday_first_order_only"
+                        invisible="not forum_birthday_promo_active"
+                    />
+                    <field
+                        name="forum_birthday_product_id"
+                        invisible="not forum_birthday_promo_active"
+                    />
+                    <field
+                        name="forum_birthday_reward_id"
+                        invisible="not forum_birthday_promo_active"
+                        readonly="1"
+                    />
+                </group>
+            </xpath>
+        </field>
+    </record>
+</odoo>

@@ -14,7 +14,7 @@
     'data': [],
     'assets': {
         'point_of_sale._assets_pos': [
-            'loyalty_customer_domain_pos/static/src/js/loyalty_customer_domain_pos.js',
+            'loyalty_customer_domain_pos_fixed/static/src/js/loyalty_customer_domain_pos.js',
         ],
     },
     'installable': True,

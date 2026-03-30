@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="1">
+        <!-- Producto de servicio para la línea de descuento en el ticket POS -->
+        <record id="product_forum_birthday_discount_line" model="product.product">
+            <field name="name">Descuento promoción cumpleaños (POS)</field>
+            <field name="type">service</field>
+            <field name="list_price">0.0</field>
+            <field name="sale_ok">True</field>
+            <field name="available_in_pos">True</field>
+            <field name="invoice_policy">order</field>
+        </record>
+    </data>
+</odoo>

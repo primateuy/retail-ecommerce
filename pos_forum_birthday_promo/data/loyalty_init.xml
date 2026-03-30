@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Ejecuta en instalación y actualización (noupdate=0) -->
+    <data noupdate="0">
+        <function model="loyalty.program" name="action_forum_birthday_ensure_technical_program"/>
+    </data>
+</odoo>

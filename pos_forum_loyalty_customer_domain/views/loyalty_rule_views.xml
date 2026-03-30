@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Ayuda contextual: dominios POS limitados a campos del cache del TPV -->
+    <record id="loyalty_rule_view_form_forum_pos_domain_help" model="ir.ui.view">
+        <field name="name">loyalty.rule.form.forum.pos.domain.help</field>
+        <field name="model">loyalty.rule</field>
+        <field name="inherit_id" ref="loyality_customer_domain.loyalty_rule_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='customer_domain']" position="after">
+                <div
+                    class="alert alert-warning"
+                    role="alert"
+                    invisible="not program_pos_ok"
+                >
+                    <p>
+                        <strong>Punto de venta:</strong> el dominio solo puede usar
+                        campos del contacto que el POS carga al iniciar sesión
+                        (por ejemplo <code>category_id</code>, país, provincia, VAT,
+                        email, teléfono; y fecha de nacimiento si los módulos la envían).
+                        Al guardar, el sistema valida que no haya otros campos.
+                    </p>
+                </div>
+            </xpath>
+            <xpath expr="//field[@name='customer_domain']" position="before">
+                <field name="program_pos_ok" invisible="1"/>
+            </xpath>
+        </field>
+    </record>
+</odoo>
