@@ -40,6 +40,7 @@ export const qzPrintService = {
      */
     start() {
         const certPath = "/pos_forum_qz_print/static/src/lib/digital-certificate.txt";
+        const signPath = "/pos_forum_qz_print/sign";
 
         // Bloque: comprobar que el bundle cargó el conector QZ.
         const ensureQzGlobal = () => {
@@ -84,6 +85,35 @@ export const qzPrintService = {
                         }
                     })
                     .catch(reject);
+            });
+            // Bloque: firma de requests hacia QZ usando endpoint backend protegido.
+            qz.security.setSignaturePromise((toSign) => {
+                return (resolve, reject) => {
+                    fetch(signPath, {
+                        method: "POST",
+                        credentials: "same-origin",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ data: toSign }),
+                    })
+                        .then((response) => {
+                            if (!response.ok) {
+                                throw new Error(
+                                    `No se pudo firmar payload QZ (HTTP ${response.status}).`
+                                );
+                            }
+                            return response.text();
+                        })
+                        .then((signature) => {
+                            if (!signature || !String(signature).trim()) {
+                                throw new Error("La firma QZ llegó vacía desde el servidor.");
+                            }
+                            resolve(signature);
+                        })
+                        .catch((error) => {
+                            console.error(`${LOG} Error en setSignaturePromise`, error);
+                            reject(error);
+                        });
+                };
             });
             await qz.websocket.connect();
             console.info(`${LOG} Conexión a QZ Tray establecida.`);
