@@ -46,6 +46,18 @@ patch(OrderReceipt.prototype, {
      * Carga en segundo plano los datos del recibo y del CFE.
      */
     async _loadReceiptData() {
+        // Si venimos de ReprintReceiptScreen (props.data no tiene cfe_data),
+        // usar los datos pre-obtenidos por reprint_receipt_button y limpiarlos.
+        const propsCfe = this.props.data?.cfe_data;
+        const propsCfeHasData = propsCfe && (propsCfe.tipo || propsCfe.serie || propsCfe.numero);
+        if (!propsCfeHasData && this.pos._reprintCfeData &&
+            (this.pos._reprintCfeData.tipo || this.pos._reprintCfeData.serie || this.pos._reprintCfeData.numero)) {
+            this.state.cfeData = this.pos._reprintCfeData;
+            // No nullear: tryReprint() también necesita este dato.
+            console.log('✓ CFE data tomado de _reprintCfeData (ReprintReceiptScreen):', this.state.cfeData);
+            return;
+        }
+
         // Obtener la orden actual si existe en el POS.
         const order = this.pos.get_order();
         // Preparar referencia de orden para búsquedas en servidor.

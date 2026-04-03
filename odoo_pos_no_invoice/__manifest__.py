@@ -23,6 +23,8 @@
             'odoo_pos_no_invoice/static/src/overrides/components/payment_screen/payment_screen.js',
             'odoo_pos_no_invoice/static/src/overrides/components/receipt_screen/receipt_screen.js',
             'odoo_pos_no_invoice/static/src/overrides/printer/pos_printer_service.js',
+            'odoo_pos_no_invoice/static/src/overrides/components/ticket_screen/reprint_receipt_button.js',
+            'odoo_pos_no_invoice/static/src/overrides/components/ticket_screen/reprint_receipt_screen.js',
             'odoo_pos_no_invoice/static/src/js/receipt_cfe_data.js',
         ],
     },
