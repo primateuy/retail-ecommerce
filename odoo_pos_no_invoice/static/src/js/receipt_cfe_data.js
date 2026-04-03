@@ -182,8 +182,11 @@ patch(OrderReceipt.prototype, {
         // Recuperar el partner asociado a la orden si existe.
         const partner = order ? order.get_partner() : null;
         
-        // Usar los datos del CFE cargados en onWillStart.
-        const cfeData = this.state.cfeData || {};
+        // Usar los datos del CFE: preferir state (cargado async), si no, usar props.data.cfe_data
+        // (pre-cargado por printReceipt antes de llamar al printer).
+        const stateHasCfe = this.state.cfeData &&
+            (this.state.cfeData.tipo || this.state.cfeData.serie || this.state.cfeData.numero);
+        const cfeData = stateHasCfe ? this.state.cfeData : (this.props.data?.cfe_data || {});
         // Usar los datos del recibo cargados desde factura/orden.
         const receiptData = this.state.receiptData || {};
         

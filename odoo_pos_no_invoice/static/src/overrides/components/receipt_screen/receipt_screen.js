@@ -95,11 +95,42 @@ patch(ReceiptScreen.prototype, {
                 )}`
         );
 
+        // Obtener datos del CFE para incluirlos en el recibo impreso.
+        let cfeData = {};
+        const accountMoveIdForCfe = accountMoveId || receiptServerData?.account_move_id || null;
+        if (accountMoveIdForCfe) {
+            try {
+                const rawCfeData = await orm.call(
+                    "pos.order",
+                    "get_cfe_data_from_invoice",
+                    [[], accountMoveIdForCfe]
+                ) || {};
+                if (rawCfeData && (rawCfeData.tipo || rawCfeData.serie || rawCfeData.numero)) {
+                    cfeData = { ...rawCfeData };
+                    cfeData.vta_cont = order?.pos_reference || order?.name || "";
+                    cfeData.caja = order?.session_id ? (order.session_id.name || "") : "";
+                    cfeData.cajero = order?.user_id ? (order.user_id.name || "") : "";
+                    cfeData.vend = "0";
+                    cfeData.store = order?.config_id ? `STORE-${order.config_id.id}` : "";
+                    if (order?.payment_ids?.length > 0) {
+                        const pm = order.payment_ids[0].payment_method_id;
+                        cfeData.pago = pm ? (pm.name || "Contado") : "Contado";
+                    } else {
+                        cfeData.pago = "Contado";
+                    }
+                    console.log("✓ Datos CFE cargados para impresión:", cfeData);
+                }
+            } catch (e) {
+                console.error("Error al obtener datos CFE para impresión:", e);
+            }
+        }
+
         const receiptData = {
             ...baseReceiptData,
             ...(receiptServerData || {}),
             isBill: this.isBill,
             oca_voucher: ocaVoucher,
+            cfe_data: cfeData,
         };
         if (!receiptServerData?.orderlines?.length) {
             receiptData.orderlines = baseReceiptData.orderlines;
