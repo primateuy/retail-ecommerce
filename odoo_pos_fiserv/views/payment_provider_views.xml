@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <record id="payment_provider_form_fiserv" model="ir.ui.view">
+            <field name="name">payment.provider.form.fiserv</field>
+            <field name="model">payment.provider</field>
+            <field name="inherit_id" ref="payment.payment_provider_form"/>
+            <field name="arch" type="xml">
+                <group name="provider_credentials" position="inside">
+                    <group string="Fiserv ITD" invisible="code != 'fiserv'">
+                        <field name="fiserv_is_multiple"/>
+                        <field name="fiserv_url_webservice" required="code == 'fiserv'"/>
+                        <field name="fiserv_system_id" required="code == 'fiserv'"/>
+                        <field name="fiserv_branch"/>
+                        <field name="fiserv_client_app_id" required="code == 'fiserv'"/>
+                    </group>
+                </group>
+                <xpath expr="//sheet/notebook" position="inside">
+                    <page string="Terminales Fiserv (PosID)"
+                          name="fiserv_terminals"
+                          invisible="code != 'fiserv' or not fiserv_is_multiple">
+                        <field name="fiserv_terminal_ids" nolabel="1">
+                            <tree editable="bottom">
+                                <field name="name"/>
+                                <field name="pos_id"/>
+                            </tree>
+                        </field>
+                    </page>
+                </xpath>
+            </field>
+        </record>
+    </data>
+</odoo>

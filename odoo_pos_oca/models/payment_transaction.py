@@ -11,6 +11,7 @@ from odoo import fields, models, api
 from odoo.exceptions import ValidationError
 import logging
 import json
+import uuid
 
 _logger = logging.getLogger(__name__)
 
@@ -698,22 +699,33 @@ class PaymentTransaction(models.Model):
     
     def _generate_oca_reference_from_complete_data(self, oca_response):
         """
-        Genera una referencia única para la transacción OCA con información completa
-        
+        Genera una referencia única para la transacción OCA con información completa.
+
+        Se usa al persistir respuestas del pinpad (incl. errores o reversas) cuando
+        aún no hay ticket/lote en el dict. Sin TransactionId, todas las filas quedarían
+        con reference='OCA' y violan payment_transaction_reference_uniq.
+
         Args:
-            oca_response (dict): Respuesta completa del POS
-            
+            oca_response (dict): Respuesta completa del POS (o dict enriquecido en hilo).
+
         Returns:
-            str: Referencia única
+            str: Referencia única para payment.transaction.reference
         """
-        pos_id = oca_response.get('PosID', '')
-        ticket = oca_response.get('Ticket', '')
-        batch = oca_response.get('Batch', '')
-        authorization = oca_response.get('AuthorizationCode', '')
-        transaction_date = oca_response.get('TransactionDate', '')
-        transaction_hour = oca_response.get('TransactionHour', '')
-        
-        # Crear una referencia más completa y única
+        # --- Extraer identificadores presentes en la respuesta ---
+        pos_id = oca_response.get('PosID', '') or ''
+        ticket = oca_response.get('Ticket', '') or ''
+        batch = oca_response.get('Batch', '') or ''
+        authorization = oca_response.get('AuthorizationCode', '') or ''
+        transaction_date = oca_response.get('TransactionDate', '') or ''
+        transaction_hour = oca_response.get('TransactionHour', '') or ''
+        # TransactionId es estable por operación OCA; suele faltar PosID/Ticket en RC12.
+        txn_id = oca_response.get('TransactionId') or oca_response.get('STransactionId')
+        if txn_id is not None and txn_id != '':
+            txn_id = str(txn_id).strip()
+        else:
+            txn_id = ''
+
+        # --- Armar referencia: siempre incluir txn_id al final si existe ---
         reference_parts = [
             'OCA',
             pos_id,
@@ -721,16 +733,20 @@ class PaymentTransaction(models.Model):
             batch,
             authorization,
             transaction_date,
-            transaction_hour
+            transaction_hour,
+            txn_id,
         ]
-        
-        # Filtrar partes vacías y unir
-        reference = '-'.join([part for part in reference_parts if part])
-        
-        # Si la referencia está vacía, usar un fallback
-        if not reference:
-            reference = f"OCA-{pos_id}-{ticket}-{batch}"
-        
+        reference = '-'.join([str(p) for p in reference_parts if p])
+
+        # --- Fallback si todo opcional vino vacío (evitar solo "OCA") ---
+        if not reference or reference == 'OCA':
+            if txn_id:
+                reference = f'OCA-{txn_id}'
+            elif pos_id or ticket or batch:
+                reference = f"OCA-{pos_id}-{ticket}-{batch}".strip('-')
+            else:
+                reference = f'OCA-{uuid.uuid4().hex[:16]}'
+
         _logger.info('OCA Reference Generated: %s', reference)
         return reference
     

@@ -139,19 +139,20 @@ class PosOrder(models.Model):
                                 if promotion_id:
                                     promotion = self.env['payment.method.promotion'].browse(promotion_id)
                                     if promotion.exists():
-                                        # Verificar si hay promociones incompatibles ya aplicadas en la orden POS.
-                                        is_incompatible, incompatible_promotions, incompat_msg = promotion._check_incompatibilities(order)
-                                        if is_incompatible:
+                                        applied_ids = self.env[
+                                            "payment.method.promotion"
+                                        ].collect_applied_loyalty_program_ids_from_pos_order(order)
+                                        blocked, block_msg = promotion.get_incompatibility_payment_block_for_applied_programs(
+                                            applied_ids
+                                        )
+                                        if blocked:
                                             _logger.warning(
-                                                'No se puede aplicar promoción %s (ID: %s) porque es incompatible con: %s. %s',
+                                                'No se puede aplicar promoción %s (ID: %s): %s',
                                                 promotion.name,
                                                 promotion.id,
-                                                ', '.join([p.name for p in incompatible_promotions]),
-                                                incompat_msg,
+                                                block_msg,
                                             )
-                                            # Lanzar error de validación para que el POS no complete
-                                            # la creación de la orden ni el proceso de pago.
-                                            raise ValidationError(incompat_msg or 'Promoción incompatible aplicada en la orden.')
+                                            raise ValidationError(block_msg)
                                 
                                 if should_apply:
                                     # Agregar línea de descuento a la orden
@@ -216,6 +217,30 @@ class PosOrder(models.Model):
         self.ensure_one()
         
         try:
+            # Bloqueo explícito: promoción OCA incompatible con lealtad ya aplicada en este pedido
+            if promotion_id:
+                promo = self.env['payment.method.promotion'].browse(promotion_id)
+                if promo.exists():
+                    applied_ids = self.env[
+                        "payment.method.promotion"
+                    ].collect_applied_loyalty_program_ids_from_pos_order(self)
+                    blocked, block_msg = (
+                        promo.get_incompatibility_payment_block_for_applied_programs(
+                            applied_ids
+                        )
+                    )
+                    if blocked:
+                        _logger.warning(
+                            'add_promotion_discount_line rechazado por incompatibilidad (orden %s, promo %s)',
+                            self.id,
+                            promotion_id,
+                        )
+                        return {
+                            'success': False,
+                            'error': block_msg,
+                            'incompatible_promotion': True,
+                        }
+
             # Validar que el producto existe
             product = self.env['product.product'].browse(product_id)
             if not product.exists():
@@ -513,17 +538,20 @@ class PosOrder(models.Model):
                                     if promotion_id:
                                         promotion = self.env['payment.method.promotion'].browse(promotion_id)
                                         if promotion.exists():
-                                            is_incompatible, incompatible_promotions, incompat_msg = promotion._check_incompatibilities(self)
-                                            if is_incompatible:
+                                            applied_ids = self.env[
+                                                "payment.method.promotion"
+                                            ].collect_applied_loyalty_program_ids_from_pos_order(self)
+                                            blocked, block_msg = promotion.get_incompatibility_payment_block_for_applied_programs(
+                                                applied_ids
+                                            )
+                                            if blocked:
                                                 _logger.warning(
-                                                    'No se puede aplicar promoción %s (ID: %s) antes de facturar porque es incompatible con: %s. %s',
+                                                    'No se puede aplicar promoción %s (ID: %s) antes de facturar: %s',
                                                     promotion.name,
                                                     promotion.id,
-                                                    ', '.join([p.name for p in incompatible_promotions]),
-                                                    incompat_msg,
+                                                    block_msg,
                                                 )
-                                                # Bloquear generación de factura para no combinar descuentos incompatibles.
-                                                raise ValidationError(incompat_msg or 'Promoción incompatible aplicada en la orden.')
+                                                raise ValidationError(block_msg)
 
                                     # Agregar el descuento ANTES de generar la factura
                                     _logger.info(

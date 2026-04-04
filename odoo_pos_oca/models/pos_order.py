@@ -330,8 +330,11 @@ class PosOrder(models.Model):
            (transaction_id / origin_transaction_id) y se persiste en pos.payment.transaction_id.
         2. Al crear la orden, para cada pago OCA se busca payment.transaction por
            oca_transaction_id = pos.payment.transaction_id (referencia unívoca).
+           No se exige pos_order_id vacío: pos.payment puede haber vinculado ya la
+           transacción (p. ej. promoción OCA con monto distinto al del pago).
         3. Si no hay transaction_id en el pago, se hace fallback a coincidencia por monto
-           (comportamiento anterior, para compatibilidad).
+           (legado). Si hay transaction_id y no se encuentra fila, NO se usa ese fallback
+           para no enganchar una transacción antigua del mismo monto (p. ej. 600).
         """
         try:
             order_name = getattr(self, 'name', 'Unknown') or 'Unknown'
@@ -377,24 +380,41 @@ class PosOrder(models.Model):
                 matching_transaction = None
                 match_by_reference = False
 
-                # 1) Asociación por referencia: pos.payment.transaction_id = payment.transaction.oca_transaction_id
+                # --- 1) Por referencia: ID OCA del pinpad en pos.payment.transaction_id ---
                 if payment_tid and oca_provider:
+                    tid_key = str(payment_tid).strip()
                     tx_by_ref = self.env['payment.transaction'].sudo().search([
-                        ('oca_transaction_id', '=', payment_tid),
+                        ('oca_transaction_id', '=', tid_key),
                         ('provider_id', '=', oca_provider.id),
-                        ('pos_order_id', '=', False),
                         ('state', 'in', ['pending', 'done']),
-                    ], limit=1)
+                    ], order='id desc', limit=1)
                     if tx_by_ref:
-                        matching_transaction = tx_by_ref
-                        match_by_reference = True
-                        _logger.info(
-                            'Transacción OCA encontrada por referencia (oca_transaction_id=%s) -> reference=%s',
-                            payment_tid, matching_transaction.reference
-                        )
+                        # --- No reutilizar una transacción ya ligada a otra orden ---
+                        if (
+                            tx_by_ref.pos_order_id
+                            and tx_by_ref.pos_order_id.id != self.id
+                        ):
+                            _logger.warning(
+                                'OCA POS: transacción oca_transaction_id=%s ya en orden %s; '
+                                'no se reasigna a %s.',
+                                tid_key,
+                                tx_by_ref.pos_order_id.name,
+                                order_name,
+                            )
+                        else:
+                            matching_transaction = tx_by_ref
+                            match_by_reference = True
+                            _logger.info(
+                                'Transacción OCA encontrada por referencia '
+                                '(oca_transaction_id=%s) -> reference=%s',
+                                payment_tid,
+                                matching_transaction.reference,
+                            )
 
-                # 2) Fallback: coincidencia por monto (cuando no hay transaction_id o no se encontró por ref)
-                if not matching_transaction:
+                # --- 2) Fallback por monto: solo si el pago no trae transaction_id OCA ---
+                # Con promo, el pago puede ser 600 y la transacción 480; si aquí se busca 600
+                # se engancha un cobro viejo. Si hay tid, el cajero ya apuntó a una operación.
+                if not matching_transaction and not payment_tid:
                     orphan_domain = [
                         ('oca_transaction_id', '!=', False),
                         ('pos_order_id', '=', False),

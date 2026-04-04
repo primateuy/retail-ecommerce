@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <record id="pos_config_view_form_inherit_fiserv_change_ticket" model="ir.ui.view">
+            <field name="name">pos.config.form.inherit.fiserv.change.ticket</field>
+            <field name="model">pos.config</field>
+            <field name="inherit_id" ref="point_of_sale.pos_config_view_form"/>
+            <field name="arch" type="xml">
+                <xpath expr="//sheet" position="inside">
+                    <group string="Ticket de cambio (Fiserv ITD)" col="2">
+                        <field name="fiserv_change_ticket_report_id"
+                               widget="many2one"
+                               options="{'no_create': True, 'no_create_edit': True}"/>
+                        <field name="fiserv_change_ticket_note" widget="html"/>
+                    </group>
+                </xpath>
+            </field>
+        </record>
+    </data>
+</odoo>

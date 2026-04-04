@@ -524,7 +524,17 @@ class MongoServerConfig(models.Model):
                 p_data = self.env['res.partner'].sudo().search([('company_id', '=', company.id)], offset=offset, limit=mongo_server_rec.limit)
 
             partner_data = self.load_partner_data_postgres(p_data, partner_fields)
-            partner_keys = partner_data.keys()
+            partner_keys = list(partner_data.keys())
+            # Evita ValueError y bucle infinito si el conteo SQL y el search ORM no coinciden.
+            if not partner_keys:
+                _logger.warning(
+                    "pos_fast_loading(create_partners_batch): lote vacío en offset=%s "
+                    "(partner_len=%s, company=%s). Se detiene el bucle.",
+                    offset,
+                    partner_len,
+                    company.id if company else None,
+                )
+                break
             min_id, max_id = min(partner_keys), max(partner_keys)
             search_data_len = len(partner_data)
             temp = search_data_len + offset if search_data_len < mongo_server_rec.limit else mongo_server_rec.limit+offset
@@ -643,6 +653,7 @@ class MongoServerConfig(models.Model):
                     AND pt.available_in_pos = True
                     AND pt.sale_ok = True
                     AND pt.company_id IS NULL
+                    ORDER BY pp.id
                     OFFSET {offset} LIMIT {mongo_server_rec.limit}
                 """)
             else:
@@ -654,10 +665,22 @@ class MongoServerConfig(models.Model):
                     AND pt.available_in_pos = True
                     AND pt.sale_ok = True
                     AND pt.company_id = {company.id}
+                    ORDER BY pp.id
                     OFFSET {offset} LIMIT {mongo_server_rec.limit}
                 """)
 
             product_keys = [rec[0] for rec in self._cr.fetchall()]
+            # Sin ORDER BY el OFFSET puede devolver 0 filas antes de agotar el conteo;
+            # sin este corte, offset no avanza y el bucle no termina.
+            if not product_keys:
+                _logger.warning(
+                    "pos_fast_loading(create_product_batch): lote vacío en offset=%s "
+                    "(product_len=%s, company=%s). Se detiene el bucle.",
+                    offset,
+                    product_len,
+                    company.id if company else None,
+                )
+                break
             variant_data = self.env['product.product'].sudo().browse(product_keys)
             products_data = self.sudo().load_product_data_postgres(variant_data, product_fields, company)
             min_id, max_id = min(product_keys), max(product_keys)

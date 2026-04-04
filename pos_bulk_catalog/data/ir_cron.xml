@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Inactivo por defecto: activar solo cuando quieras construcción en segundo plano.
+         El código usa lock PostgreSQL, tope de tiempo y commits por lote para limitar carga. -->
+    <record id="ir_cron_pos_bulk_catalog_build" model="ir.cron">
+        <field name="name">POS Bulk Catalog: continuar construcción de caché</field>
+        <field name="model_id" ref="model_pos_bulk_catalog_settings"/>
+        <field name="state">code</field>
+        <field name="code">model.cron_continue_build()</field>
+        <field name="interval_number">10</field>
+        <field name="interval_type">minutes</field>
+        <field name="numbercall">-1</field>
+        <field name="user_id" ref="base.user_root"/>
+        <field name="active" eval="False"/>
+    </record>
+</odoo>

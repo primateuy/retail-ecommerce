@@ -1,0 +1,145 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <!-- Fragmento QWeb reutilizable: voucher tarjeta estilo ticket térmico (Fiserv ITD). -->
+        <record id="fiserv_card_voucher_snippet" model="ir.ui.view">
+            <field name="name">odoo_pos_fiserv.fiserv_card_voucher_snippet</field>
+            <field name="type">qweb</field>
+            <field name="arch" type="xml">
+                <t t-name="odoo_pos_fiserv.fiserv_card_voucher_snippet">
+                    <t t-set="cl" t-value="copy_label or 'COPIA EMPRESA'"/>
+                    <t t-set="order" t-value="tx.pos_order_id"/>
+                    <t t-set="branch_partner"
+                       t-value="order and (order.config_id.picking_type_id.warehouse_id.partner_id if order.config_id and order.config_id.picking_type_id and order.config_id.picking_type_id.warehouse_id and order.config_id.picking_type_id.warehouse_id.partner_id else (order.config_id.company_id.partner_id if order.config_id and order.config_id.company_id else order.company_id.partner_id))"/>
+                    <t t-set="card_masked"
+                       t-value="(tx.card_bin or '******') + '******' + (tx.card_last_four or '****')"/>
+                    <t t-set="voucher_ref" t-value="tx.ticket_number or tx.reference or ''"/>
+
+                    <div class="fiserv-thermal-voucher"
+                         style="font-family: 'Courier New', Courier, monospace; font-size: 13px; line-height: 1.4; max-width: 80mm; margin: 0 auto; color: #000; padding: 4px 0;">
+
+                        <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
+                            <span t-if="tx.create_date" t-out="context_timestamp(tx.create_date).strftime('%d/%m/%Y')"/>
+                            <span t-if="tx.create_date" t-out="context_timestamp(tx.create_date).strftime('%H:%M')"/>
+                        </div>
+                        <div style="text-align:center; font-weight:bold; font-size:15px; margin-bottom:4px;">
+                            Fiserv ITD
+                        </div>
+                        <div style="text-align:center; margin-bottom:2px;">
+                            <span t-esc="tx.issuer_name or 'TARJETA'"/> ONLINE
+                        </div>
+                        <div style="text-align:center; font-weight:bold; font-size:14px; margin-bottom:8px;">
+                            <span t-if="order and order.company_id" t-field="order.company_id.name"/>
+                            <span t-if="not order or not order.company_id" t-field="tx.company_id.name"/>
+                        </div>
+
+                        <div style="display:flex; justify-content:space-between; gap:8px; margin-bottom:8px;">
+                            <div style="flex:1;">
+                                <span t-if="branch_partner and branch_partner.street" t-field="branch_partner.street"/>
+                            </div>
+                            <div style="text-align:right; flex:1;">
+                                <span t-if="branch_partner and branch_partner.vat">RUT <span t-field="branch_partner.vat"/></span>
+                            </div>
+                        </div>
+
+                        <div style="text-align:center; font-weight:bold; margin-bottom:8px;">
+                            Voucher de Tarjeta <span t-if="voucher_ref" t-esc="voucher_ref"/>
+                        </div>
+
+                        <div style="display:flex; justify-content:space-between; margin-bottom:2px;">
+                            <span>TARJETA: <span t-esc="tx.issuer_name or '-'"/></span>
+                            <span>Online <span t-esc="tx.acquirer or 'Fiserv'"/></span>
+                        </div>
+                        <div style="display:flex; justify-content:space-between; margin-bottom:2px;">
+                            <span>Comercio: <span t-esc="tx.merchant_number or '-'"/></span>
+                            <span>Terminal: <span t-esc="tx.pos_id or '-'"/></span>
+                        </div>
+                        <div style="display:flex; justify-content:space-between; margin-bottom:2px;">
+                            <span>Operacion: Venta</span>
+                            <span t-if="tx.create_date" t-out="context_timestamp(tx.create_date).strftime('%d/%m/%Y %H:%M:%S')"/>
+                        </div>
+                        <div style="display:flex; justify-content:space-between; margin-bottom:2px;">
+                            <span>Producto: <span t-esc="tx.acquirer or '-'"/></span>
+                            <span>Ticket: <span t-esc="tx.ticket_number or '-'"/></span>
+                        </div>
+                        <div style="display:flex; justify-content:space-between; margin-bottom:2px;">
+                            <span>LOTE: <span t-esc="tx.batch_number or '-'"/></span>
+                            <span>Ingreso: NFC</span>
+                        </div>
+                        <div style="display:flex; justify-content:space-between; margin-bottom:2px;">
+                            <span>Tarjeta: <span t-esc="card_masked"/></span>
+                            <span>Exp: xx/xx</span>
+                        </div>
+                        <div style="display:flex; justify-content:space-between; margin-bottom:2px;">
+                            <span>Cuotas: <span t-esc="tx.installments or 0"/></span>
+                            <span>Plan: <span t-esc="tx.issuer_code or '0'"/></span>
+                        </div>
+                        <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
+                            <span>Autorizacion: <span t-esc="tx.authorization_code or '-'"/></span>
+                            <span>No.FACT: <span t-esc="tx.invoice_number or '-'"/></span>
+                        </div>
+
+                        <div style="display:flex; justify-content:space-between; font-weight:bold; margin:6px 0 4px 0;">
+                            <span>IMPORTE</span>
+                            <span t-field="tx.amount" t-options='{"widget":"monetary","display_currency": tx.currency_id}'/>
+                        </div>
+                        <div style="display:flex; justify-content:space-between; font-weight:bold; font-size:15px; margin-bottom:8px;">
+                            <span>TOTAL A PAGAR</span>
+                            <span t-field="tx.amount" t-options='{"widget":"monetary","display_currency": tx.currency_id}'/>
+                        </div>
+                        <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
+                            <span t-if="order and order.partner_id" t-field="order.partner_id.name"/>
+                        </div>
+
+                        <div style="text-align:center; font-size:11px; margin:6px 0;">
+                            NO REQUIERE PIN NI OTROS DATOS
+                        </div>
+                        <div style="text-align:center; font-size:11px; margin-bottom:4px;">
+                            NO APLICA Ley
+                        </div>
+                        <div style="text-align:center; font-size:11px; margin-bottom:6px;">
+                            Adq: <span t-esc="tx.acquirer or '-'"/>
+                        </div>
+                        <div style="font-size:11px; margin-bottom:8px; text-align:center;">
+                            Aplica dev. IVA-Ley 19210 Sin nro. factura no aplica ley
+                        </div>
+                        <div style="text-align:center; font-size:12px; font-weight:bold; margin-bottom:10px;">
+                            MUCHAS GRACIAS
+                        </div>
+
+                        <div style="background:#000; color:#fff; text-align:center; font-weight:bold; padding:6px 4px; margin-top:4px; letter-spacing:0.5px;">
+                            *** <span t-esc="cl"/> ***
+                        </div>
+                    </div>
+                </t>
+            </field>
+        </record>
+
+        <record id="action_report_payment_transaction_fiserv_voucher" model="ir.actions.report">
+            <field name="name">Voucher Fiserv POS</field>
+            <field name="model">payment.transaction</field>
+            <field name="report_type">qweb-pdf</field>
+            <field name="report_name">odoo_pos_fiserv.payment_transaction_fiserv_voucher_report</field>
+            <field name="report_file">odoo_pos_fiserv.payment_transaction_fiserv_voucher_report</field>
+            <field name="print_report_name">'Voucher Fiserv - %s' % (object.reference or object.id)</field>
+            <field name="binding_model_id" ref="payment.model_payment_transaction"/>
+            <field name="binding_type">report</field>
+        </record>
+
+        <record id="payment_transaction_fiserv_voucher_report" model="ir.ui.view">
+            <field name="name">odoo_pos_fiserv.payment_transaction_fiserv_voucher_report</field>
+            <field name="model">payment.transaction</field>
+            <field name="type">qweb</field>
+            <field name="arch" type="xml">
+                <t t-call="web.html_container">
+                    <t t-foreach="docs" t-as="tx">
+                        <div class="article o_report_layout_standard" style="padding: 8px;">
+                            <t t-set="copy_label" t-value="'COPIA EMPRESA'"/>
+                            <t t-call="odoo_pos_fiserv.fiserv_card_voucher_snippet"/>
+                        </div>
+                    </t>
+                </t>
+            </field>
+        </record>
+    </data>
+</odoo>

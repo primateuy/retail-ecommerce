@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <record id="account_payment_form_fiserv" model="ir.ui.view">
+            <field name="name">account.payment.form.fiserv</field>
+            <field name="model">account.payment</field>
+            <field name="inherit_id" ref="account.view_account_payment_form"/>
+            <field name="arch" type="xml">
+                <xpath expr="//field[@name='payment_transaction_id']" position="after">
+                    <field name="pos_session_id" string="Sesión POS" readonly="1"
+                           invisible="not pos_session_id"/>
+                </xpath>
+            </field>
+        </record>
+    </data>
+</odoo>
