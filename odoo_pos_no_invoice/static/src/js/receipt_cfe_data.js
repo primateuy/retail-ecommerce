@@ -244,6 +244,27 @@ patch(OrderReceipt.prototype, {
             return_policy: returnPolicyValue,
         };
 
+        // Logo de rutina de impresión: priorizar receipt_logo, luego logo de empresa.
+        const receiptLogo = receiptData?.receipt_logo
+            || this.pos?.config?.receipt_logo
+            || this.props.data?.receipt_logo
+            || '';
+
+        // Normalizar nombres de medios de pago (Efectivo_Suc XXX → Efectivo).
+        const normalizePaymentName = (name) => {
+            if (name && name.toLowerCase().includes('efectivo')) return 'Efectivo';
+            return name || '';
+        };
+        const normalizedPaymentlines = (
+            receiptData?.paymentlines?.length
+                ? receiptData.paymentlines
+                : this.props.data?.paymentlines || []
+        ).map(l => ({ ...l, name: normalizePaymentName(l.name) }));
+
+        // Total recibido: suma de todos los medios de pago.
+        const totalReceived = receiptData?.total_received
+            || normalizedPaymentlines.reduce((acc, l) => acc + (typeof l.amount === 'number' ? l.amount : 0), 0);
+
         // Construir URL del código de barras para el número de ticket.
         const barcodeValue = legalData.ticket_number || this.props.data?.name || '';
         const baseUrl = this.props.data?.base_url || this.pos?.base_url || '';
@@ -265,10 +286,8 @@ patch(OrderReceipt.prototype, {
             ? receiptData.orderlines
             : this.props.data.orderlines;
 
-        // Definir líneas de pago priorizando datos del servidor.
-        const receiptPaymentlines = (receiptData && receiptData.paymentlines)
-            ? receiptData.paymentlines
-            : this.props.data.paymentlines;
+        // Líneas de pago normalizadas (ya procesadas arriba).
+        const receiptPaymentlines = normalizedPaymentlines;
 
         // Bloque: voucher OCA — marcar show_client_copy si hay datos (evita t-if que falle con JSON).
         const mergedOcaVoucher = {
@@ -304,8 +323,11 @@ patch(OrderReceipt.prototype, {
                 barcode_src: barcodeSrc,
                 legal_data: legalData,
                 adenda_data: adendaData,
-                cfe_data: cfeData, // Agregar datos del CFE directamente a props.data
+                cfe_data: cfeData,
                 oca_voucher: mergedOcaVoucher,
+                receipt_logo: receiptLogo,
+                total_received: totalReceived,
+                currency_name: receiptData?.currency_name || this.props.data?.currency_name || '',
             },
             order: order,
             receipt: this.props.data,

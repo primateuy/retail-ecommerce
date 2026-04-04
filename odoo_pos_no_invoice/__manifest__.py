@@ -11,8 +11,9 @@
     """,
     'category': 'Localization',
     'version': '17.0.0.1',
-    'depends': ['base', 'point_of_sale', 'custom_receipts_for_pos', 'odoo_pos_oca'],
+    'depends': ['base', 'base_setup', 'point_of_sale', 'custom_receipts_for_pos', 'odoo_pos_oca'],
     'data': [
+        'views/res_config_settings_views.xml',
         'views/pos_config_views.xml',
         'data/pos_receipt_cfe_data.xml',
     ],

@@ -45,6 +45,8 @@ class PosSession(models.Model):
             # y download_invoice no está ya en la lista
             if 'download_invoice' not in result['search_params']['fields']:
                 result['search_params']['fields'].append('download_invoice')
-        
+            if 'receipt_logo' not in result['search_params']['fields']:
+                result['search_params']['fields'].append('receipt_logo')
+
         return result
 

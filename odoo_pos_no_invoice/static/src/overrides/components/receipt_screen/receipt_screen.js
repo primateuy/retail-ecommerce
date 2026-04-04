@@ -69,7 +69,17 @@ patch(ReceiptScreen.prototype, {
             await new Promise((resolve) => setTimeout(resolve, 1000));
         }
 
+        const normalizePaymentName = (name) => {
+            if (name && name.toLowerCase().includes('efectivo')) return 'Efectivo';
+            return name || '';
+        };
+
         const baseReceiptData = this.pos.get_order().export_for_printing();
+        if (baseReceiptData?.paymentlines) {
+            baseReceiptData.paymentlines = baseReceiptData.paymentlines.map(l => ({
+                ...l, name: normalizePaymentName(l.name),
+            }));
+        }
 
         // Bloque: voucher OCA (id backend y/o referencia si aún no hay server_id).
         let ocaVoucher = {};
