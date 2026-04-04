@@ -1,0 +1,116 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_pos_bulk_catalog_settings_tree" model="ir.ui.view">
+        <field name="name">pos.bulk.catalog.settings.tree</field>
+        <field name="model">pos.bulk.catalog.settings</field>
+        <field name="arch" type="xml">
+            <tree string="Caché catálogo POS">
+                <field name="name"/>
+                <field name="company_id"/>
+                <field name="state" widget="badge"
+                    decoration-success="state == 'ready'"
+                    decoration-info="state == 'building'"
+                    decoration-danger="state == 'error'"/>
+                <field name="last_ready_at"/>
+                <field name="chunk_count" optional="show"/>
+            </tree>
+        </field>
+    </record>
+
+    <record id="view_pos_bulk_catalog_settings_form" model="ir.ui.view">
+        <field name="name">pos.bulk.catalog.settings.form</field>
+        <field name="model">pos.bulk.catalog.settings</field>
+        <field name="arch" type="xml">
+            <form string="Caché catálogo masivo POS">
+                <header>
+                    <button name="action_start_build" type="object" string="Iniciar / reiniciar construcción"
+                        class="btn-primary"
+                        invisible="state == 'building'"/>
+                    <button name="action_reset_draft" type="object" string="Volver a borrador"
+                        class="btn-secondary"
+                        invisible="state not in ('ready', 'error')"/>
+                    <field name="state" widget="statusbar"
+                        statusbar_visible="draft,building,ready,error"/>
+                </header>
+                <sheet>
+                    <group>
+                        <group string="Alcance">
+                            <field name="name"/>
+                            <field name="company_id"/>
+                            <field name="active"/>
+                            <field name="reference_pos_config_id"/>
+                        </group>
+                        <group string="Rendimiento">
+                            <field name="batch_size"/>
+                            <field name="max_batches_per_cron"/>
+                            <field name="max_cron_wallclock_seconds"/>
+                            <field name="cron_commit_each_batch"/>
+                            <field name="include_product_images"/>
+                        </group>
+                    </group>
+                    <group string="Cron y servidor" colspan="2">
+                        <div class="text-muted" colspan="2">
+                            El cron de continuación viene <strong>desactivado</strong>.
+                            Actívalo en Ajustes técnicos → Automatización → acciones planificadas
+                            solo cuando la construcción esté en curso. Cada ejecución está acotada
+                            en tiempo y lotes; usa un lock en base de datos para no solapar workers.
+                            Para desactivar por completo el cron desde código de sistema, defina el
+                            parámetro <code>pos_bulk_catalog.cron_master_disabled</code> = true.
+                        </div>
+                    </group>
+                    <group string="Diagnóstico" invisible="not last_error">
+                        <field name="last_error" nolabel="1" colspan="2"/>
+                    </group>
+                    <group string="Progreso interno">
+                        <field name="chunk_count" readonly="1"/>
+                        <field name="build_stage" readonly="1"/>
+                        <field name="build_cursor_product_id" readonly="1"/>
+                        <field name="build_cursor_partner_id" readonly="1"/>
+                        <field name="last_ready_at" readonly="1"/>
+                    </group>
+                    <notebook>
+                        <page string="Fragmentos">
+                            <field name="chunk_ids" readonly="1">
+                                <tree>
+                                    <field name="kind"/>
+                                    <field name="sequence"/>
+                                </tree>
+                            </field>
+                        </page>
+                    </notebook>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_pos_bulk_catalog_settings" model="ir.actions.act_window">
+        <field name="name">Caché catálogo masivo</field>
+        <field name="res_model">pos.bulk.catalog.settings</field>
+        <field name="view_mode">tree,form</field>
+    </record>
+
+    <menuitem id="menu_pos_bulk_catalog_settings"
+        name="Caché catálogo masivo"
+        parent="point_of_sale.menu_point_config_product"
+        action="action_pos_bulk_catalog_settings"
+        sequence="25"
+        groups="point_of_sale.group_pos_manager"/>
+
+    <record id="pos_config_view_form_bulk_catalog" model="ir.ui.view">
+        <field name="name">pos.config.form.bulk.catalog</field>
+        <field name="model">pos.config</field>
+        <field name="inherit_id" ref="point_of_sale.pos_config_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//sheet" position="inside">
+                <group string="Catálogo masivo (precarga)"
+                    name="pos_bulk_catalog_group">
+                    <!-- Odoo 17: el dominio de bulk_catalog_settings_id usa company_id; debe existir en la vista. -->
+                    <field name="company_id" invisible="1"/>
+                    <field name="bulk_catalog_settings_id"
+                        options="{'no_create': True}"
+                        help="Use un caché en estado Listo. El TPV de referencia del caché debe tener el mismo criterio de productos (p. ej. categorías) que este punto de venta."/>
+                </group>
+            </xpath>
+        </field>
+    </record>
+</odoo>
