@@ -109,8 +109,9 @@ class PaymentMethodPromotion(models.Model):
         'promotion_id',
         'loyalty_program_id',
         string='Promociones Incompatibles',
-        help='Promociones de Odoo (Descuento y lealtad) que no pueden combinarse con esta. '
-             'Si el pedido ya tiene una de estas promociones aplicada, esta no se aplicará.'
+        help='Programas de lealtad aplicados en el pedido que no pueden combinarse con esta '
+             'promoción de tarjeta. Si el carrito tiene uno de estos programas activo (y vigente), '
+             'el cobro OCA con promo se cancela y se solicita reversa.'
     )
     
     # Vigencia
@@ -251,54 +252,151 @@ class PaymentMethodPromotion(models.Model):
             return self.payment_provider_id.code == provider_code
         return False
     
-    def _check_incompatibilities(self, order):
+    def _loyalty_program_rules_active(self, program):
         """
-        Verifica si en la orden ya está aplicada alguna promoción estándar de Odoo
-        (Descuento y lealtad) marcada como incompatible con esta promoción.
-        
-        Args:
-            order: Registro de pos.order o sale.order
-            
-        Returns:
-            tuple: (is_incompatible: bool, incompatible_promotions: list, message: str)
+        True si el loyalty.program sigue activo/vigente a nivel de sistema (active y fechas),
+        para decidir si una incompatibilidad configurada sigue 'en vigor'.
         """
         self.ensure_one()
-        incompatible_promotions = []
+        if not program:
+            return False
+        if hasattr(program, 'active') and not program.active:
+            return False
+        today = date.today()
+        date_from = getattr(program, 'date_from', None)
+        date_to = getattr(program, 'date_to', None)
+        if date_from and today < date_from:
+            return False
+        if date_to and today > date_to:
+            return False
+        return True
 
-        if not self.incompatible_promotion_ids:
-            return False, incompatible_promotions, ''
+    @api.model
+    def collect_applied_loyalty_program_ids_from_pos_order(self, order):
+        """
+        Devuelve los IDs de loyalty.program presentes en líneas del pedido POS (recompensas/cupones).
 
-        # Recoger programas de lealtad aplicados en la orden (POS: líneas con reward_id; Sale: cupones)
-        applied_programs = self.env['loyalty.program']
-        if hasattr(order, 'lines'):
-            for line in order.lines:
-                reward = getattr(line, 'reward_id', None)
-                if reward and getattr(reward, 'program_id', None):
-                    if reward.program_id in self.incompatible_promotion_ids:
-                        applied_programs |= reward.program_id
-        if hasattr(order, 'coupon_point_ids'):
-            for cp in order.coupon_point_ids:
-                card = getattr(cp, 'coupon_id', None) or getattr(cp, 'card_id', None)
-                if card and getattr(card, 'program_id', None) and card.program_id in self.incompatible_promotion_ids:
-                    applied_programs |= card.program_id
-        if hasattr(order, 'applied_coupon_ids'):
-            for coupon in order.applied_coupon_ids:
-                if getattr(coupon, 'program_id', None) and coupon.program_id in self.incompatible_promotion_ids:
-                    applied_programs |= coupon.program_id
+        Se usa cuando el borrador ya existe en el servidor; se combina con el snapshot en pos.session.
+        """
+        ids = []
+        if not order or not hasattr(order, "lines"):
+            _logger.info(
+                "OCA_PROMOS_ORDER_LINES: sin order o sin lines | order=%s",
+                order.id if order else None,
+            )
+            return ids
+        seen = set()
+        for line in order.lines:
+            reward = getattr(line, "reward_id", None)
+            if reward:
+                prog = getattr(reward, "program_id", None)
+                if prog and prog.id and prog.id not in seen:
+                    seen.add(prog.id)
+                    ids.append(prog.id)
+            coupon = getattr(line, "coupon_id", None)
+            if coupon:
+                prog = getattr(coupon, "program_id", None)
+                if prog and prog.id and prog.id not in seen:
+                    seen.add(prog.id)
+                    ids.append(prog.id)
+        _logger.info(
+            "OCA_PROMOS_ORDER_LINES: pos.order id=%s | líneas=%s | loyalty.program ids=%s",
+            order.id,
+            len(order.lines),
+            ids,
+        )
+        return ids
 
-        if applied_programs:
-            message = _('Esta promoción no puede combinarse con: %s') % ', '.join(applied_programs.mapped('name'))
-            return True, list(applied_programs), message
+    def get_incompatibility_payment_block_for_applied_programs(self, applied_program_ids):
+        """
+        Bloquea el cobro con promo OCA si el pedido/carrito tiene aplicado algún loyalty.program
+        que figure en incompatible_promotion_ids y siga activo/vigente en Odoo.
 
-        return False, incompatible_promotions, ''
-    
+        Args:
+            applied_program_ids (list|tuple|set|False): IDs de loyalty.program aplicados en el carrito.
+
+        Returns:
+            tuple: (blocked: bool, message: str)
+        """
+        self.ensure_one()
+        if not applied_program_ids:
+            _logger.info(
+                "OCA_PROMOS_INCOMPAT: promo_id=%s | sin IDs de lealtad aplicados en carrito → NO bloqueo",
+                self.id,
+            )
+            return False, ""
+        try:
+            id_set = {
+                int(x)
+                for x in applied_program_ids
+                if x is not None and str(x).strip() != ""
+            }
+        except (TypeError, ValueError) as err:
+            _logger.warning(
+                "OCA_PROMOS_INCOMPAT: error normalizando applied_program_ids | promo_id=%s | err=%s",
+                self.id,
+                err,
+            )
+            return False, ""
+        if not id_set:
+            return False, ""
+        applied = self.env["loyalty.program"].browse(list(id_set)).exists()
+        _logger.info(
+            "OCA_PROMOS_INCOMPAT: promo_id=%s | name=%s | aplicados_en_carrito_ids=%s | "
+            "aplicados_existentes=%s | incompatible_promotion_ids(config)=%s",
+            self.id,
+            self.name,
+            sorted(id_set),
+            applied.ids,
+            self.incompatible_promotion_ids.ids,
+        )
+        conflicting = self.env["loyalty.program"]
+        for prog in applied:
+            in_list = prog in self.incompatible_promotion_ids
+            if not in_list:
+                _logger.info(
+                    "OCA_PROMOS_INCOMPAT: eval programa id=%s name=%r | en_incompatibles=False",
+                    prog.id,
+                    prog.name,
+                )
+                continue
+            rules_ok = self._loyalty_program_rules_active(prog)
+            _logger.info(
+                "OCA_PROMOS_INCOMPAT: eval programa id=%s name=%r | en_incompatibles=True | "
+                "reglas_activas/vigentes=%s",
+                prog.id,
+                prog.name,
+                rules_ok,
+            )
+            if rules_ok:
+                conflicting |= prog
+        if not conflicting:
+            _logger.info(
+                "OCA_PROMOS_INCOMPAT: promo_id=%s | sin cruce incompatible activo → NO bloqueo",
+                self.id,
+            )
+            return False, ""
+        names = ", ".join(conflicting.mapped("name"))
+        msg = _(
+            'No se puede cobrar con la promoción de tarjeta "%(promo)s": en el pedido hay aplicado '
+            'el programa de beneficios "%(programs)s", incompatible con esta promoción. '
+            "Quite ese beneficio o utilice otro medio de pago."
+        ) % {"promo": self.name, "programs": names}
+        _logger.warning(
+            "OCA_PROMOS_INCOMPAT: BLOQUEO | promo_id=%s | programas_conflictivos=%s | msg=%s",
+            self.id,
+            conflicting.ids,
+            msg,
+        )
+        return True, msg
+
     @api.model
     def find_applicable_promotion(self, card_data, provider_code=None, payment_method_id=None, order=None):
         """
         Busca una promoción aplicable según los criterios dados
         
-        Este método evalúa todas las promociones activas y retorna la primera que cumpla
-        todos los criterios (proveedor, BIN, fechas, incompatibilidades).
+        Evalúa promociones activas y retorna la primera que cumpla proveedor, BIN y fechas.
+        El bloqueo por incompatibilidades activas en sistema no se aplica aquí.
         
         Args:
             card_data (dict): Datos de la tarjeta con keys:
@@ -307,7 +405,9 @@ class PaymentMethodPromotion(models.Model):
                 - CardNumber: Número de tarjeta o BIN
             provider_code (str): Código del proveedor de pago
             payment_method_id (int): ID del método de pago POS
-            order: Registro de pos.order o sale.order para validar incompatibilidades
+            order: Obsoleto, se ignora. La incompatibilidad se evalúa con los programas aplicados
+                en carrito (pos.session + pos.order borrador) vía
+                ``get_incompatibility_payment_block_for_applied_programs()``.
             
         Returns:
             payment.method.promotion o None: Promoción aplicable o None si no hay ninguna
@@ -337,13 +437,9 @@ class PaymentMethodPromotion(models.Model):
             if not promotion._matches_bin(card_number):
                 continue
             
-            # Verificar incompatibilidades
-            if order:
-                is_incompatible, _, _ = promotion._check_incompatibilities(order)
-                if is_incompatible:
-                    continue
+            # Coincide por tarjeta; el bloqueo por lealtad aplicada en carrito se hace después.
             
-            # Si llegamos aquí, la promoción es aplicable
+            # Promoción candidata por BIN/proveedor/fechas
             _logger.info('Promoción aplicable encontrada: %s (ID: %s)', promotion.name, promotion.id)
             return promotion
         

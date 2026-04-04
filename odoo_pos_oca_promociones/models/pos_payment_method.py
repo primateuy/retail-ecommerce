@@ -18,6 +18,128 @@ from odoo import fields, models, api, SUPERUSER_ID
 _logger = logging.getLogger(__name__)
 
 
+def parse_applied_loyalty_ids_from_payload(data):
+    """
+    Lee IDs de programas de lealtad desde el dict enviado al pinpad (si el conector los conserva).
+    """
+    if not data or not isinstance(data, dict):
+        _logger.info(
+            "OCA_PROMOS_PAYLOAD: sin dict data o vacío → ids de lealtad desde pinpad = []"
+        )
+        return []
+    raw = data.get("OcaAppliedLoyaltyProgramIds") or data.get(
+        "oca_applied_loyalty_program_ids"
+    )
+    if raw in (None, False, ""):
+        _logger.info(
+            "OCA_PROMOS_PAYLOAD: claves OcaAppliedLoyaltyProgramIds / "
+            "oca_applied_loyalty_program_ids vacías o ausentes"
+        )
+        return []
+    if isinstance(raw, (list, tuple, set)):
+        out = []
+        for x in raw:
+            try:
+                out.append(int(x))
+            except (TypeError, ValueError):
+                continue
+        _logger.info(
+            "OCA_PROMOS_PAYLOAD: lealtad desde pinpad (lista) | raw=%s | parseados=%s",
+            raw,
+            out,
+        )
+        return out
+    out = []
+    for part in str(raw).split(","):
+        part = part.strip()
+        if not part:
+            continue
+        try:
+            out.append(int(part))
+        except ValueError:
+            continue
+    _logger.info(
+        "OCA_PROMOS_PAYLOAD: lealtad desde pinpad (string/CSV) | raw=%r | parseados=%s",
+        raw,
+        out,
+    )
+    return out
+
+
+def get_applied_loyalty_program_ids_for_oca_thread(env, pos_session_id, data):
+    """
+    IDs de loyalty.program aplicados al carrito que se está cobrando: snapshot en pos.session
+    (guardado por el POS web antes de pagar), payload opcional, y líneas del borrador en servidor.
+    """
+    Promo = env["payment.method.promotion"]
+    from_payload = set(parse_applied_loyalty_ids_from_payload(data or {}))
+    from_session = set()
+    from_order_lines = set()
+
+    session = env["pos.session"].sudo().browse(int(pos_session_id))
+    if session.exists():
+        csv_val = session.oca_applied_loyalty_program_ids
+        _logger.info(
+            "OCA_PROMOS_MERGE: pos.session | session_id=%s | oca_applied_loyalty_program_ids=%r",
+            pos_session_id,
+            csv_val,
+        )
+        if csv_val:
+            for part in csv_val.split(","):
+                part = part.strip()
+                if not part:
+                    continue
+                try:
+                    from_session.add(int(part))
+                except ValueError:
+                    _logger.warning(
+                        "OCA_PROMOS_MERGE: token no numérico en CSV sesión | part=%r",
+                        part,
+                    )
+    else:
+        _logger.warning(
+            "OCA_PROMOS_MERGE: pos.session id=%s no existe (sudo browse)",
+            pos_session_id,
+        )
+
+    order = env["pos.order"].search(
+        [
+            ("session_id", "=", int(pos_session_id)),
+            ("state", "=", "draft"),
+        ],
+        order="id desc",
+        limit=1,
+    )
+    if order:
+        from_order_lines = set(
+            Promo.collect_applied_loyalty_program_ids_from_pos_order(order)
+        )
+        _logger.info(
+            "OCA_PROMOS_MERGE: borrador pos.order | order_id=%s | name=%s | "
+            "loyalty.program ids desde líneas=%s",
+            order.id,
+            order.name,
+            sorted(from_order_lines),
+        )
+    else:
+        _logger.info(
+            "OCA_PROMOS_MERGE: no hay pos.order draft para session_id=%s",
+            pos_session_id,
+        )
+
+    seen = set(from_payload) | from_session | from_order_lines
+    _logger.info(
+        "OCA_PROMOS_MERGE: resumen | session_id=%s | desde_pinpad=%s | desde_sesión=%s | "
+        "desde_borrador=%s | UNIÓN_FINAL=%s",
+        pos_session_id,
+        sorted(from_payload),
+        sorted(from_session),
+        sorted(from_order_lines),
+        sorted(seen),
+    )
+    return sorted(seen)
+
+
 class PosPaymentMethod(models.Model):
     """
     Extensión del modelo pos.payment.method para promociones OCA
@@ -101,6 +223,11 @@ class PosPaymentMethod(models.Model):
             _logger.info('  Currency: %s', data.get('Currency'))
             _logger.info('  InvoiceNumber: %s', data.get('InvoiceNumber'))
             _logger.info('  TransactionDateTimeyyyyMMddHHmmssSSS: %s', data.get('TransactionDateTimeyyyyMMddHHmmssSSS'))
+            _logger.info('  Installments: %s | Quotas: %s', data.get('Installments'), data.get('Quotas'))
+            _logger.info(
+                'OCA_PROMOS processFinancialPurchase: OcaAppliedLoyaltyProgramIds en payload (si el conector lo reenvía)=%r',
+                data.get('OcaAppliedLoyaltyProgramIds'),
+            )
             
             base_url_endpoint = self.sudo().url_webservice
             endpoint = base_url_endpoint + '/processFinancialPurchase'
@@ -386,15 +513,28 @@ class PosPaymentMethod(models.Model):
 
             def _get_quota_value():
                 """
-                Obtener cantidad de cuotas para enviar en processConfirmFinancialPurchase.
-                Se usa el valor recibido del POS (result) si está disponible; si no,
-                el del request inicial (data); fallback 1 para que la API no rechace.
+                Cuotas para processConfirmFinancialPurchase: nunca 0 (OCA puede devolver EXCEDE CUOTAS).
+
+                Se prioriza Quota/Quotas del resultado de consulta; luego Installments del cobro inicial;
+                se ignoran valores < 1.
                 """
-                raw_quota = result.get('Quota') or result.get('Quotas') or data.get('Quotas') or data.get('Installments')
-                try:
-                    return int(raw_quota) if raw_quota is not None else 1
-                except (TypeError, ValueError):
-                    return 1
+                candidates = []
+                for key in ('Quota', 'Quotas'):
+                    val = result.get(key)
+                    if val is not None and val != '':
+                        candidates.append(val)
+                for key in ('Installments', 'Quotas'):
+                    val = data.get(key)
+                    if val is not None and val != '':
+                        candidates.append(val)
+                for raw in candidates:
+                    try:
+                        n = int(raw)
+                    except (TypeError, ValueError):
+                        continue
+                    if n >= 1:
+                        return n
+                return 1
 
             query_data = {
                 "PosID": data['PosID'],
@@ -423,33 +563,85 @@ class PosPaymentMethod(models.Model):
                             _logger.info('Procesando promoción automáticamente desde backend - Acquirer: %s, Issuer: %s', 
                                        result.get('Acquirer'), result.get('Issuer'))
                             
-                            # Marcar como procesado inmediatamente para evitar múltiples intentos
-                            promotion_processed = True
-                            
                             try:
                                 # Obtener el método de pago
                                 payment_method = env['pos.payment.method'].browse(payment_method_id)
                                 
-                                # Buscar promoción aplicable según configuración
-                                # Preparar datos de tarjeta para búsqueda
+                                # Preparar datos de tarjeta para búsqueda (misma lógica que find_applicable_promotion sin orden)
                                 card_data = {
                                     'Acquirer': result.get('Acquirer', ''),
                                     'Issuer': result.get('Issuer', ''),
                                     'CardNumber': result.get('CardNumber', ''),
                                 }
                                 
-                                # Obtener código del proveedor (OCA en este caso)
                                 provider_code = 'oca' if payment_method.use_payment_terminal == 'oca' else None
                                 
-                                # Buscar promoción aplicable
                                 promotion = env['payment.method.promotion'].find_applicable_promotion(
                                     card_data=card_data,
                                     provider_code=provider_code,
                                     payment_method_id=payment_method_id,
-                                    order=None  # No tenemos la orden aún
+                                    order=None,
                                 )
+
+                                if promotion:
+                                    _logger.info(
+                                        "OCA_PROMOS_RC12: promo candidata por tarjeta | id=%s | name=%s | "
+                                        "incompatible_promotion_ids=%s",
+                                        promotion.id,
+                                        promotion.name,
+                                        promotion.incompatible_promotion_ids.ids,
+                                    )
+                                    applied_loyalty_ids = get_applied_loyalty_program_ids_for_oca_thread(
+                                        env, pos_session_id, data
+                                    )
+                                    blocked, block_msg = (
+                                        promotion.get_incompatibility_payment_block_for_applied_programs(
+                                            applied_loyalty_ids
+                                        )
+                                    )
+                                    _logger.info(
+                                        "OCA_PROMOS_RC12: chequeo incompatibilidad | trans_id=%s | "
+                                        "applied_loyalty_ids=%s | blocked=%s",
+                                        transaction_id,
+                                        applied_loyalty_ids,
+                                        blocked,
+                                    )
+                                    if blocked:
+                                        promotion_processed = True
+                                        _logger.warning(
+                                            'Pago OCA con promoción bloqueado por incompatibilidad (trans. %s): %s',
+                                            transaction_id,
+                                            block_msg,
+                                        )
+                                        reverse_result = payment_method.processFinancialReverse(
+                                            query_data, base_url_endpoint
+                                        )
+                                        result.update({
+                                            'ResponseCode': '999',
+                                            'TransactionId': transaction_id,
+                                            'msg': block_msg,
+                                            'promotion_incompatible_cancelled': True,
+                                            'reverse_after_incompatible_ok': (
+                                                str(reverse_result.get('ResponseCode', '')) == '0'
+                                            ),
+                                            'reverse_msg': reverse_result.get('msg', ''),
+                                        })
+                                        _logger.info(
+                                            'processFinancialReverse tras incompatibilidad promoción/lealtad: %s',
+                                            pprint.pformat(reverse_result),
+                                        )
+                                        break
+
+                                # Sin bloqueo por lealtad incompatible (o sin promoción por BIN)
+                                promotion_processed = True
                                 
                                 if not promotion:
+                                    _logger.info(
+                                        "OCA_PROMOS_RC12: sin payment.method.promotion para esta tarjeta "
+                                        "(BIN/proveedor/fechas) | trans_id=%s | CardNumber_prefix=%s",
+                                        transaction_id,
+                                        (str(card_data.get("CardNumber") or "")[:12]),
+                                    )
                                     _logger.info('No se encontró promoción aplicable para esta transacción (BIN no coincide o no hay promociones configuradas)')
                                     _logger.info('Procesando pago normalmente sin aplicar descuento ni promoción')
                                     # Confirmar sin promoción (valores originales). Quotas = valor recibido del POS.
@@ -495,6 +687,12 @@ class PosPaymentMethod(models.Model):
                                         base_amount = original_amount
                                     discount_amount = base_amount * (discount_percent / 100.0)
                                     new_amount = original_amount - discount_amount
+                                    _logger.info(
+                                        "OCA_PROMOS_RC12: aplicando descuento OCA (compatible con lealtad del carrito) | "
+                                        "trans_id=%s | promo_id=%s",
+                                        transaction_id,
+                                        promotion.id,
+                                    )
                                     _logger.info('Promoción aplicable encontrada: %s (ID: %s) - %s%% de descuento - Monto original: %s, Descuento: %s, Nuevo monto: %s', 
                                                promotion.name, promotion.id, discount_percent, original_amount, discount_amount, new_amount)
                                     # Obtener producto de descuento de la promoción
@@ -697,7 +895,9 @@ class PosPaymentMethod(models.Model):
                 _logger.error('Error al enviar mensaje bus final: %s', str(e))
 
     @api.model
-    def get_promotion_info(self, card_data, pos_session_id):
+    def get_promotion_info(
+        self, card_data, pos_session_id, pos_order_id=False, applied_loyalty_program_ids=None
+    ):
         """
         Obtiene información de promoción basada en datos de la tarjeta
         
@@ -710,13 +910,17 @@ class PosPaymentMethod(models.Model):
                 - Issuer: Emisor (código o dict con code/name)
                 - CardNumber: Número de tarjeta o BIN
             pos_session_id (int): ID de la sesión POS
-            
+            pos_order_id (int|False): pos.order opcional para calcular montos de descuento.
+            applied_loyalty_program_ids (list|None): IDs de lealtad del carrito (POS); si es None se usan sesión + borrador.
+        
         Returns:
             dict: Información de promoción con keys:
                 - hasPromotion: bool - Si hay promoción aplicable
                 - discountAmount: float - Monto del descuento
                 - productId: int - ID del producto de descuento
                 - description: str - Descripción del descuento
+                - blockedByIncompatibility: bool - Si hay promo por tarjeta pero lealtad aplicada incompatible
+                - userMessage: str - Mensaje para mostrar en el POS si está bloqueado
         """
         self.ensure_one()
         
@@ -728,22 +932,96 @@ class PosPaymentMethod(models.Model):
                 card_data=card_data,
                 provider_code=provider_code,
                 payment_method_id=self.id,
-                order=None  # No tenemos la orden aún
+                order=None,
             )
             
             if not promotion:
-                _logger.info('No se encontró promoción aplicable para esta transacción')
+                _logger.info(
+                    "OCA_PROMOS get_promotion_info: sin promo por tarjeta | payment_method_id=%s | "
+                    "pos_session_id=%s | CardNumber_prefix=%s",
+                    self.id,
+                    pos_session_id,
+                    (str((card_data or {}).get("CardNumber") or ""))[:12],
+                )
                 return {
                     'hasPromotion': False,
                     'discountAmount': 0.0,
                     'productId': False,
-                    'description': ''
+                    'description': '',
+                    'blockedByIncompatibility': False,
+                    'userMessage': '',
+                    'promotionId': False,
                 }
-            
-            # Obtener monto de la orden para calcular descuento
-            pos_order = self.env['pos.order'].search([
-                ('session_id', '=', pos_session_id)
-            ], order='id desc', limit=1)
+
+            resolved_loyalty_ids = []
+            if applied_loyalty_program_ids not in (None, False):
+                try:
+                    resolved_loyalty_ids = [
+                        int(x)
+                        for x in applied_loyalty_program_ids
+                        if x is not None and str(x).strip() != ""
+                    ]
+                except (TypeError, ValueError):
+                    resolved_loyalty_ids = []
+                _logger.info(
+                    "OCA_PROMOS get_promotion_info: lealtad desde RPC (POS) | ids=%s | "
+                    "promo_id=%s | incompatible_config_ids=%s",
+                    resolved_loyalty_ids,
+                    promotion.id,
+                    promotion.incompatible_promotion_ids.ids,
+                )
+            else:
+                resolved_loyalty_ids = get_applied_loyalty_program_ids_for_oca_thread(
+                    self.env, pos_session_id, {}
+                )
+                _logger.info(
+                    "OCA_PROMOS get_promotion_info: lealtad resuelta en servidor (sesión+borrador) | "
+                    "ids=%s | promo_id=%s",
+                    resolved_loyalty_ids,
+                    promotion.id,
+                )
+
+            blocked, block_msg = (
+                promotion.get_incompatibility_payment_block_for_applied_programs(
+                    resolved_loyalty_ids
+                )
+            )
+            if blocked:
+                _logger.warning(
+                    "OCA_PROMOS get_promotion_info: BLOQUEADO | promo_id=%s | applied_loyalty=%s | msg=%s",
+                    promotion.id,
+                    resolved_loyalty_ids,
+                    block_msg,
+                )
+                return {
+                    'hasPromotion': False,
+                    'discountAmount': 0.0,
+                    'productId': promotion.discount_product_id.id,
+                    'description': promotion.name,
+                    'blockedByIncompatibility': True,
+                    'userMessage': block_msg,
+                    'promotionId': promotion.id,
+                }
+
+            _logger.info(
+                "OCA_PROMOS get_promotion_info: OK compatibilidad lealtad | promo_id=%s | "
+                "applied_loyalty_ids=%s → se calcula descuento",
+                promotion.id,
+                resolved_loyalty_ids,
+            )
+
+            pos_order = self.env['pos.order']
+            if pos_order_id:
+                pos_order = pos_order.browse(int(pos_order_id)).exists()
+            if not pos_order:
+                pos_order = self.env['pos.order'].search([
+                    ('session_id', '=', pos_session_id),
+                    ('state', '=', 'draft'),
+                ], order='id desc', limit=1)
+            if not pos_order:
+                pos_order = self.env['pos.order'].search([
+                    ('session_id', '=', pos_session_id)
+                ], order='id desc', limit=1)
             
             if not pos_order:
                 _logger.warning('No se encontró orden POS para calcular descuento')
@@ -751,7 +1029,10 @@ class PosPaymentMethod(models.Model):
                     'hasPromotion': False,
                     'discountAmount': 0.0,
                     'productId': promotion.discount_product_id.id,
-                    'description': promotion.name
+                    'description': promotion.name,
+                    'blockedByIncompatibility': False,
+                    'userMessage': '',
+                    'promotionId': promotion.id,
                 }
             
             # Calcular descuento según tipo de promoción
@@ -771,7 +1052,10 @@ class PosPaymentMethod(models.Model):
                 'hasPromotion': True,
                 'discountAmount': discount_amount,
                 'productId': promotion.discount_product_id.id,
-                'description': f'{promotion.name} - {promotion.discount_percent}%'
+                'description': f'{promotion.name} - {promotion.discount_percent}%',
+                'blockedByIncompatibility': False,
+                'userMessage': '',
+                'promotionId': promotion.id,
             }
             
         except Exception as e:
@@ -782,6 +1066,9 @@ class PosPaymentMethod(models.Model):
                 'hasPromotion': False,
                 'discountAmount': 0.0,
                 'productId': False,
-                'description': ''
+                'description': '',
+                'blockedByIncompatibility': False,
+                'userMessage': '',
+                'promotionId': False,
             }
 

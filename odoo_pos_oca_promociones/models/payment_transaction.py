@@ -22,6 +22,19 @@ class PaymentTransaction(models.Model):
     """
     _inherit = 'payment.transaction'
 
+    @api.model
+    def get_oca_display_message(self, oca_response):
+        """
+        Prioriza el texto de cancelación por incompatibilidad promo/lealtad sobre el mapa genérico 999.
+        """
+        if (
+            oca_response
+            and oca_response.get('promotion_incompatible_cancelled')
+            and oca_response.get('msg')
+        ):
+            return oca_response['msg']
+        return super().get_oca_display_message(oca_response)
+
     def update_oca_transaction(self, oca_response):
         """
         Extiende el método base para incluir información de promoción
@@ -124,19 +137,24 @@ class PaymentTransaction(models.Model):
                 if promotion_id:
                     promotion = self.env['payment.method.promotion'].browse(promotion_id)
                     if promotion.exists():
-                        is_incompatible, incompatible_promotions, incompat_msg = promotion._check_incompatibilities(self.pos_order_id)
-                        if is_incompatible:
-                            # Log de diagnóstico detallado manteniendo el warning existente.
+                        applied_ids = []
+                        if self.pos_order_id:
+                            applied_ids = self.env[
+                                'payment.method.promotion'
+                            ].collect_applied_loyalty_program_ids_from_pos_order(
+                                self.pos_order_id
+                            )
+                        blocked, block_msg = promotion.get_incompatibility_payment_block_for_applied_programs(
+                            applied_ids
+                        )
+                        if blocked:
                             _logger.warning(
-                                'No se puede aplicar promoción %s (ID: %s) porque es incompatible con: %s. %s',
+                                'No se puede aplicar promoción %s (ID: %s): %s',
                                 promotion.name,
                                 promotion.id,
-                                ', '.join([p.name for p in incompatible_promotions]),
-                                incompat_msg,
+                                block_msg,
                             )
-                            # Lanzar error de validación para impedir que la orden
-                            # continúe su flujo normal con combinaciones inválidas.
-                            raise ValidationError(incompat_msg or 'Promoción incompatible aplicada en la orden.')
+                            raise ValidationError(block_msg)
                 
                 # Agregar línea de descuento a la orden
                 discount_result = self.pos_order_id.add_promotion_discount_line(

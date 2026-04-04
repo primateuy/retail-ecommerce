@@ -32,6 +32,205 @@ patch(PaymentOCA.prototype, {
     },
 
     /**
+     * ID de pos.order en el servidor para validar incompatibilidades (lealtad vs promo OCA).
+     */
+    _getServerPosOrderId(order) {
+        if (!order) {
+            return false;
+        }
+        const raw =
+            order.server_id != null && order.server_id !== false
+                ? order.server_id
+                : order.id;
+        if (raw == null || raw === false) {
+            return false;
+        }
+        const parsed = parseInt(raw, 10);
+        if (Number.isNaN(parsed) || parsed <= 0) {
+            return false;
+        }
+        return parsed;
+    },
+
+    _loyaltyModels() {
+        return this.pos?.models || this.pos?.data?.models || {};
+    },
+
+    _normalizeProgramId(raw) {
+        if (raw == null || raw === false) {
+            return null;
+        }
+        if (Array.isArray(raw)) {
+            return this._normalizeProgramId(raw[0]);
+        }
+        if (typeof raw === "object" && raw.id != null) {
+            return Number(raw.id);
+        }
+        const n = Number(raw);
+        return Number.isNaN(n) ? null : n;
+    },
+
+    /**
+     * loyalty.program aplicados en el carrito actual (para payload OCA y snapshot en sesión).
+     *
+     * Odoo 17 + pos_loyalty usa reward_by_id, couponCache, líneas de pedido, etc.
+     *
+     * Importante: NO usamos order.couponPointChanges para este conjunto. Ese mapa suele
+     * seguir referenciando el programa después de borrar la línea de descuento (acumulación
+     * de puntos / estado interno), lo que provocaba bloqueos falsos al volver a cobrar con
+     * promo OCA. La incompatibilidad debe basarse en beneficios aún presentes en líneas
+     * o cupones activados por código.
+     */
+    _collectAppliedLoyaltyProgramIdsFromPosOrder(order) {
+        const ids = new Set();
+        const pos = this.pos;
+        if (!order) {
+            return [];
+        }
+
+        const fromCodeCoupons = [];
+        const cac = order.codeActivatedCoupons;
+        if (Array.isArray(cac)) {
+            for (const c of cac) {
+                const pid = this._normalizeProgramId(c?.program_id);
+                if (pid) {
+                    ids.add(pid);
+                    fromCodeCoupons.push(pid);
+                }
+            }
+        }
+
+        let lines = [];
+        if (typeof order.get_orderlines === "function") {
+            lines = order.get_orderlines() || [];
+        } else if (Array.isArray(order.orderlines)) {
+            lines = order.orderlines;
+        }
+
+        const fromLinesReward = [];
+        const fromLinesCoupon = [];
+        const fromLinesDirect = [];
+
+        for (const line of lines) {
+            const directPid = this._normalizeProgramId(line.program_id);
+            if (directPid) {
+                ids.add(directPid);
+                fromLinesDirect.push(directPid);
+            }
+
+            let rewardId = line.reward_id;
+            if (Array.isArray(rewardId)) {
+                rewardId = rewardId[0];
+            }
+            if (rewardId && pos.reward_by_id) {
+                const reward = pos.reward_by_id[rewardId];
+                const programId = this._normalizeProgramId(reward?.program_id);
+                if (programId) {
+                    ids.add(programId);
+                    fromLinesReward.push(programId);
+                }
+            }
+
+            let couponId = line.coupon_id;
+            if (Array.isArray(couponId)) {
+                couponId = couponId[0];
+            }
+            if (couponId != null && pos.couponCache) {
+                const card = pos.couponCache[couponId];
+                const programId = this._normalizeProgramId(card?.program_id);
+                if (programId) {
+                    ids.add(programId);
+                    fromLinesCoupon.push(programId);
+                }
+            }
+
+            const models = this._loyaltyModels();
+            const RewardModel = models["loyalty.reward"];
+            const CardModel = models["loyalty.card"];
+            if (rewardId && RewardModel && typeof RewardModel.get === "function") {
+                const reward = RewardModel.get(rewardId);
+                const programId = this._normalizeProgramId(reward?.program_id);
+                if (programId) {
+                    ids.add(programId);
+                }
+            }
+            if (couponId && CardModel && typeof CardModel.get === "function") {
+                const card = CardModel.get(couponId);
+                const programId = this._normalizeProgramId(card?.program_id);
+                if (programId) {
+                    ids.add(programId);
+                }
+            }
+        }
+
+        const out = Array.from(ids);
+        // --- Log de diagnóstico: couponPointChanges solo informativo (no entra en FINAL) ---
+        const cpcDebug = [];
+        const cpc = order.couponPointChanges;
+        if (cpc && typeof cpc === "object") {
+            for (const pe of Object.values(cpc)) {
+                const pid = this._normalizeProgramId(pe?.program_id);
+                if (pid) {
+                    cpcDebug.push(pid);
+                }
+            }
+        }
+        console.info(
+            "[OCA_PROMOS] _collectAppliedLoyaltyProgramIdsFromPosOrder | FINAL=%s | " +
+                "couponPointChanges(solo_log)=%s | codeActivatedCoupons=%s | líneas reward_by_id=%s | " +
+                "líneas couponCache=%s | líneas program_id=%s | n_líneas=%s",
+            JSON.stringify(out),
+            JSON.stringify(cpcDebug),
+            JSON.stringify(fromCodeCoupons),
+            JSON.stringify(fromLinesReward),
+            JSON.stringify(fromLinesCoupon),
+            JSON.stringify(fromLinesDirect),
+            lines.length
+        );
+        return out;
+    },
+
+    /**
+     * Guarda en pos.session los programas de lealtad del carrito para el hilo OCA (sin depender del borrador).
+     */
+    async _syncOcaCartLoyaltyProgramsToSession(order) {
+        const sid = order?.pos_session_id;
+        if (!sid) {
+            console.info(
+                "[OCA_PROMOS] _syncOcaCartLoyaltyProgramsToSession: sin pos_session_id en orden, no se persiste lealtad"
+            );
+            return;
+        }
+        const ids = this._collectAppliedLoyaltyProgramIdsFromPosOrder(order);
+        const nLines =
+            typeof order.get_orderlines === "function"
+                ? (order.get_orderlines() || []).length
+                : (order.orderlines || []).length;
+        console.info(
+            "[OCA_PROMOS] sync lealtad → sesión | session_id=%s | líneas_carrito=%s | loyalty.program ids=%s",
+            sid,
+            nLines,
+            JSON.stringify(ids)
+        );
+        await this.env.services.orm.silent
+            .call("pos.session", "oca_promociones_set_cart_loyalty_programs", [
+                [sid],
+                ids,
+            ])
+            .then(() => {
+                console.info(
+                    "[OCA_PROMOS] oca_promociones_set_cart_loyalty_programs OK (revisar log servidor OCA_PROMOS_SESSION)"
+                );
+            })
+            .catch((err) => {
+                console.warn(
+                    "[OCA promos] oca_promociones_set_cart_loyalty_programs:",
+                    err
+                );
+            });
+    },
+
+    /**
      * Extiende send_payment_request para agregar flag NeedToReadCard
      * 
      * IMPORTANTE: NO llamamos a super.send_payment_request() porque el backend
@@ -80,6 +279,10 @@ patch(PaymentOCA.prototype, {
             return Promise.resolve();
         }
 
+        if (!has_refunded_line) {
+            await this._syncOcaCartLoyaltyProgramsToSession(order);
+        }
+
         var total_order_amount = Math.round(Math.abs(order.get_total_with_tax()) * 100);
         var total_order_amount_without_tax = Math.round(Math.abs(order.get_total_without_tax()) * 100);
         var amount_to_send_by_100 = Math.round(Math.abs(line.amount) * 100);
@@ -101,8 +304,23 @@ patch(PaymentOCA.prototype, {
         data.TaxableAmount = `${total_order_amount_without_tax}`;
         data.InvoiceAmount = `${total_order_amount}`;
         data.InvoiceNumber = "1";
-        data.Installments = "1";
+        data.Installments = `${numCuotas}`;
         data.TicketNumber = "";
+
+        const loyaltyIdsForPayload =
+            this._collectAppliedLoyaltyProgramIdsFromPosOrder(order);
+        if (loyaltyIdsForPayload.length && !has_refunded_line) {
+            data.OcaAppliedLoyaltyProgramIds = loyaltyIdsForPayload.join(",");
+            console.info(
+                "[OCA_PROMOS] payload enviar_pago incluye OcaAppliedLoyaltyProgramIds=%s (si el conector lo conserva)",
+                data.OcaAppliedLoyaltyProgramIds
+            );
+        } else {
+            console.info(
+                "[OCA_PROMOS] sin OcaAppliedLoyaltyProgramIds en payload (vacío o reembolso) | reembolso=%s",
+                has_refunded_line
+            );
+        }
 
         // NO agregar NeedToReadCard aquí porque el backend ya lo agrega
         // cuando hay promociones activas configuradas
@@ -146,6 +364,24 @@ patch(PaymentOCA.prototype, {
         var response_code = payload.ResponseCode;
         var pos_response_code = payload.PosResponseCode;
         var isPaymentSuccessful = false;
+
+        // Cobro cancelado en servidor: promo OCA incompatible con lealtad del carrito (reversión enviada)
+        if (
+            payload.promotion_incompatible_cancelled ||
+            String(response_code) === "999"
+        ) {
+            const msg =
+                payload.msg ||
+                "El pago no puede completarse: la promoción de tarjeta es incompatible con beneficios del pedido.";
+            this._show_error(msg);
+            const resolver = this.paymentLineResolvers?.[line.cid];
+            if (resolver) {
+                resolver(false);
+            } else {
+                line.handle_payment_response(false);
+            }
+            return;
+        }
 
         // NUEVO: Detectar ResponseCode = 12 con datos de tarjeta (promociones)
         // Nota: CardNumber puede no estar presente en todas las respuestas, solo Acquirer e Issuer son suficientes
@@ -220,27 +456,69 @@ patch(PaymentOCA.prototype, {
             console.log('Procesando promoción con datos:', cardData);
             
             // 1. Obtener información de promoción del backend
-            const promotionInfo = await this.getPromotionInfo(cardData, order.pos_session_id);
-            
+            const serverOrderId = this._getServerPosOrderId(order);
+            const appliedLoyaltyIds =
+                this._collectAppliedLoyaltyProgramIdsFromPosOrder(order);
+            console.info(
+                "[OCA_PROMOS] processPromotionAndConfirm | get_promotion_info con appliedLoyaltyIds=%s | serverOrderId=%s",
+                JSON.stringify(appliedLoyaltyIds),
+                serverOrderId
+            );
+            const promotionInfo = await this.getPromotionInfo(
+                cardData,
+                order.pos_session_id,
+                serverOrderId,
+                appliedLoyaltyIds
+            );
+
+            if (promotionInfo.blockedByIncompatibility) {
+                const msg =
+                    promotionInfo.userMessage ||
+                    "Este pago no puede continuar: promoción de tarjeta incompatible con el pedido.";
+                this._show_error(msg);
+                paymentLine.set_payment_status("force_done");
+                const resolver = this.paymentLineResolvers?.[paymentLine.cid];
+                if (resolver) {
+                    resolver(false);
+                } else {
+                    paymentLine.handle_payment_response(false);
+                }
+                return;
+            }
+
             if (promotionInfo.hasPromotion && promotionInfo.discountAmount > 0) {
                 console.log('Promoción aplicable - Descuento:', promotionInfo.discountAmount);
                 
                 // 2. Agregar línea de descuento a la orden en el backend
                 const discountResult = await this.addDiscountLineToOrder(
-                    order.id,
+                    serverOrderId || order.id,
                     promotionInfo.discountAmount,
                     promotionInfo.productId,
-                    promotionInfo.description || 'Descuento Promoción'
+                    promotionInfo.description || "Descuento Promoción",
+                    promotionInfo.promotionId || false
                 );
                 
                 if (!discountResult.success) {
-                    console.error('Error al agregar línea de descuento:', discountResult.error);
-                    // Continuar sin descuento
+                    console.error("Error al agregar línea de descuento:", discountResult.error);
+                    if (discountResult.incompatible_promotion) {
+                        this._show_error(
+                            discountResult.error ||
+                                "Promoción de tarjeta incompatible con el pedido."
+                        );
+                        paymentLine.set_payment_status("force_done");
+                        const resolverFail = this.paymentLineResolvers?.[paymentLine.cid];
+                        if (resolverFail) {
+                            resolverFail(false);
+                        } else {
+                            paymentLine.handle_payment_response(false);
+                        }
+                        return;
+                    }
                     return this.confirmFinancialPurchaseWithoutPromotion(cardData, paymentLine);
                 }
                 
                 // 3. Obtener nuevo monto total de la orden (desde backend)
-                const orderData = await this.getOrderUpdatedTotals(order.id);
+                const orderData = await this.getOrderUpdatedTotals(serverOrderId || order.id);
 
                 // 3b. Actualizar el monto de la línea de pago al total con descuento aplicado.
                 //     Usar set_amount() para que el POS actualice redondeo y estado interno.
@@ -300,30 +578,48 @@ patch(PaymentOCA.prototype, {
     /**
      * Obtiene información de promoción basada en datos de la tarjeta
      */
-    async getPromotionInfo(cardData, sessionId) {
-        return this.env.services.orm.silent.call(
-            "pos.payment.method",
-            "get_promotion_info",
-            [[this.payment_method.id], cardData, sessionId]
-        ).catch((error) => {
-            console.error('Error al obtener información de promoción:', error);
-            return {
-                hasPromotion: false,
-                discountAmount: 0,
-                productId: false,
-                description: ''
-            };
-        });
+    async getPromotionInfo(
+        cardData,
+        sessionId,
+        posOrderId = false,
+        appliedLoyaltyProgramIds = null
+    ) {
+        return this.env.services.orm.silent
+            .call("pos.payment.method", "get_promotion_info", [
+                [this.payment_method.id],
+                cardData,
+                sessionId,
+                posOrderId || false,
+                appliedLoyaltyProgramIds,
+            ])
+            .catch((error) => {
+                console.error("Error al obtener información de promoción:", error);
+                return {
+                    hasPromotion: false,
+                    discountAmount: 0,
+                    productId: false,
+                    description: "",
+                    blockedByIncompatibility: false,
+                    userMessage: "",
+                    promotionId: false,
+                };
+            });
     },
 
     /**
      * Agrega una línea de descuento a la orden POS
      */
-    async addDiscountLineToOrder(orderId, discountAmount, productId, description) {
+    async addDiscountLineToOrder(
+        orderId,
+        discountAmount,
+        productId,
+        description,
+        promotionId = false
+    ) {
         return this.env.services.orm.silent.call(
             "pos.order",
             "add_promotion_discount_line",
-            [[orderId], discountAmount, productId, description]
+            [[orderId], discountAmount, productId, description, promotionId]
         ).catch((error) => {
             console.error('Error al agregar línea de descuento:', error);
             return {
