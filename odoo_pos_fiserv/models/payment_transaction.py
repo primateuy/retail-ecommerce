@@ -187,8 +187,16 @@ class PaymentTransaction(models.Model):
     transaction_origin = fields.Selection([
         ('pos_payment', 'Pago POS'),
         ('pos_order', 'Pedido POS'),
-        ('other', 'Otro')
+        ('account_payment', 'Pago contable'),
+        ('other', 'Otro'),
     ], string='Origen de Transacción', default='pos_payment')
+    
+    account_payment_id = fields.Many2one(
+        comodel_name='account.payment',
+        string='Pago contable',
+        ondelete='set null',
+        help='Registro de pago estándar (account.payment) cuando el cobro ITD se inició desde contabilidad.',
+    )
     
     pos_order_id = fields.Many2one(
         'pos.order',
@@ -283,6 +291,18 @@ class PaymentTransaction(models.Model):
                 new_payment = self.env['pos.payment'].browse(new_payment_id)
                 if new_payment.exists():
                     new_payment.payment_transaction_id = self.id
+
+        if 'account_payment_id' in vals:
+            new_ap_id = vals.get('account_payment_id')
+            old_ap_id = self.account_payment_id.id if self.account_payment_id else False
+            if old_ap_id and old_ap_id != new_ap_id:
+                old_ap = self.env['account.payment'].browse(old_ap_id)
+                if old_ap.exists() and old_ap.payment_transaction_id.id == self.id:
+                    old_ap.payment_transaction_id = False
+            if new_ap_id:
+                new_ap = self.env['account.payment'].browse(new_ap_id)
+                if new_ap.exists():
+                    new_ap.payment_transaction_id = self.id
         
         # Llamar al método write original
         return super(PaymentTransaction, self).write(vals)
@@ -303,6 +323,15 @@ class PaymentTransaction(models.Model):
         contabilidad (solo debe existir el pos.payment).
         """
         self.ensure_one()
+        # Transacción ya vinculada a un pago contable existente: no duplicar account.payment
+        if self.transaction_origin == 'account_payment' and self.account_payment_id:
+            _logger.info(
+                'Fiserv: transacción %s ya asociada a account.payment %s; no se crea pago duplicado.',
+                self.reference,
+                self.account_payment_id.id,
+            )
+            return self.account_payment_id
+
         # Identificar transacciones que provienen del POS Fiserv (no crear account.payment)
         is_pos_fiserv = (
             self.transaction_origin in ('pos_payment', 'pos_order')
@@ -634,7 +663,15 @@ class PaymentTransaction(models.Model):
                     'issuer_code': itd_response['Issuer'].get('code', ''),
                     'issuer_name': itd_response['Issuer'].get('name', ''),
                 })
-        
+            else:
+                # --- Código numérico ITD: enriquecer con EMV o tabla Fiserv ---
+                update_vals['issuer_code'] = str(itd_response['Issuer'])
+                update_vals['issuer_name'] = self._get_fiserv_card_brand_display_name(itd_response)
+
+        # --- Nombre de aplicación EMV (chip) prevalece sobre issuer genérico ---
+        if (itd_response.get('EmvApplicationName') or '').strip():
+            update_vals['issuer_name'] = self._get_fiserv_card_brand_display_name(itd_response)
+
         if itd_response.get('Acquirer'):
             update_vals['acquirer'] = itd_response['Acquirer']
         
@@ -653,7 +690,14 @@ class PaymentTransaction(models.Model):
         self.write(update_vals)
     
     @api.model
-    def create_fiserv_transaction_with_complete_data(self, itd_response, pos_order=None, pos_payment=None, transaction_id=None):
+    def create_fiserv_transaction_with_complete_data(
+        self,
+        itd_response,
+        pos_order=None,
+        pos_payment=None,
+        transaction_id=None,
+        account_payment_id=False,
+    ):
         """
         Crea una nueva transacción Fiserv con la información completa recibida del POS
         
@@ -662,6 +706,7 @@ class PaymentTransaction(models.Model):
             pos_order (pos.order): Pedido POS relacionado
             pos_payment (pos.payment): Pago POS relacionado
             transaction_id (str): ID de la transacción Fiserv
+            account_payment_id (int|bool): ID de account.payment si el cobro fue desde contabilidad.
             
         Returns:
             payment.transaction: Transacción creada
@@ -686,12 +731,25 @@ class PaymentTransaction(models.Model):
         _logger.info('Fiserv Complete Transaction Amount Debug - TotalAmount: %s, Corrected: %s', 
                     total_amount, corrected_amount)
         
-        # Obtener el número de factura del pedido POS relacionado
-        invoice_number = self._get_invoice_number_from_relations(pos_order, pos_payment)
+        # --- Número de referencia para ITD / UI: pedido POS, pago contable o texto por defecto ---
+        account_pay = (
+            self.env['account.payment'].browse(account_payment_id)
+            if account_payment_id
+            else self.env['account.payment']
+        )
+        if account_pay:
+            invoice_number = account_pay.ref or account_pay.name or 'Pago-%s' % account_pay.id
+        else:
+            invoice_number = self._get_invoice_number_from_relations(pos_order, pos_payment)
         
         # Log para debuggear la referencia y número de factura
-        _logger.info('Fiserv Invoice Number Debug - Invoice Number: %s, POS Order: %s, POS Payment: %s', 
-                    invoice_number, pos_order.name if pos_order else 'None', pos_payment.name if pos_payment else 'None')
+        _logger.info(
+            'Fiserv Invoice Number Debug - Invoice Number: %s, POS Order: %s, POS Payment: %s, account.payment: %s',
+            invoice_number,
+            pos_order.name if pos_order else 'None',
+            pos_payment.name if pos_payment else 'None',
+            account_pay.id if account_pay else None,
+        )
         
         # ITD puede devolver TransactionId numérico; el campo Odoo es Char.
         _merge_tid = (
@@ -705,6 +763,18 @@ class PaymentTransaction(models.Model):
             else ''
         )
 
+        # --- Partner y compañía: prioridad pago contable sobre relaciones POS ---
+        if account_pay:
+            partner_id = account_pay.partner_id.id
+            company_id = account_pay.company_id.id
+        else:
+            partner_id = self._get_partner_id(pos_order, pos_payment)
+            company_id = self._get_company_id(pos_order, pos_payment)
+
+        tx_origin = 'account_payment' if account_pay else (
+            'pos_payment' if pos_payment else 'pos_order' if pos_order else 'other'
+        )
+
         # Crear valores para la transacción con información completa
         transaction_vals = {
             'provider_id': self._get_fiserv_provider_id(),
@@ -714,15 +784,15 @@ class PaymentTransaction(models.Model):
             'currency_id': self._get_currency_id_from_response(itd_response),
             'state': state,
             'state_message': state_message,
-            'partner_id': self._get_partner_id(pos_order, pos_payment),
-            'company_id': self._get_company_id(pos_order, pos_payment),
+            'partner_id': partner_id,
+            'company_id': company_id,
             
             # Campos específicos de Fiserv ITD con información completa
             'pos_id': itd_response.get('PosID'),
             'card_bin': itd_response.get('CardNumber', '')[:6] if itd_response.get('CardNumber') else '',
             'card_last_four': itd_response.get('CardNumber', '')[-4:] if itd_response.get('CardNumber') else '',
             'issuer_code': str(itd_response.get('Issuer', '')),
-            'issuer_name': self._get_fiserv_issuer_name(itd_response.get('Issuer')),
+            'issuer_name': self._get_fiserv_card_brand_display_name(itd_response),
             'installments': self._parse_itd_quota(itd_response.get('Quota', 0)),
             'acquirer': str(itd_response.get('Acquirer', '')),
             'ticket_number': itd_response.get('Ticket', ''),
@@ -738,7 +808,8 @@ class PaymentTransaction(models.Model):
             # Campos de relación
             'pos_order_id': pos_order.id if pos_order else False,
             'pos_payment_id': pos_payment.id if pos_payment else False,
-            'transaction_origin': 'pos_payment' if pos_payment else 'pos_order' if pos_order else 'other',
+            'account_payment_id': account_pay.id if account_pay else False,
+            'transaction_origin': tx_origin,
         }
         
         # Crear la transacción
@@ -747,6 +818,9 @@ class PaymentTransaction(models.Model):
         # Si hay un pago POS asociado, actualizar su campo payment_transaction_id
         if pos_payment:
             pos_payment.payment_transaction_id = transaction.id
+
+        if account_pay:
+            account_pay.payment_transaction_id = transaction.id
         
         return transaction
     
@@ -815,6 +889,26 @@ class PaymentTransaction(models.Model):
         # Por defecto usar la moneda de la empresa
         return self.env.company.currency_id.id
     
+    def _get_fiserv_card_brand_display_name(self, itd_response):
+        """
+        Nombre de marca para mostrar: prioriza EMV (p. ej. Mastercard) sobre el código Issuer.
+
+        ITD suele enviar EmvApplicationName cuando la tarjeta pasó chip; el código Issuer
+        a veces no coincide con tablas locales y generaba textos genéricos tipo «Emisor 52».
+
+        Args:
+            itd_response (dict): Respuesta completa del pinpad / ITD.
+
+        Returns:
+            str: Texto legible para issuer_name en payment.transaction.
+        """
+        if not isinstance(itd_response, dict):
+            return self._get_fiserv_issuer_name(itd_response)
+        emv_name = (itd_response.get('EmvApplicationName') or '').strip()
+        if emv_name:
+            return emv_name
+        return self._get_fiserv_issuer_name(itd_response.get('Issuer'))
+
     def _get_fiserv_issuer_name(self, issuer_code):
         """
         Obtiene el nombre del emisor basado en el código

@@ -188,7 +188,8 @@ class PaymentTransaction(models.Model):
     transaction_origin = fields.Selection([
         ('pos_payment', 'Pago POS'),
         ('pos_order', 'Pedido POS'),
-        ('other', 'Otro')
+        ('account_payment', 'Pago contable'),
+        ('other', 'Otro'),
     ], string='Origen de Transacción', default='pos_payment')
     
     pos_order_id = fields.Many2one(
@@ -288,6 +289,13 @@ class PaymentTransaction(models.Model):
         contabilidad (solo debe existir el pos.payment).
         """
         self.ensure_one()
+        # Coexistencia con Fiserv: pago contable ya existe (campo definido en odoo_pos_fiserv).
+        if (
+            self.transaction_origin == 'account_payment'
+            and getattr(self, 'account_payment_id', False)
+        ):
+            return self.account_payment_id
+
         # Identificar transacciones que provienen del POS OCA (no crear account.payment)
         is_pos_oca = (
             self.transaction_origin in ('pos_payment', 'pos_order')
@@ -593,7 +601,13 @@ class PaymentTransaction(models.Model):
                     'issuer_code': oca_response['Issuer'].get('code', ''),
                     'issuer_name': oca_response['Issuer'].get('name', ''),
                 })
-        
+            else:
+                update_vals['issuer_code'] = str(oca_response['Issuer'])
+                update_vals['issuer_name'] = self._resolve_oca_issuer_display(oca_response)
+
+        if (oca_response.get('EmvApplicationName') or '').strip():
+            update_vals['issuer_name'] = self._resolve_oca_issuer_display(oca_response)
+
         if oca_response.get('Acquirer'):
             update_vals['acquirer'] = oca_response['Acquirer']
         
@@ -669,7 +683,7 @@ class PaymentTransaction(models.Model):
             'card_bin': oca_response.get('CardNumber', '')[:6] if oca_response.get('CardNumber') else '',
             'card_last_four': oca_response.get('CardNumber', '')[-4:] if oca_response.get('CardNumber') else '',
             'issuer_code': str(oca_response.get('Issuer', '')),
-            'issuer_name': self._get_issuer_name(oca_response.get('Issuer')),
+            'issuer_name': self._resolve_oca_issuer_display(oca_response),
             'installments': int(oca_response.get('Quota', 0)),
             'acquirer': str(oca_response.get('Acquirer', '')),
             'ticket_number': oca_response.get('Ticket', ''),
@@ -777,6 +791,23 @@ class PaymentTransaction(models.Model):
         # Por defecto usar la moneda de la empresa
         return self.env.company.currency_id.id
     
+    def _resolve_oca_issuer_display(self, oca_response):
+        """
+        Texto de marca/emisor para transacciones OCA: prioriza nombre EMV del pinpad.
+
+        Args:
+            oca_response (dict): Respuesta ITD/POSLink.
+
+        Returns:
+            str: Valor para issuer_name en payment.transaction.
+        """
+        if not isinstance(oca_response, dict):
+            return self._get_issuer_name(oca_response)
+        emv_name = (oca_response.get('EmvApplicationName') or '').strip()
+        if emv_name:
+            return emv_name
+        return self._get_issuer_name(oca_response.get('Issuer'))
+
     def _get_issuer_name(self, issuer_code):
         """
         Obtiene el nombre del emisor basado en el código
@@ -787,12 +818,14 @@ class PaymentTransaction(models.Model):
         Returns:
             str: Nombre del emisor
         """
-        # Mapeo de códigos OCA a métodos de pago estándar de Odoo
+        # Mapeo de códigos OCA / ITD a métodos de pago estándar de Odoo
         issuer_mapping = {
             21: 'OCA',
             5: 'Visa',
             6: 'Mastercard',
             7: 'American Express',
+            24: 'Visa',
+            52: 'Mastercard',
         }
         
         # Intentar obtener el nombre del método de pago correspondiente

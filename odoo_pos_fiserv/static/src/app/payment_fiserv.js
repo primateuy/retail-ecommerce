@@ -55,6 +55,29 @@ export class PaymentFiserv extends PaymentInterface {
         return `${year}${month}${day}${hours}${minutes}${seconds}${milliseconds}`;
     }
 
+    /**
+     * ITD suele exigir InvoiceNumber no vacío. Debe alinear con el backend que busca el pedido
+     * por tracking_number (7 dígitos) o por id numérico de pos.order en la sesión.
+     */
+    _fiservInvoiceNumberForItd(order) {
+        if (!order) {
+            return String(Date.now()).slice(-7).padStart(7, "0");
+        }
+        const tracking = order.tracking_number ?? order.trackingNumber;
+        if (tracking !== undefined && tracking !== null && String(tracking) !== "") {
+            const trackingNum = String(tracking);
+            if (trackingNum.length <= 7) {
+                return trackingNum.padStart(7, "0");
+            }
+            return trackingNum.slice(-7);
+        }
+        const serverOrLocalId = order.server_id ?? order.id;
+        if (serverOrLocalId) {
+            return String(serverOrLocalId).slice(-7).padStart(7, "0");
+        }
+        return String(Date.now()).slice(-7).padStart(7, "0");
+    }
+
     pending_fiserv_line() {
         return this.pos.getPendingPaymentLine("fiserv");
     }
@@ -132,7 +155,7 @@ export class PaymentFiserv extends PaymentInterface {
         data.TaxRefund = 0;
         data.TaxableAmount = `${total_order_amount_without_tax}`;
         data.InvoiceAmount = `${total_order_amount}`;
-        data.InvoiceNumber = "";
+        data.InvoiceNumber = this._fiservInvoiceNumberForItd(order);
         data.Installments = numCuotas;
         data.TicketNumber = "";
         data.NeedToReadCard = true;

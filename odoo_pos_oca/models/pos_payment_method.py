@@ -36,18 +36,25 @@ class PosPaymentMethod(models.Model):
 
         return self.processFinancialPurchaseVoidByTicket(data, pos_session_id)
 
-    def processFinancialPurchase(self, data, pos_session_id):
+    def processFinancialPurchase(self, data, pos_session_id, account_payment_id=None):
         """
-        Procesa una compra financiera enviando datos al POS y almacenando la transacción
-        
+        Procesa una compra financiera enviando datos al POS y almacenando la transacción.
+
         Args:
             data (dict): Datos de la transacción a enviar al POS
             pos_session_id (int): ID de la sesión POS
-            
+            account_payment_id (int|None): Compatibilidad con odoo_pos_fiserv (pago contable + terminal);
+                en flujo OCA puro no se usa; si hay super() en la cadena, debe propagarse.
+
         Returns:
             dict: Respuesta del POS
         """
         self.ensure_one()
+        # Terminal Fiserv: la implementación vive en odoo_pos_fiserv (incl. account_payment_id).
+        if self.use_payment_terminal == 'fiserv':
+            return super(PosPaymentMethod, self).processFinancialPurchase(
+                data, pos_session_id, account_payment_id=account_payment_id
+            )
         _logger.info('Metodo processFinancialPurchase %s', pprint.pformat(data))
         
         # Log detallado de los campos enviados
@@ -187,23 +194,45 @@ class PosPaymentMethod(models.Model):
                         if order_tracking == invoice_number:
                             _logger.info('Pedido POS encontrado por tracking_number: %s (InvoiceNumber: %s)', order.name, invoice_number)
                             return order
-                
-                # Si no se encuentra por tracking_number, intentar por ID del pedido
+
+                # Coincidir con el formato del POS: últimos 7 dígitos del id de pos.order rellenados a 7
+                # (evita depender solo de tracking_number, a menudo vacío en borradores).
+                inv_norm = str(invoice_number).strip()
+                for order in pos_orders:
+                    oid_suffix = str(order.id)[-7:].zfill(7)
+                    if oid_suffix == inv_norm:
+                        _logger.info(
+                            'Pedido POS encontrado por id (sufijo 7 dígitos): %s (InvoiceNumber: %s)',
+                            order.name,
+                            invoice_number,
+                        )
+                        return order
+
+                # Solo tratar como id numérico de BD si la cadena es canónica (sin ceros a la izquierda
+                # artificiales): int('0000201') == 201 sería un falso positivo frente al formato ITD de 7 dígitos.
                 try:
-                    order_id = int(invoice_number)
-                    _logger.info('Intentando buscar por ID del pedido: %s', order_id)
-                    
-                    pos_order = self.env['pos.order'].search([
-                        ('id', '=', order_id),
-                        ('session_id', '=', pos_session_id)
-                    ], limit=1)
-                    
-                    if pos_order:
-                        _logger.info('Pedido POS encontrado por ID: %s (InvoiceNumber: %s)', pos_order.name, invoice_number)
-                        return pos_order
-                    else:
-                        _logger.warning('No se encontró pedido con ID %s en sesión %s', order_id, pos_session_id)
-                        
+                    if inv_norm.isdigit() and str(int(inv_norm)) == inv_norm:
+                        order_id = int(inv_norm)
+                        _logger.info('Intentando buscar por ID del pedido: %s', order_id)
+                        pos_order = self.env['pos.order'].search(
+                            [
+                                ('id', '=', order_id),
+                                ('session_id', '=', pos_session_id),
+                            ],
+                            limit=1,
+                        )
+                        if pos_order:
+                            _logger.info(
+                                'Pedido POS encontrado por ID: %s (InvoiceNumber: %s)',
+                                pos_order.name,
+                                invoice_number,
+                            )
+                            return pos_order
+                        _logger.warning(
+                            'No se encontró pedido con ID %s en sesión %s',
+                            order_id,
+                            pos_session_id,
+                        )
                 except (ValueError, TypeError) as e:
                     _logger.warning('Error al convertir InvoiceNumber a ID: %s', str(e))
             
@@ -278,10 +307,20 @@ class PosPaymentMethod(models.Model):
         
         return None
 
-    def _procesar_en_segundo_plano(self, data, bus_channel_name, id_config, transaction_id, base_url_endpoint, pos_session_id):
+    def _procesar_en_segundo_plano(
+        self,
+        data,
+        bus_channel_name,
+        id_config,
+        transaction_id,
+        base_url_endpoint,
+        pos_session_id,
+        account_payment_id=None,
+        user_id=None,
+    ):
         """
-        Procesa la transacción en segundo plano y actualiza la información almacenada
-        
+        Procesa la transacción en segundo plano y actualiza la información almacenada.
+
         Args:
             data (dict): Datos originales de la transacción
             bus_channel_name (str): Nombre del canal de bus
@@ -289,7 +328,21 @@ class PosPaymentMethod(models.Model):
             transaction_id (str): ID de la transacción
             base_url_endpoint (str): URL base del endpoint
             pos_session_id (int): ID de la sesión POS
+            account_payment_id (int|None): odoo_pos_fiserv (pago contable + ITD)
+            user_id (int|None): Usuario del cursor en el hilo Fiserv
         """
+        # Terminal Fiserv: el bucle ITD y el post de account.payment están en odoo_pos_fiserv
+        if self.use_payment_terminal == 'fiserv':
+            return super(PosPaymentMethod, self)._procesar_en_segundo_plano(
+                data,
+                bus_channel_name,
+                id_config,
+                transaction_id,
+                base_url_endpoint,
+                pos_session_id,
+                account_payment_id=account_payment_id,
+                user_id=user_id,
+            )
         # Guardar el ID del payment method antes de crear el nuevo cursor
         # para usarlo dentro del nuevo entorno
         payment_method_id = self.id
@@ -413,17 +466,61 @@ class PosPaymentMethod(models.Model):
         except Exception as e:
             _logger.error('Error al actualizar/crear transacción OCA: %s', str(e))
 
+    def _try_delegate_fiserv_itd_create(self, transaction_id, final_result, pos_session_id):
+        """
+        Si la sesión tiene un método POS Fiserv con el mismo PosID que la respuesta ITD,
+        crea payment.transaction vía flujo Fiserv y devuelve True.
+
+        Args:
+            transaction_id (str): ID ITD normalizado.
+            final_result (dict): Payload pinpad.
+            pos_session_id (int|None): Sesión POS.
+
+        Returns:
+            bool: True si ya se creó la transacción Fiserv.
+        """
+        if not pos_session_id:
+            return False
+        pm = self._resolve_itd_pos_payment_method_for_session(
+            pos_session_id, final_result.get('PosID')
+        )
+        if (
+            not pm
+            or pm.use_payment_terminal != 'fiserv'
+            or not hasattr(self.env['payment.transaction'], 'create_fiserv_transaction_with_complete_data')
+        ):
+            return False
+        _logger.info(
+            'Delegando creación ITD a Fiserv (id=%s, sesión=%s, método=%s)',
+            transaction_id,
+            pos_session_id,
+            pm.display_name,
+        )
+        pm._create_fiserv_transaction_with_complete_data(
+            transaction_id, final_result, pos_session_id
+        )
+        return True
+
     def _create_oca_transaction_with_complete_data(self, transaction_id, final_result, pos_session_id=None):
         """
-        Crea una transacción OCA con la información completa del POS
-        
+        Crea un payment.transaction con la respuesta completa del pinpad ITD.
+
+        Si el método de pago del TPV que coincide con PosID es Fiserv y está instalado
+        odoo_pos_fiserv, delega en _create_fiserv_transaction_with_complete_data para
+        que provider, método de pago y fiserv_transaction_id sean correctos.
+
         Args:
-            transaction_id (str): ID de la transacción OCA
+            transaction_id (str): ID de la transacción ITD
             final_result (dict): Resultado final con información completa
             pos_session_id (int): ID de la sesión POS (opcional)
         """
         try:
-            _logger.info('Creando transacción OCA con información completa para ID: %s', transaction_id)
+            tid = str(transaction_id).strip()
+            # --- Primera oportunidad: sesión ya conocida (p. ej. hilo promociones) ---
+            if self._try_delegate_fiserv_itd_create(tid, final_result, pos_session_id):
+                return
+
+            _logger.info('Creando transacción OCA con información completa para ID: %s', tid)
             
             pos_session = None
             pos_order = None
@@ -434,31 +531,35 @@ class PosPaymentMethod(models.Model):
                 pos_session = self.env['pos.session'].browse(pos_session_id)
                 if pos_session.exists():
                     _logger.info('Usando sesión POS proporcionada: %s', pos_session_id)
-                    pos_order = self._find_related_pos_order_by_transaction(transaction_id, pos_session_id)
-                    pos_payment = self._find_related_pos_payment_by_transaction(transaction_id, pos_session_id)
+                    pos_order = self._find_related_pos_order_by_transaction(tid, pos_session_id)
+                    pos_payment = self._find_related_pos_payment_by_transaction(tid, pos_session_id)
                 else:
                     _logger.warning('Sesión POS %s no existe, buscando alternativas', pos_session_id)
                     pos_session = None
             
             if not pos_session:
                 # Buscar el pedido POS relacionado usando el transaction_id
-                pos_session = self._find_session_by_transaction_id(transaction_id)
+                pos_session = self._find_session_by_transaction_id(tid)
                 
                 if not pos_session:
-                    _logger.warning('No se encontró sesión POS para la transacción: %s. Creando transacción sin relaciones.', transaction_id)
+                    _logger.warning('No se encontró sesión POS para la transacción: %s. Creando transacción sin relaciones.', tid)
                     # Crear la transacción sin relaciones específicas
                     self.env['payment.transaction'].sudo().create_oca_transaction_with_complete_data(
                         oca_response=final_result,
                         pos_order=None,
                         pos_payment=None,
-                        transaction_id=transaction_id
+                        transaction_id=tid
                     )
                     return
                 
                 # Buscar el pedido POS relacionado
-                pos_order = self._find_related_pos_order_by_transaction(transaction_id, pos_session.id)
-                pos_payment = self._find_related_pos_payment_by_transaction(transaction_id, pos_session.id)
+                pos_order = self._find_related_pos_order_by_transaction(tid, pos_session.id)
+                pos_payment = self._find_related_pos_payment_by_transaction(tid, pos_session.id)
             
+            # --- Segunda oportunidad: sesión hallada por id ITD cuando no vino pos_session_id ---
+            if pos_session and self._try_delegate_fiserv_itd_create(tid, final_result, pos_session.id):
+                return
+
             _logger.info('Relaciones encontradas - Sesión: %s, Pedido: %s, Pago: %s', 
                         pos_session.id, pos_order.id if pos_order else 'None', pos_payment.id if pos_payment else 'None')
             
@@ -467,7 +568,7 @@ class PosPaymentMethod(models.Model):
                 oca_response=final_result,
                 pos_order=pos_order,
                 pos_payment=pos_payment,
-                transaction_id=transaction_id
+                transaction_id=tid
             )
             
             _logger.info('Transacción OCA creada exitosamente con ID: %s', transaction.id)
@@ -480,7 +581,7 @@ class PosPaymentMethod(models.Model):
                     oca_response=final_result,
                     pos_order=None,
                     pos_payment=None,
-                    transaction_id=transaction_id
+                    transaction_id=tid
                 )
                 _logger.info('Transacción OCA creada sin relaciones como fallback')
             except Exception as fallback_error:
@@ -681,18 +782,23 @@ class PosPaymentMethod(models.Model):
         }
         return response
 
-    def processFinancialPurchaseVoidByTicket(self, data, pos_session_id):
+    def processFinancialPurchaseVoidByTicket(self, data, pos_session_id, account_payment_id=None):
         """
-        Procesa una anulación de compra financiera por ticket
-        
+        Procesa una anulación de compra financiera por ticket.
+
         Args:
             data (dict): Datos de la anulación
             pos_session_id (int): ID de la sesión POS
-            
+            account_payment_id (int|None): Compatibilidad con odoo_pos_fiserv (devolución contable).
+
         Returns:
             dict: Respuesta de la anulación
         """
         self.ensure_one()
+        if self.use_payment_terminal == 'fiserv':
+            return super(PosPaymentMethod, self).processFinancialPurchaseVoidByTicket(
+                data, pos_session_id, account_payment_id=account_payment_id
+            )
         _logger.info('Metodo processFinancialPurchaseVoidByTicket %s', pprint.pformat(data))
 
         base_url_endpoint = self.sudo().url_webservice
@@ -802,34 +908,98 @@ class PosPaymentMethod(models.Model):
         _logger.info('processFinancialReverse Response:\n%s', pprint.pformat(response_json))
         return response_json
 
-    def _update_stored_transaction_with_session(self, transaction_id, final_result, pos_session_id):
+    def _resolve_itd_pos_payment_method_for_session(self, pos_session_id, pos_id_from_response):
+        """
+        Localiza el pos.payment.method de la sesión cuyo PosID (codigo_terminal) coincide
+        con la respuesta ITD (OCA o Fiserv comparten el mismo protocolo).
+
+        Se usa cuando el hilo de fondo llama al modelo sin recordset (p. ej. promociones)
+        y no se sabe si el cobro fue por terminal OCA o Fiserv; sin esto, si el MRO
+        expone primero los métodos de odoo_pos_oca, todas las ITD quedaban como OCA.
+
+        Args:
+            pos_session_id (int): Sesión POS activa.
+            pos_id_from_response (str|None): PosID devuelto por el pinpad.
+
+        Returns:
+            pos.payment.method: Un registro como máximo, o recordset vacío.
+        """
+        if not pos_session_id or pos_id_from_response in (None, False, ''):
+            return self.env['pos.payment.method']
+        pos_id_norm = str(pos_id_from_response).strip()
+        session = self.env['pos.session'].sudo().browse(pos_session_id)
+        if not session.exists() or not session.config_id:
+            return self.env['pos.payment.method']
+        # --- Filtrar métodos con terminal OCA o Fiserv y mismo PosID configurado ---
+        candidates = session.config_id.payment_method_ids.filtered(
+            lambda m: m.use_payment_terminal in ('oca', 'fiserv')
+            and (m.codigo_terminal or '').strip() == pos_id_norm
+        )
+        if len(candidates) > 1:
+            _logger.warning(
+                'ITD: varios métodos POS comparten PosID %s en config %s; se usa el primero.',
+                pos_id_norm,
+                session.config_id.display_name,
+            )
+        return candidates[:1]
+
+    def _update_stored_transaction_with_session(
+        self, transaction_id, final_result, pos_session_id, **kwargs
+    ):
         """
         Actualiza la transacción almacenada con la información final del procesamiento
-        O crea la transacción si no existe (cuando tenemos información completa)
-        
+        o crea la transacción si no existe (respuesta completa del pinpad).
+
+        Con odoo_pos_fiserv instalado, el ID ITD puede persistirse en
+        payment.transaction como Fiserv (fiserv_transaction_id) u OCA (oca_transaction_id).
+        Este método busca en ambos y, al crear, delega en Fiserv si el método POS
+        coincidente con PosID es terminal Fiserv (sin tocar odoo_pos_oca_promociones).
+
+        **kwargs: reservado (p. ej. account_payment_id en hilos Fiserv); ignorado aquí para
+        no romper el MRO si algún caller pasa argumentos extra.
+
         Args:
-            transaction_id (str): ID de la transacción OCA
-            final_result (dict): Resultado final del procesamiento
-            pos_session_id (int): ID de la sesión POS
+            transaction_id (str): ID de transacción ITD (mismo valor en OCA y Fiserv).
+            final_result (dict): Resultado final del procesamiento (payload pinpad).
+            pos_session_id (int): ID de la sesión POS.
         """
         try:
-            # Buscar la transacción por el ID de OCA
-            transaction = self.env['payment.transaction'].sudo().search([
-                ('oca_transaction_id', '=', transaction_id)
-            ], limit=1)
-            
-            if transaction:
-                # Si la transacción ya existe, actualizarla
-                transaction.update_oca_transaction(final_result)
-                _logger.info('Transacción OCA actualizada exitosamente con información final')
-            else:
-                # Si la transacción no existe, crearla con la información completa
-                # Esto sucede cuando la respuesta inicial fue exitosa y ahora tenemos todos los datos
-                self._create_oca_transaction_with_complete_data(transaction_id, final_result, pos_session_id)
-                _logger.info('Transacción OCA creada exitosamente con información completa')
-                
+            tid = str(transaction_id).strip()
+            PaymentTx = self.env['payment.transaction'].sudo()
+
+            # --- Actualización: una sola fila según dónde esté el id ITD ---
+            fiserv_tx = (
+                PaymentTx.search([('fiserv_transaction_id', '=', tid)], limit=1)
+                if 'fiserv_transaction_id' in PaymentTx._fields
+                else PaymentTx.browse()
+            )
+            if fiserv_tx:
+                fiserv_tx.update_fiserv_transaction(final_result)
+                _logger.info(
+                    'Transacción Fiserv actualizada con información final (id ITD=%s)',
+                    tid,
+                )
+                return
+
+            oca_tx = PaymentTx.search([('oca_transaction_id', '=', tid)], limit=1)
+            if oca_tx:
+                oca_tx.update_oca_transaction(final_result)
+                _logger.info(
+                    'Transacción OCA actualizada con información final (id ITD=%s)',
+                    tid,
+                )
+                return
+
+            # --- Creación: _create_oca_transaction_with_complete_data enruta a Fiserv si aplica ---
+            self._create_oca_transaction_with_complete_data(tid, final_result, pos_session_id)
+            _logger.info(
+                'Transacción ITD creada con información completa (id=%s, sesión=%s)',
+                tid,
+                pos_session_id,
+            )
+
         except Exception as e:
-            _logger.error('Error al actualizar/crear transacción OCA: %s', str(e))
+            _logger.error('Error al actualizar/crear transacción ITD/OCA/Fiserv: %s', str(e))
 
     def _find_related_pos_order_by_transaction(self, transaction_id, pos_session_id):
         """

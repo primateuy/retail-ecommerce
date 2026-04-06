@@ -6,8 +6,9 @@ import {useService} from "@web/core/utils/hooks";
 import {onMounted, onWillUnmount} from "@odoo/owl";
 
 /**
- * Paridad con odoo_pos_oca: ticket de cambio, rutina, voucher ITD y cupón lealtad.
- * Usa fiserv_change_ticket_report_id o, si existe, change_ticket_report_id (OCA).
+ * Ticket de cambio Fiserv, rutina, voucher ITD y cupón lealtad.
+ * Solo muestra la fila si hay fiserv_change_ticket_report_id (no usa el reporte OCA
+ * para evitar duplicar botones cuando OCA y Fiserv están instalados).
  */
 patch(ReceiptScreen.prototype, {
     setup() {
@@ -27,11 +28,11 @@ patch(ReceiptScreen.prototype, {
     },
 
     /**
-     * Indica si la configuración tiene algún reporte de ticket de cambio (Fiserv u OCA).
+     * Solo reporte Fiserv: OCA tiene su propia fila en su módulo.
      */
     _fiservHasChangeTicketReportConfigured() {
         const c = this.pos.config;
-        return Boolean(c.fiserv_change_ticket_report_id || c.change_ticket_report_id);
+        return Boolean(c.fiserv_change_ticket_report_id);
     },
 
     _addFiservChangeTicketRowSafely() {
@@ -172,19 +173,15 @@ patch(ReceiptScreen.prototype, {
     },
 
     /**
-     * ID del reporte seleccionado en config: prioridad Fiserv, luego OCA.
+     * ID del reporte de ticket de cambio Fiserv en pos.config.
      */
     _fiservResolveChangeTicketReportId() {
         const c = this.pos.config;
         const fid = c.fiserv_change_ticket_report_id;
-        const oid = c.change_ticket_report_id;
-        if (fid) {
-            return Array.isArray(fid) ? fid[0] : fid;
+        if (!fid) {
+            return null;
         }
-        if (oid) {
-            return Array.isArray(oid) ? oid[0] : oid;
-        }
-        return null;
+        return Array.isArray(fid) ? fid[0] : fid;
     },
 
     async fiservPrintChangeTicketRoutine() {
@@ -230,9 +227,7 @@ patch(ReceiptScreen.prototype, {
                 console.error("odoo_pos_fiserv: ir.model.data reporte:", e);
             }
             if (!reportXmlId) {
-                reportXmlId = this.pos.config.fiserv_change_ticket_report_id
-                    ? "odoo_pos_fiserv.action_report_pos_order_fiserv_change_ticket"
-                    : "odoo_pos_oca.action_report_pos_order_change_ticket";
+                reportXmlId = "odoo_pos_fiserv.action_report_pos_order_fiserv_change_ticket";
             }
 
             await this.report.doAction(reportXmlId, [orderId]);

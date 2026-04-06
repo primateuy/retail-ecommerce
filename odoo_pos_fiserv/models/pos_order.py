@@ -25,11 +25,15 @@ class PosOrder(models.Model):
         help='Transacción Fiserv ITD más reciente asociada a la orden (p. ej. reporte PDF de voucher).',
     )
 
-    @api.depends('state', 'payment_ids', 'payment_ids.payment_transaction_id')
+    @api.depends('state', 'payment_ids')
     def _compute_fiserv_voucher_transaction_id(self):
         """
         Resuelve la misma transacción que get_fiserv_voucher_html_for_pos_print para poder
         renderizar el voucher en reportes QWeb sin duplicar lógica en plantillas.
+
+        No se usa @depends(..., 'payment_ids.payment_transaction_id'): ese campo lo añaden
+        odoo_pos_oca u odoo_pos_fiserv_pos_payment; si no están instalados, el registro
+        falla al cargar el modelo.
         """
         # Bloque: búsqueda por orden y proveedor Fiserv (alineado con get_fiserv_voucher_html_for_pos_print).
         PaymentTransaction = self.env['payment.transaction'].sudo()
@@ -140,14 +144,16 @@ class PosOrder(models.Model):
         if transaction:
             return transaction
         # Bloque: transacción enlazada al pago POS (a veces pos_order_id se asocia después).
-        for pay in order.payment_ids:
-            if pay.payment_transaction_id:
-                t = pay.payment_transaction_id.sudo()
-                if fiserv_provider and t.provider_id == fiserv_provider:
-                    return t
-        for pay in order.payment_ids:
-            if pay.payment_transaction_id:
-                return pay.payment_transaction_id.sudo()
+        # payment_transaction_id solo existe si está OCA u odoo_pos_fiserv_pos_payment.
+        if "payment_transaction_id" in self.env["pos.payment"]._fields:
+            for pay in order.payment_ids:
+                if pay.payment_transaction_id:
+                    t = pay.payment_transaction_id.sudo()
+                    if fiserv_provider and t.provider_id == fiserv_provider:
+                        return t
+            for pay in order.payment_ids:
+                if pay.payment_transaction_id:
+                    return pay.payment_transaction_id.sudo()
         # Bloque: último recurso — cualquier transacción con pos_order_id.
         return PaymentTransaction.search(
             [('pos_order_id', '=', order.id)],

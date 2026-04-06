@@ -30,6 +30,7 @@
                             <field name="transaction_origin"/>
                             <field name="pos_order_id"/>
                             <field name="pos_payment_id"/>
+                            <field name="account_payment_id" invisible="transaction_origin != 'account_payment'"/>
                             <field name="is_promotion"/>
                         </group>
                         <group string="Auditoría ITD">

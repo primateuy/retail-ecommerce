@@ -149,23 +149,24 @@ class PosPaymentMethod(models.Model):
     """
     _inherit = 'pos.payment.method'
 
-    def processFinancialPurchase(self, data, pos_session_id):
+    def processFinancialPurchase(self, data, pos_session_id, account_payment_id=None):
         """
         Extiende processFinancialPurchase para verificar promociones activas
-        y agregar NeedToReadCard si es necesario
-        
+        y agregar NeedToReadCard si es necesario.
+
         Si hay promociones activas configuradas para este método de pago,
         se agrega NeedToReadCard: True para que el POS lea los datos de la tarjeta
         desde el inicio y se pueda procesar la promoción correctamente.
-        
+
         IMPORTANTE: Cuando hay promociones activas, este método NO llama al método base
         para evitar que se inicie el hilo de procesamiento en segundo plano dos veces.
         En su lugar, implementa la lógica completa aquí.
-        
+
         Args:
             data (dict): Datos de la transacción a enviar al POS
             pos_session_id (int): ID de la sesión POS
-            
+            account_payment_id (int|None): Propagado a la cadena (p. ej. odoo_pos_fiserv + account.payment).
+
         Returns:
             dict: Respuesta del POS
         """
@@ -303,7 +304,9 @@ class PosPaymentMethod(models.Model):
             return response_json
         else:
             # Si no hay promociones activas, llamar al método base normalmente
-            return super(PosPaymentMethod, self).processFinancialPurchase(data, pos_session_id)
+            return super(PosPaymentMethod, self).processFinancialPurchase(
+                data, pos_session_id, account_payment_id=account_payment_id
+            )
 
     def _call_process_financial_purchase_direct(self, data):
         """
@@ -493,14 +496,38 @@ class PosPaymentMethod(models.Model):
         
         return response_json
 
-    def _procesar_en_segundo_plano(self, data, bus_channel_name, id_config, transaction_id, base_url_endpoint, pos_session_id):
+    def _procesar_en_segundo_plano(
+        self,
+        data,
+        bus_channel_name,
+        id_config,
+        transaction_id,
+        base_url_endpoint,
+        pos_session_id,
+        account_payment_id=None,
+        user_id=None,
+    ):
         """
         Extiende el método base para procesar promociones automáticamente desde el backend
         cuando se recibe ResponseCode = 12 con datos de tarjeta.
-        
+
         Para la POC, todo el procesamiento se hace en el backend para evitar problemas
         de sincronización con el frontend.
+
+        Args extra (compat odoo_pos_fiserv): account_payment_id, user_id — en terminal Fiserv
+        se delega al _procesar_en_segundo_plano de Fiserv (mismo hilo que processFinancialPurchase).
         """
+        if self.use_payment_terminal == 'fiserv':
+            return super(PosPaymentMethod, self)._procesar_en_segundo_plano(
+                data,
+                bus_channel_name,
+                id_config,
+                transaction_id,
+                base_url_endpoint,
+                pos_session_id,
+                account_payment_id=account_payment_id,
+                user_id=user_id,
+            )
         # Guardar el ID del payment method antes de crear el nuevo cursor
         payment_method_id = self.id
         
