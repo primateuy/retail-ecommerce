@@ -3,3 +3,5 @@
 
 # Except README.md
 !README.md
+__pycache__/
+*.pyc
