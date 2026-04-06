@@ -18,6 +18,11 @@ class PosConfig(models.Model):
         help='Texto a mostrar en el recibo del POS con la política o sistema '
              'de puntos vigente.'
     )
+    receipt_logo = fields.Binary(
+        related='company_id.pos_receipt_logo',
+        readonly=False,
+        string='Logo de Rutina de Impresión',
+    )
     download_invoice = fields.Boolean(
         string='Descargar factura',
         default=False,

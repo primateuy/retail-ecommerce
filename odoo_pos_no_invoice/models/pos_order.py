@@ -331,6 +331,26 @@ class PosOrder(models.Model):
             if hasattr(invoice, 'qr_img') and invoice.qr_img:
                 qr_base64 = invoice.qr_img
             
+            # Obtener moneda de la transacción
+            moneda = invoice.currency_id.name if invoice.currency_id else ''
+
+            # Obtener datos de sucursal y punto de emisión desde el diario de la factura
+            sucursal_nombre = ''
+            sucursal_direccion = ''
+            sucursal_ciudad = ''
+            punto_emision_nombre = ''
+            journal = invoice.journal_id
+            if journal:
+                if hasattr(journal, 'dgi_sucursal_id') and journal.dgi_sucursal_id:
+                    sucursal = journal.dgi_sucursal_id
+                    sucursal_nombre = sucursal.name or ''
+                    if hasattr(sucursal, 'direccion_partner_id') and sucursal.direccion_partner_id:
+                        addr = sucursal.direccion_partner_id
+                        sucursal_direccion = addr.street or ''
+                        sucursal_ciudad = addr.city or ''
+                if hasattr(journal, 'punto_emision_id') and journal.punto_emision_id:
+                    punto_emision_nombre = journal.punto_emision_id.name or ''
+
             # Construir objeto con datos del CFE
             cfe_data = {
                 'tipo': tipo_nombre,
@@ -346,6 +366,11 @@ class PosOrder(models.Model):
                 'cae_rango_hasta': cae_rango_hasta,
                 'cae_fecha_vencimiento': fecha_vencimiento,
                 'qr_base64': qr_base64,
+                'moneda': moneda,
+                'sucursal_nombre': sucursal_nombre,
+                'sucursal_direccion': sucursal_direccion,
+                'sucursal_ciudad': sucursal_ciudad,
+                'punto_emision': punto_emision_nombre,
             }
             
             _logger.info('✓ Datos CFE obtenidos desde factura %s: tipo=%s, serie=%s, numero=%s', account_move_id, tipo_nombre, serie, numero)
@@ -355,6 +380,14 @@ class PosOrder(models.Model):
             return {}
         
         return cfe_data
+
+    def _normalize_payment_name(self, name):
+        """Normaliza el nombre del medio de pago.
+        Si contiene 'efectivo' (case insensitive), devuelve 'Efectivo'.
+        """
+        if name and 'efectivo' in name.lower():
+            return 'Efectivo'
+        return name or ''
 
     @api.model
     def get_receipt_data_from_invoice_or_order(self, ids, account_move_id, order_reference, order_id=None):
@@ -372,9 +405,13 @@ class PosOrder(models.Model):
             'account_move_id': False,
             'order_id': False,
             'orderlines': [],
+            'paymentlines': [],
             'amount_total': 0.0,
             'amount_tax': 0.0,
             'total_without_tax': 0.0,
+            'total_received': 0.0,
+            'currency_name': '',
+            'receipt_logo': False,
             'tax_details': [],
             'legal_data': {
                 'purchase_condition': '',
@@ -490,6 +527,29 @@ class PosOrder(models.Model):
         if pos_order and pos_order.config_id:
             branch_name = pos_order.config_id.name or ''
 
+        # Logo de rutina de impresión desde la compañía.
+        company = (invoice.company_id if invoice else False) or (pos_order.company_id if pos_order else False)
+        if company and hasattr(company, 'pos_receipt_logo') and company.pos_receipt_logo:
+            receipt_data['receipt_logo'] = company.pos_receipt_logo.decode('utf-8') if isinstance(company.pos_receipt_logo, bytes) else company.pos_receipt_logo
+
+        # Moneda de la transacción.
+        if invoice and invoice.currency_id:
+            receipt_data['currency_name'] = invoice.currency_id.name or ''
+        elif pos_order and hasattr(pos_order, 'currency_id') and pos_order.currency_id:
+            receipt_data['currency_name'] = pos_order.currency_id.name or ''
+
+        # Líneas de pago normalizadas desde la orden POS (todas, no solo la primera).
+        if pos_order and pos_order.payment_ids:
+            total_received = 0.0
+            paymentlines = []
+            for payment in pos_order.payment_ids:
+                pname = self._normalize_payment_name(payment.payment_method_id.name or '')
+                pamount = payment.amount or 0.0
+                total_received += pamount
+                paymentlines.append({'name': pname, 'amount': pamount})
+            receipt_data['paymentlines'] = paymentlines
+            receipt_data['total_received'] = total_received
+
         # Asignar información legal al recibo.
         receipt_data['legal_data'].update({
             'purchase_condition': purchase_condition,
@@ -566,6 +626,13 @@ class PosOrder(models.Model):
 
             # Construir líneas del recibo a partir de las líneas de factura.
             for line in invoice_lines:
+                is_note = line.display_type == 'note'
+                is_combo = False
+                if not is_note and line.tax_ids:
+                    for tax in line.tax_ids:
+                        if 'entrega gratuita' in (tax.name or '').lower():
+                            is_combo = True
+                            break
                 receipt_data['orderlines'].append({
                     'productName': line.name or (line.product_id.display_name if line.product_id else ''),
                     'qty': line.quantity,
@@ -573,18 +640,16 @@ class PosOrder(models.Model):
                     'price': line.price_total,
                     'discount': line.discount or 0.0,
                     'customerNote': '',
+                    'is_note': is_note,
+                    'is_combo': is_combo,
                 })
 
-            # Construir líneas de pago desde la factura para reflejar el total final.
-            payment_name = ''
-            if pos_order and pos_order.payment_ids:
-                payment_name = pos_order.payment_ids[0].payment_method_id.name or ''
-            if not payment_name:
+            # Las líneas de pago ya fueron construidas desde pos_order arriba.
+            # Si no había orden POS, usar el total de la factura como fallback.
+            if not receipt_data['paymentlines']:
                 payment_name = purchase_condition or 'Contado'
-            receipt_data['paymentlines'] = [{
-                'name': payment_name,
-                'amount': invoice.amount_total,
-            }]
+                receipt_data['paymentlines'] = [{'name': payment_name, 'amount': invoice.amount_total}]
+                receipt_data['total_received'] = invoice.amount_total
 
             # Construir detalle de impuestos desde tax_totals si está disponible.
             tax_totals = invoice.tax_totals or {}
@@ -607,6 +672,13 @@ class PosOrder(models.Model):
 
             # Construir líneas del recibo a partir de las líneas de la orden.
             for line in pos_order.lines:
+                is_note = getattr(line, 'display_type', '') == 'note'
+                is_combo = False
+                if not is_note and hasattr(line, 'tax_ids') and line.tax_ids:
+                    for tax in line.tax_ids:
+                        if 'entrega gratuita' in (tax.name or '').lower():
+                            is_combo = True
+                            break
                 receipt_data['orderlines'].append({
                     'productName': line.name or (line.product_id.display_name if line.product_id else ''),
                     'qty': line.qty,
@@ -614,6 +686,8 @@ class PosOrder(models.Model):
                     'price': line.price_subtotal_incl if hasattr(line, 'price_subtotal_incl') else line.price_subtotal,
                     'discount': line.discount or 0.0,
                     'customerNote': line.note if hasattr(line, 'note') and line.note else '',
+                    'is_note': is_note,
+                    'is_combo': is_combo,
                 })
 
             # Intentar construir detalle de impuestos desde la orden usando tax_totals si existe.

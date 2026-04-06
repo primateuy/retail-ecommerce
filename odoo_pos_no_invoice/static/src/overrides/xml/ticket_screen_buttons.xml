@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates id="template" xml:space="preserve">
+
+    <!-- Ocultar botón de factura en pantalla de tickets -->
+    <t t-name="odoo_pos_no_invoice.InvoiceButton" t-inherit="point_of_sale.InvoiceButton" t-inherit-mode="extension" owl="1">
+        <xpath expr="//button" position="attributes">
+            <attribute name="style">display:none</attribute>
+        </xpath>
+    </t>
+
+    <!-- Renombrar "Print Receipt" a "Imprimir Boleta" -->
+    <t t-name="odoo_pos_no_invoice.ReprintReceiptButton" t-inherit="point_of_sale.ReprintReceiptButton" t-inherit-mode="extension" owl="1">
+        <xpath expr="//span[text()='Print Receipt']" position="replace">
+            <span>Imprimir Boleta</span>
+        </xpath>
+    </t>
+
+</templates>
