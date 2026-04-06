@@ -1,0 +1,36 @@
+# Translation of Odoo Server.
+# This file contains the translation of the following modules:
+# * pos_forum_order_search_expand
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: Odoo Server 17.0\n"
+"Language: es_UY\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#. module: pos_forum_order_search_expand
+msgid "Change Ticket"
+msgstr "Ticket de cambio"
+
+#. module: pos_forum_order_search_expand
+msgid "Could not resolve the report identifier."
+msgstr "No se pudo resolver el identificador del informe."
+
+#. module: pos_forum_order_search_expand
+msgid "External payment"
+msgstr "Pago externo"
+
+#. module: pos_forum_order_search_expand
+msgid "No change ticket report is configured for this POS."
+msgstr "No hay informe de ticket de cambio configurado para este TPV."
+
+#. module: pos_forum_order_search_expand
+msgid "Payment"
+msgstr "Pago"
+
+#. module: pos_forum_order_search_expand
+msgid "The order is not available for reprinting."
+msgstr "El pedido no está disponible para reimprimir."

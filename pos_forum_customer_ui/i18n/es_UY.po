@@ -1,0 +1,124 @@
+# Translation of Odoo Server.
+# This file contains the translation of the following modules:
+# * pos_forum_customer_ui
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: Odoo Server 17.0\n"
+"Language: es_UY\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#. module: pos_forum_customer_ui
+msgid "%s format does not match the required pattern."
+msgstr "El formato de %s no coincide con el patrón requerido."
+
+#. module: pos_forum_customer_ui
+msgid "%s must be %s digits."
+msgstr "%s debe tener %s dígitos."
+
+#. module: pos_forum_customer_ui
+msgid "%s must have at least 8 digits after the country code."
+msgstr "%s debe tener al menos 8 dígitos después del código de país."
+
+#. module: pos_forum_customer_ui
+msgid "Celular"
+msgstr "Celular"
+
+#. module: pos_forum_customer_ui
+msgid "Date of Birth"
+msgstr "Fecha de nacimiento"
+
+#. module: pos_forum_customer_ui
+msgid "Date of birth cannot be in the future."
+msgstr "La fecha de nacimiento no puede ser futura."
+
+#. module: pos_forum_customer_ui
+msgid "Default Partner City"
+msgstr "Ciudad predeterminada"
+
+#. module: pos_forum_customer_ui
+msgid "Default Partner Street"
+msgstr "Calle predeterminada"
+
+#. module: pos_forum_customer_ui
+msgid "Document Number"
+msgstr "Número de documento"
+
+#. module: pos_forum_customer_ui
+msgid "Document Type"
+msgstr "Tipo de documento"
+
+#. module: pos_forum_customer_ui
+msgid "Document number is required to consult RUT."
+msgstr "Se requiere número de documento para consultar el RUT."
+
+#. module: pos_forum_customer_ui
+msgid "Document number is required."
+msgstr "Se requiere número de documento."
+
+#. module: pos_forum_customer_ui
+msgid "Email"
+msgstr "Correo electrónico"
+
+#. module: pos_forum_customer_ui
+msgid "Email format is invalid."
+msgstr "El formato del correo electrónico no es válido."
+
+#. module: pos_forum_customer_ui
+msgid "Invalid Date"
+msgstr "Fecha inválida"
+
+#. module: pos_forum_customer_ui
+msgid "Invalid Document"
+msgstr "Documento inválido"
+
+#. module: pos_forum_customer_ui
+msgid "Invalid Phone"
+msgstr "Número inválido"
+
+#. module: pos_forum_customer_ui
+msgid "Missing information"
+msgstr "Información incompleta"
+
+#. module: pos_forum_customer_ui
+msgid "Mobile"
+msgstr "Celular"
+
+#. module: pos_forum_customer_ui
+msgid "POS Partner Defaults"
+msgstr "Predeterminados del POS"
+
+#. module: pos_forum_customer_ui
+msgid "Partner not found for RUT query."
+msgstr "No se encontró el contacto para la consulta de RUT."
+
+#. module: pos_forum_customer_ui
+msgid "Phone format does not match the required pattern."
+msgstr "El formato del teléfono no coincide con el patrón requerido."
+
+#. module: pos_forum_customer_ui
+msgid "Phone length must be %s digits for this country."
+msgstr "El teléfono debe tener %s dígitos para este país."
+
+#. module: pos_forum_customer_ui
+msgid "Please fill: %s"
+msgstr "Por favor complete: %s"
+
+#. module: pos_forum_customer_ui
+msgid "RUT Query"
+msgstr "Consulta RUT"
+
+#. module: pos_forum_customer_ui
+msgid "RUT query is not available on this system."
+msgstr "La consulta de RUT no está disponible en este sistema."
+
+#. module: pos_forum_customer_ui
+msgid "Telefono"
+msgstr "Teléfono"
+
+#. module: pos_forum_customer_ui
+msgid "The document number is invalid for this type."
+msgstr "El número de documento no es válido para este tipo."

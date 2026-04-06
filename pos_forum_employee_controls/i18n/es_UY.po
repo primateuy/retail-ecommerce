@@ -1,0 +1,80 @@
+# Translation of Odoo Server.
+# This file contains the translation of the following modules:
+# * pos_forum_employee_controls
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: Odoo Server 17.0\n"
+"Language: es_UY\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#. module: pos_forum_employee_controls
+msgid "Control Buttons"
+msgstr "Botones de control"
+
+#. module: pos_forum_employee_controls
+msgid "Loyalty Buttons"
+msgstr "Botones de lealtad"
+
+#. module: pos_forum_employee_controls
+msgid "Numpad Controls"
+msgstr "Control teclado numérico"
+
+#. module: pos_forum_employee_controls
+msgid "POS Permissions"
+msgstr "Permisos en PDV"
+
+#. module: pos_forum_employee_controls
+msgid "POS: Allow Customer Note Button"
+msgstr "POS: Autorizar botón de nota de cliente"
+
+#. module: pos_forum_employee_controls
+msgid "POS: Allow Discount Button"
+msgstr "POS: Autorizar botón de descuento"
+
+#. module: pos_forum_employee_controls
+msgid "POS: Allow eWallet Button"
+msgstr "POS: Autorizar botón de monedero"
+
+#. module: pos_forum_employee_controls
+msgid "POS: Allow Numpad Discount"
+msgstr "POS: Autorizar descuento en teclado numérico"
+
+#. module: pos_forum_employee_controls
+msgid "POS: Allow Numpad Price"
+msgstr "POS: Autorizar cambio de precio en teclado numérico"
+
+#. module: pos_forum_employee_controls
+msgid "POS: Allow Pricelist Button"
+msgstr "POS: Autorizar botón de lista de precios"
+
+#. module: pos_forum_employee_controls
+msgid "POS: Allow Promo Code Button"
+msgstr "POS: Autorizar botón de código promocional"
+
+#. module: pos_forum_employee_controls
+msgid "POS: Allow Quotation Button"
+msgstr "POS: Autorizar botón de cotización"
+
+#. module: pos_forum_employee_controls
+msgid "POS: Allow Refund Button"
+msgstr "POS: Autorizar botón de devolución"
+
+#. module: pos_forum_employee_controls
+msgid "POS: Allow Reset Programs Button"
+msgstr "POS: Autorizar botón de restablecer programas"
+
+#. module: pos_forum_employee_controls
+msgid "POS: Allow Reward Button"
+msgstr "POS: Autorizar botón de recompensa"
+
+#. module: pos_forum_employee_controls
+msgid "POS: Allow Salesperson Button"
+msgstr "POS: Autorizar botón de vendedor"
+
+#. module: pos_forum_employee_controls
+msgid "POS: Allow Z Report Button"
+msgstr "POS: Autorizar botón de reporte Z"

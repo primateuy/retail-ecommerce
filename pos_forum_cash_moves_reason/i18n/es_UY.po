@@ -1,0 +1,60 @@
+# Translation of Odoo Server.
+# This file contains the translation of the following modules:
+# * pos_forum_cash_moves_reason
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: Odoo Server 17.0\n"
+"Language: es_UY\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#. module: pos_forum_cash_moves_reason
+msgid "Amount"
+msgstr "Importe"
+
+#. module: pos_forum_cash_moves_reason
+msgid "Cash"
+msgstr "Efectivo"
+
+#. module: pos_forum_cash_moves_reason
+msgid "Cash Move Reasons"
+msgstr "Razones de movimiento de efectivo"
+
+#. module: pos_forum_cash_moves_reason
+msgid "Cash in/out of %s is ignored."
+msgstr "Entrada/salida de efectivo de %s ignorada."
+
+#. module: pos_forum_cash_moves_reason
+msgid "Invalid cash move reason for this company."
+msgstr "Razón de movimiento de efectivo no válida para esta compañía."
+
+#. module: pos_forum_cash_moves_reason
+msgid "Select a cash move reason before confirming."
+msgstr "Seleccione una razón de movimiento de efectivo antes de confirmar."
+
+#. module: pos_forum_cash_moves_reason
+msgid "Successfully made a cash %s of %s."
+msgstr "Movimiento de efectivo (%s) por %s registrado correctamente."
+
+#. module: pos_forum_cash_moves_reason
+msgid "The selected reason has no account configured."
+msgstr "La razón seleccionada no tiene cuenta contable configurada."
+
+#. module: pos_forum_cash_moves_reason
+msgid "The selected reason is not allowed for the cash journal in this POS."
+msgstr "La razón seleccionada no está permitida para el diario de caja de este TPV."
+
+#. module: pos_forum_cash_moves_reason
+msgid "The selected reason is not valid for cash in."
+msgstr "La razón seleccionada no es válida para entrada de efectivo."
+
+#. module: pos_forum_cash_moves_reason
+msgid "The selected reason is not valid for cash out."
+msgstr "La razón seleccionada no es válida para salida de efectivo."
+
+#. module: pos_forum_cash_moves_reason
+msgid "There is no cash payment method for this PoS Session"
+msgstr "No hay método de pago en efectivo para esta sesión de TPV."

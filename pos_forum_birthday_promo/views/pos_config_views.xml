@@ -24,6 +24,10 @@
                         invisible="not forum_birthday_promo_active"
                     />
                     <field
+                        name="forum_birthday_max_uses_per_period"
+                        invisible="not forum_birthday_promo_active"
+                    />
+                    <field
                         name="forum_birthday_product_id"
                         invisible="not forum_birthday_promo_active"
                     />

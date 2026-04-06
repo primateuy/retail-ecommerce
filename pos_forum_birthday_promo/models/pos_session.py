@@ -3,15 +3,17 @@
 Carga de datos en el POS y comprobación server-side de elegibilidad de la promo.
 """
 
-from datetime import datetime, time
+from datetime import datetime, time, timedelta
 
 from odoo import api, fields, models
+from odoo.osv import expression
 
 
 class PosSession(models.Model):
     """
     Extiende la sesión POS para exponer campos de configuración y un RPC de
-    elegibilidad que respeta fecha servidor y regla de primera orden.
+    elegibilidad que respeta fecha servidor, primera orden del día y tope de
+    usos en la ventana de tolerancia.
     """
 
     _inherit = "pos.session"
@@ -69,6 +71,7 @@ class PosSession(models.Model):
             "forum_birthday_discount_percent",
             "forum_birthday_tolerance_days",
             "forum_birthday_first_order_only",
+            "forum_birthday_max_uses_per_period",
             "forum_birthday_product_id",
             "forum_birthday_reward_id",
         ]
@@ -86,6 +89,7 @@ class PosSession(models.Model):
         la promo aplica si **alguna** de las fechas definidas cae en la ventana
         de tolerancia (mismo criterio ± días respecto al aniversario en el año
         en curso). Opcionalmente exige que no haya órdenes POS finalizadas hoy.
+        Opcionalmente limita cuántas veces puede usarse la promo en esa ventana.
 
         Args:
             session_id (int): ID de `pos.session` abierta.
@@ -116,6 +120,21 @@ class PosSession(models.Model):
         if config.forum_birthday_first_order_only:
             if self._forum_birthday_partner_has_completed_order_today(partner.id, today):
                 return {"eligible": False, "reason": "first_order_used"}
+        # Bloque: tope de usos en el período (misma ventana ± tolerancia, año en curso).
+        max_uses = config.forum_birthday_max_uses_per_period or 0
+        if max_uses > 0:
+            product = config.forum_birthday_product_id
+            if product:
+                used = self._forum_birthday_count_completed_orders_with_promo_in_windows(
+                    partner_id=partner.id,
+                    config=config,
+                    product_id=product.id,
+                    birth_dates=birth_dates,
+                    year=today.year,
+                    tolerance_days=tolerance,
+                )
+                if used >= max_uses:
+                    return {"eligible": False, "reason": "max_uses_period"}
         return {"eligible": True}
 
     def _forum_birthday_partner_reference_dates(self, partner):
@@ -166,6 +185,86 @@ class PosSession(models.Model):
             anniversary = birth_date.replace(year=today.year, month=2, day=28)
         delta_days = (today - anniversary).days
         return -tolerance_days <= delta_days <= tolerance_days
+
+    def _forum_birthday_window_date_bounds(self, birth_date, year, tolerance_days):
+        """
+        Calcula el rango inclusivo de fechas de la ventana de promo para un año dado.
+
+        Usa el mismo aniversario ``replace(year=...)`` que la elegibilidad para
+        que el conteo de usos coincida con la regla de negocio del TPV.
+
+        Args:
+            birth_date (date): Fecha de nacimiento.
+            year (int): Año calendario (el de ``today`` al validar).
+            tolerance_days (int): Días antes y después del aniversario.
+
+        Returns:
+            tuple[date, date]: (inicio, fin) de la ventana.
+        """
+        try:
+            anniversary = birth_date.replace(year=year)
+        except ValueError:
+            anniversary = birth_date.replace(year=year, month=2, day=28)
+        start = anniversary - timedelta(days=tolerance_days)
+        end = anniversary + timedelta(days=tolerance_days)
+        return start, end
+
+    def _forum_birthday_count_completed_orders_with_promo_in_windows(
+        self,
+        partner_id,
+        config,
+        product_id,
+        birth_dates,
+        year,
+        tolerance_days,
+    ):
+        """
+        Cuenta órdenes POS finalizadas del cliente con línea del producto promo.
+
+        Solo cuenta pedidos del mismo ``pos.config`` y cuya ``date_order`` cae
+        en alguna ventana ± tolerancia de cada fecha de nacimiento referencia
+        en el año indicado (unión de intervalos).
+
+        Args:
+            partner_id (int): Cliente.
+            config (pos.config): Configuración de la sesión actual.
+            product_id (int): ``product.product`` de la línea de descuento promo.
+            birth_dates (list[date]): Fechas de nacimiento a considerar.
+            year (int): Año en curso para anclar el aniversario.
+            tolerance_days (int): Misma tolerancia que la promo.
+
+        Returns:
+            int: Cantidad de órdenes distintas que cumplen el criterio.
+        """
+        PosOrder = self.env["pos.order"].sudo()
+        subdomains = []
+        for bd in birth_dates:
+            start_d, end_d = self._forum_birthday_window_date_bounds(
+                bd, year, tolerance_days
+            )
+            start_dt = fields.Datetime.to_string(datetime.combine(start_d, time.min))
+            end_dt = fields.Datetime.to_string(datetime.combine(end_d, time.max))
+            subdomains.append(
+                [
+                    ("date_order", ">=", start_dt),
+                    ("date_order", "<=", end_dt),
+                ]
+            )
+        if not subdomains:
+            return 0
+        date_domain = (
+            subdomains[0]
+            if len(subdomains) == 1
+            else expression.OR(subdomains)
+        )
+        base_domain = [
+            ("partner_id", "=", partner_id),
+            ("state", "in", ("paid", "done", "invoiced")),
+            ("config_id", "=", config.id),
+            ("lines.product_id", "=", product_id),
+        ]
+        domain = expression.AND([base_domain, date_domain])
+        return PosOrder.search_count(domain)
 
     def _forum_birthday_partner_has_completed_order_today(self, partner_id, today):
         """

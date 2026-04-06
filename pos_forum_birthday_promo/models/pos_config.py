@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 """
 Extiende la configuración del Punto de Venta con los parámetros de la promoción
-por cumpleaños (ventana de días, porcentaje, producto de línea y primera orden).
+por cumpleaños (ventana de días, porcentaje, producto de línea, primera orden y
+límite opcional de usos en el período).
 """
 
 from odoo import _, api, fields, models
@@ -26,8 +27,9 @@ class PosConfig(models.Model):
     forum_birthday_discount_percent = fields.Float(
         string="Porcentaje de descuento",
         default=0.0,
-        help="Porcentaje aplicado sobre el subtotal imponible de líneas normales "
-        "(sin otras líneas de recompensa).",
+        help="Porcentaje aplicado sobre el total con impuestos incluidos de las "
+        "líneas normales del pedido (coherente con el TPV en precios con impuestos "
+        "incluidos). No incluye otras líneas de recompensa.",
     )
     forum_birthday_tolerance_days = fields.Integer(
         string="Tolerancia (días)",
@@ -39,6 +41,15 @@ class PosConfig(models.Model):
         string="Solo primera orden del día",
         help="Si está activo, solo aplica si el cliente no tiene órdenes POS "
         "finalizadas en la fecha actual del servidor.",
+    )
+    forum_birthday_max_uses_per_period = fields.Integer(
+        string="Máximo usos con descuento en el período",
+        default=0,
+        help="Tope de compras con línea de esta promo durante la ventana de "
+        "tolerancia (± días respecto al cumpleaños en el año en curso), solo en "
+        "este punto de venta. Use 0 o deje vacío para no limitar por cantidad "
+        "de usos (sigue aplicando ventana de fechas y, si aplica, solo primera "
+        "orden del día).",
     )
     forum_birthday_product_id = fields.Many2one(
         "product.product",
@@ -78,6 +89,7 @@ class PosConfig(models.Model):
         "forum_birthday_discount_percent",
         "forum_birthday_tolerance_days",
         "forum_birthday_product_id",
+        "forum_birthday_max_uses_per_period",
     )
     def _check_forum_birthday_settings(self):
         """
@@ -86,6 +98,7 @@ class PosConfig(models.Model):
         for config in self:
             if not config.forum_birthday_promo_active:
                 continue
+            # Bloque: porcentaje y tolerancia obligatorios cuando la promo está activa.
             if config.forum_birthday_discount_percent <= 0:
                 raise ValidationError(
                     _("El porcentaje de descuento debe ser mayor que cero.")
@@ -95,4 +108,9 @@ class PosConfig(models.Model):
             if not config.forum_birthday_product_id:
                 raise ValidationError(
                     _("Debe indicarse el producto de la promoción de cumpleaños.")
+                )
+            # Bloque: el tope de usos no puede ser negativo (0 = sin límite de usos).
+            if config.forum_birthday_max_uses_per_period < 0:
+                raise ValidationError(
+                    _("El máximo de usos en el período no puede ser negativo.")
                 )

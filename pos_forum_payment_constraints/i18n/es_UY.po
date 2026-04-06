@@ -1,0 +1,28 @@
+# Translation of Odoo Server.
+# This file contains the translation of the following modules:
+# * pos_forum_payment_constraints
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: Odoo Server 17.0\n"
+"Language: es_UY\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#. module: pos_forum_payment_constraints
+msgid "Amount limited"
+msgstr "Importe limitado"
+
+#. module: pos_forum_payment_constraints
+msgid "Counted cash cannot exceed the expected balance."
+msgstr "El efectivo contado no puede superar el saldo esperado."
+
+#. module: pos_forum_payment_constraints
+msgid "Invalid Closing Amount"
+msgstr "Importe de cierre inválido"
+
+#. module: pos_forum_payment_constraints
+msgid "This payment method cannot exceed the order balance. Amount set to %s."
+msgstr "Este método de pago no puede superar el saldo del pedido. Importe fijado en %s."

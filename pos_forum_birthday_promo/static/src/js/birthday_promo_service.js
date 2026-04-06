@@ -6,6 +6,23 @@ import { random5Chars } from "@point_of_sale/utils";
 import { roundPrecision as round_pr } from "@web/core/utils/numbers";
 
 /**
+ * Retorna el importe de la línea a usar como base del % de descuento cumpleaños.
+ *
+ * Usa el total con impuestos incluidos (`get_price_with_tax`) para alinear el
+ * descuento con TPV configurado en precios con impuestos incluidos. Si el método
+ * no existiera (extensiones antiguas), cae en `get_price_without_tax`.
+ *
+ * @param {import("@point_of_sale/app/store/models").Orderline} line
+ * @returns {number}
+ */
+function forumBirthdayLinePromoBaseAmount(line) {
+    if (typeof line.get_price_with_tax === "function") {
+        return line.get_price_with_tax();
+    }
+    return line.get_price_without_tax();
+}
+
+/**
  * Extiende el pedido POS para la promoción de cumpleaños Forum.
  *
  * - Considera `birthdate_date` (OCA) y `birthdate` (p. ej. Cybrosys): basta
@@ -80,6 +97,10 @@ patch(Order.prototype, {
 
     /**
      * Agrupa llamadas al sincronizador para no disparar demasiados RPC seguidos.
+     *
+     * Retardo de 250 ms para ejecutar después de hooks de otros módulos (p. ej.
+     * `pos_forum_loyalty_customer_domain` dispara lógica a los 150 ms al cambiar
+     * cliente) y evitar que la línea de cumpleaños se pierda o quede incoherente.
      */
     _forumBirthdayScheduleSync() {
         const cfg = this.pos?.config;
@@ -92,7 +113,7 @@ patch(Order.prototype, {
         this._forumBirthdaySyncTimer = setTimeout(() => {
             this._forumBirthdaySyncTimer = null;
             void this._forumBirthdaySyncExecute();
-        }, 80);
+        }, 250);
     },
 
     /**
@@ -141,12 +162,13 @@ patch(Order.prototype, {
             if (percent <= 0) {
                 return;
             }
+            // Bloque: base del % = total con impuestos de líneas vendibles (no rewards / devoluciones).
             let base = 0;
             for (const line of this.get_orderlines()) {
                 if (line.is_reward_line || line.refunded_orderline_id) {
                     continue;
                 }
-                base += line.get_price_without_tax();
+                base += forumBirthdayLinePromoBaseAmount(line);
             }
             base = round_pr(base, this.pos.currency.rounding);
             if (base <= 0) {
