@@ -24,6 +24,7 @@ campos y vistas; no lo instale si ya tiene odoo_pos_oca (campos duplicados).
     "depends": [
         "base",
         "bus",
+        "point_of_sale",
         "payment",
         "account",
         "account_payment",
