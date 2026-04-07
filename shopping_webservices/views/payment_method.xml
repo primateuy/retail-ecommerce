@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+
+    <record id="view_payment_method_form_inherit_brands" model="ir.ui.view">
+    <field name="name">payment.method.form.inherit.brands</field>
+    <field name="model">payment.method</field>
+    <field name="inherit_id" ref="payment.payment_method_form"/>
+    <field name="arch" type="xml">
+
+        <xpath expr="//field[@name='code']" position="after">
+            <field name="shopping_payment_code" invisible="is_primary"/>
+        </xpath>
+        
+        <!-- Localizamos el tree dentro de la página Brands -->
+        <xpath expr="//page[@name='brands']//field[@name='brand_ids']" position="replace">
+            <field name="brand_ids">
+                <tree>
+                    <field name="name"/>
+                    <field name="shopping_payment_code" string="Código Shopping"/>
+                    <field name="active"/>
+                </tree>
+            </field>
+        </xpath>
+
+    </field>
+</record>
+
+</odoo>
