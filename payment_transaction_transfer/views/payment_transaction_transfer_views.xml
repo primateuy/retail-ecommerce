@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Vista formulario del asistente: diario destino + botones Cancelar / Transferir -->
+    <record id="view_payment_transaction_transfer_wizard_form" model="ir.ui.view">
+        <field name="name">payment.transaction.transfer.wizard.form</field>
+        <field name="model">payment.transaction.transfer.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Crear transferencia">
+                <group>
+                    <field name="company_id" invisible="1"/>
+                    <field name="destination_journal_id"/>
+                </group>
+                <footer>
+                    <button name="action_transfer" type="object" string="Transferir" class="btn-primary" data-hotkey="q"/>
+                    <button name="action_cancel" type="object" string="Cancelar" class="btn-secondary" data-hotkey="z"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <!-- Acción enlazada al listado de transacciones de pago (menú Acciones) -->
+    <record id="action_payment_transaction_transfer_wizard" model="ir.actions.act_window">
+        <field name="name">Crear transferencia</field>
+        <field name="res_model">payment.transaction.transfer.wizard</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+        <field name="binding_model_id" ref="payment.model_payment_transaction"/>
+        <field name="binding_view_types">list</field>
+        <field name="groups_id" eval="[(4, ref('account.group_account_invoice'))]"/>
+    </record>
+</odoo>
