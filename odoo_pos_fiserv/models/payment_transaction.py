@@ -631,11 +631,46 @@ class PaymentTransaction(models.Model):
         else:
             return self.env.company.id
     
+    def _fiserv_corrected_amount_from_total_amount(self, itd_response):
+        """
+        Convierte TotalAmount ITD (centavos) a importe de transacción Odoo.
+
+        Misma regla que en ``create_fiserv_transaction_with_complete_data``: si no hay
+        monto válido, devuelve None y el llamador no pisa ``amount`` en el write.
+
+        Args:
+            itd_response (dict): Respuesta ITD.
+
+        Returns:
+            float|None: Importe en unidad de moneda, o None si no aplica actualizar.
+        """
+        if 'TotalAmount' not in itd_response:
+            return None
+        total_amount = itd_response.get('TotalAmount', '0')
+        if isinstance(total_amount, str):
+            try:
+                total_amount = float(total_amount)
+            except (ValueError, TypeError):
+                return None
+        else:
+            try:
+                total_amount = float(total_amount)
+            except (TypeError, ValueError):
+                return None
+        if total_amount <= 0:
+            return None
+        return total_amount / 100.0
+
     def update_fiserv_transaction(self, itd_response):
         """
         Actualiza una transacción Fiserv existente con nueva información.
         Usa mensaje parseado según POSLink v135 y considera posResponseCode para estado error.
-        
+
+        Tras un error temprano en el bucle Query (p. ej. excepción antes del éxito), la
+        transacción puede haberse creado con referencia genérica «FISERV», importe 0 y sin
+        datos de ticket; cuando llega la respuesta final aprobada, aquí se deben alinear
+        referencia, importe, PosID y demás campos igual que en la creación «completa».
+
         Args:
             itd_response (dict): Nueva respuesta del POS
         """
@@ -649,14 +684,39 @@ class PaymentTransaction(models.Model):
             'fiserv_response_message': state_message,
             'fiserv_complete_response': json.dumps(itd_response, indent=2, ensure_ascii=False),
         }
-        
+
+        # --- Referencia legible: al actualizar tras Query, debe coincidir con creación completa ---
+        update_vals['reference'] = self._generate_fiserv_reference_from_complete_data(itd_response)
+
+        # --- Importe desde TotalAmount cuando ITD lo envía (p. ej. respuesta final RC=0) ---
+        corrected_amount = self._fiserv_corrected_amount_from_total_amount(itd_response)
+        if corrected_amount is not None:
+            update_vals['amount'] = corrected_amount
+
+        # --- PosID y moneda si vienen en la respuesta ---
+        if itd_response.get('PosID'):
+            update_vals['pos_id'] = itd_response['PosID']
+        if itd_response.get('Currency'):
+            update_vals['currency_id'] = self._get_currency_id_from_response(itd_response)
+
+        # --- Cuotas (Quota en ITD) ---
+        if itd_response.get('Quota') is not None and itd_response.get('Quota') != '':
+            update_vals['installments'] = self._parse_itd_quota(itd_response.get('Quota', 0))
+
         # Actualizar campos específicos si están disponibles en la respuesta
         if itd_response.get('CardNumber'):
-            update_vals.update({
-                'card_bin': itd_response['CardNumber'][:6],
-                'card_last_four': itd_response['CardNumber'][-4:],
-            })
-        
+            card_num = str(itd_response['CardNumber'])
+            if len(card_num) >= 10:
+                update_vals.update({
+                    'card_bin': card_num[:6],
+                    'card_last_four': card_num[-4:],
+                })
+            elif len(card_num) >= 6:
+                update_vals.update({
+                    'card_bin': card_num[:6],
+                    'card_last_four': '',
+                })
+
         if itd_response.get('Issuer'):
             if isinstance(itd_response['Issuer'], dict):
                 update_vals.update({
@@ -672,21 +732,21 @@ class PaymentTransaction(models.Model):
         if (itd_response.get('EmvApplicationName') or '').strip():
             update_vals['issuer_name'] = self._get_fiserv_card_brand_display_name(itd_response)
 
-        if itd_response.get('Acquirer'):
-            update_vals['acquirer'] = itd_response['Acquirer']
-        
+        if itd_response.get('Acquirer') is not None and itd_response.get('Acquirer') != '':
+            update_vals['acquirer'] = str(itd_response['Acquirer'])
+
         if itd_response.get('Ticket'):
             update_vals['ticket_number'] = itd_response['Ticket']
-        
+
         if itd_response.get('Batch'):
             update_vals['batch_number'] = itd_response['Batch']
-        
+
         if itd_response.get('AuthorizationCode'):
             update_vals['authorization_code'] = itd_response['AuthorizationCode']
-        
+
         if itd_response.get('Merchant'):
             update_vals['merchant_number'] = itd_response['Merchant']
-        
+
         self.write(update_vals)
     
     @api.model
@@ -834,13 +894,13 @@ class PaymentTransaction(models.Model):
         Returns:
             str: Referencia única
         """
-        pos_id = itd_response.get('PosID', '')
-        ticket = itd_response.get('Ticket', '')
-        batch = itd_response.get('Batch', '')
-        authorization = itd_response.get('AuthorizationCode', '')
-        transaction_date = itd_response.get('TransactionDate', '')
-        transaction_hour = itd_response.get('TransactionHour', '')
-        
+        pos_id = str(itd_response.get('PosID', '') or '').strip()
+        ticket = str(itd_response.get('Ticket', '') or '').strip()
+        batch = str(itd_response.get('Batch', '') or '').strip()
+        authorization = str(itd_response.get('AuthorizationCode', '') or '').strip()
+        transaction_date = str(itd_response.get('TransactionDate', '') or '').strip()
+        transaction_hour = str(itd_response.get('TransactionHour', '') or '').strip()
+
         # Crear una referencia más completa y única
         reference_parts = [
             'FISERV',
@@ -849,16 +909,23 @@ class PaymentTransaction(models.Model):
             batch,
             authorization,
             transaction_date,
-            transaction_hour
+            transaction_hour,
         ]
-        
+
         # Filtrar partes vacías y unir
         reference = '-'.join([part for part in reference_parts if part])
-        
-        # Si la referencia está vacía, usar un fallback
+
+        # Si la referencia está vacía, usar un fallback con PosID/ticket/lote
         if not reference:
-            reference = f"FISERV-{pos_id}-{ticket}-{batch}"
-        
+            reference = '-'.join(
+                p for p in ('FISERV', pos_id, ticket, batch) if p
+            )
+
+        # --- Sin ticket ni datos aún: evitar solo «FISERV» (ambiguo en listas y búsquedas) ---
+        tid = str(itd_response.get('TransactionId', '') or '').strip()
+        if tid and reference in ('FISERV', ''):
+            reference = f'FISERV-{tid}'
+
         _logger.info('Fiserv Reference Generated: %s', reference)
         return reference
     

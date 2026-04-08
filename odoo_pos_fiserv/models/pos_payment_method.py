@@ -35,6 +35,33 @@ FISERV_ITD_RESPONSE_CODE_MSG = {
 }
 
 
+def _fiserv_extract_itd_message_from_body(response_json):
+    """
+    Obtiene el texto descriptivo que envía ITD antes de aplicar la tabla genérica POSLink.
+
+    Algunos entornos devuelven el detalle en Message/Description y ResponseCode=999; si
+    pisamos siempre con FISERV_ITD_RESPONSE_CODE_MSG se pierde la causa real.
+    """
+    if not isinstance(response_json, dict):
+        return ''
+    for key in (
+        'Message',
+        'msg',
+        'Description',
+        'description',
+        'ErrorMessage',
+        'errorMessage',
+        'ErrorDescription',
+        'errorDescription',
+        'Detail',
+        'detail',
+    ):
+        val = response_json.get(key)
+        if val is not None and str(val).strip():
+            return str(val).strip()
+    return ''
+
+
 def _fiserv_normalize_itd_http_response(response_json):
     """
     Normaliza el JSON devuelto por ITD: ResponseCode y TransactionId suelen venir como int;
@@ -42,6 +69,8 @@ def _fiserv_normalize_itd_http_response(response_json):
     """
     if not isinstance(response_json, dict):
         return response_json
+    # --- Texto del host (si existe) tiene prioridad sobre la tabla de códigos ---
+    itd_text = _fiserv_extract_itd_message_from_body(response_json)
     rc = response_json.get('ResponseCode')
     response_json['ResponseCode'] = str(rc).strip() if rc is not None else '999'
     tid = response_json.get('TransactionId')
@@ -51,11 +80,115 @@ def _fiserv_normalize_itd_http_response(response_json):
     if stid is not None:
         response_json['STransactionId'] = str(stid).strip()
     code = response_json['ResponseCode']
-    response_json['msg'] = FISERV_ITD_RESPONSE_CODE_MSG.get(
+    mapped = FISERV_ITD_RESPONSE_CODE_MSG.get(
         code,
         'Respuesta ITD (código %s)' % code,
     )
+    response_json['msg'] = itd_text or mapped
     return response_json
+
+
+def fiserv_itd_http_post(
+    base_url_endpoint,
+    path_suffix,
+    data,
+    log_label,
+    extra_999_pos_warning=False,
+):
+    """
+    POST JSON genérico a ITD (processFinancialPurchase, voidByTicket, etc.).
+
+    Centraliza validación HTTP, parseo y normalización para ``pos.payment.method`` y
+    ``payment.provider`` (cobro contable sin configurar POS).
+
+    Args:
+        base_url_endpoint (str): URL base sin barra final.
+        path_suffix (str): Ruta del recurso (p. ej. ``/processFinancialPurchase``).
+        data (dict): Cuerpo JSON.
+        log_label (str): Nombre para logs (p. ej. ``processFinancialPurchase``).
+        extra_999_pos_warning (bool): Si True, log adicional cuando RC=999 y TransactionId=0.
+
+    Returns:
+        tuple: (base_url_endpoint, response_json normalizado).
+    """
+    base_url_endpoint = (base_url_endpoint or '').rstrip('/')
+    endpoint = base_url_endpoint + path_suffix
+    req = requests.post(
+        endpoint,
+        json=data,
+        headers={'Content-Type': 'application/json'},
+        timeout=30,
+    )
+    is_void = 'VoidByTicket' in path_suffix
+    if not (200 <= req.status_code < 300):
+        body_preview = (req.text or '')[:2000]
+        _logger.error(
+            'Fiserv %s HTTP %s URL=%s cuerpo (recorte): %s',
+            log_label,
+            req.status_code,
+            endpoint,
+            body_preview,
+        )
+        err = {
+            'ResponseCode': '999',
+            'TransactionId': '0',
+            'STransactionId': '0',
+            'msg': (
+                _(
+                    'ITD (anulación) respondió HTTP %(status)s. Recorte: %(body)s'
+                )
+                if is_void
+                else _(
+                    'ITD respondió HTTP %(status)s. Compruebe la URL del proveedor Fiserv, '
+                    'certificados y conectividad. Recorte de respuesta: %(body)s'
+                )
+            )
+            % {'status': req.status_code, 'body': (req.text or '')[:400]},
+        }
+        _fiserv_normalize_itd_http_response(err)
+        return base_url_endpoint, err
+    try:
+        response_json = req.json()
+    except ValueError:
+        body_preview = (req.text or '')[:2000]
+        _logger.error(
+            'Fiserv %s: respuesta no JSON desde %s: %s',
+            log_label,
+            endpoint,
+            body_preview,
+        )
+        err = {
+            'ResponseCode': '999',
+            'TransactionId': '0',
+            'STransactionId': '0',
+            'msg': (
+                _('ITD (anulación) devolvió respuesta no JSON. Recorte: %(body)s')
+                if is_void
+                else _(
+                    'La respuesta de ITD no es JSON válido (¿URL apunta al servicio correcto?). '
+                    'Recorte: %(body)s'
+                )
+            )
+            % {'body': (req.text or '')[:400]},
+        }
+        _fiserv_normalize_itd_http_response(err)
+        return base_url_endpoint, err
+    _fiserv_normalize_itd_http_response(response_json)
+    _logger.info('%s Response:\n%s', log_label, pprint.pformat(response_json))
+    if (
+        extra_999_pos_warning
+        and str(response_json.get('ResponseCode', '')).strip() == '999'
+        and str(response_json.get('TransactionId', '0') or '0').strip() in ('0', '')
+    ):
+        _logger.warning(
+            'Fiserv ITD rechazó el inicio (999, TransactionId=0). Revise con el proveedor: '
+            'URL, PosID %s, SystemId %s, Branch %s, moneda/campos obligatorios. Mensaje: %s',
+            data.get('PosID'),
+            data.get('SystemId'),
+            data.get('Branch'),
+            response_json.get('msg'),
+        )
+    return base_url_endpoint, response_json
 
 
 def _fiserv_card_data_ready_for_confirm(query_result):
@@ -220,6 +353,70 @@ class PosPaymentMethod(models.Model):
             elif not prov.fiserv_is_multiple:
                 rec.fiserv_terminal_id = False
 
+    def _fiserv_itd_base_url_webservice(self):
+        """
+        URL base ITD para POST (processFinancial*, cancel, etc.).
+
+        Si el método tiene ``fiserv_provider_id`` con URL en el proveedor, se usa esa
+        (fuente de verdad del comercio). Así no depende de que ``url_webservice`` del
+        método esté sincronizado tras guardar formularios sin onchange.
+
+        Returns:
+            str: URL sin barra final.
+        """
+        self.ensure_one()
+        prov = self.fiserv_provider_id
+        if prov and prov.code == 'fiserv' and (prov.fiserv_url_webservice or '').strip():
+            return str(prov.fiserv_url_webservice).strip().rstrip('/')
+        return (self.sudo().url_webservice or '').rstrip('/')
+
+    def _fiserv_itd_system_id_for_payload(self):
+        """
+        SystemId que identifica al comercio ante ITD (POSLink).
+
+        Prioriza ``payment.provider.fiserv_system_id`` cuando el método está ligado al
+        proveedor Fiserv. Evita enviar ``'1'`` u otros placeholders del método POS si el
+        proveedor ya tiene el GUID/código real (típico cuando OCA sincronizó el proveedor
+        pero el método no se re-guardó).
+
+        Returns:
+            str: SystemId no vacío si está configurado en proveedor o método.
+        """
+        self.ensure_one()
+        prov = self.fiserv_provider_id
+        if prov and prov.code == 'fiserv' and (prov.fiserv_system_id or '').strip():
+            return str(prov.fiserv_system_id).strip()
+        return str(self.codigo_sistema or '').strip()
+
+    def _fiserv_itd_branch_for_payload(self):
+        """
+        Branch ITD: primero el texto del proveedor, luego método + código sucursal numérico.
+
+        Returns:
+            str: Valor Branch para el JSON ITD.
+        """
+        self.ensure_one()
+        prov = self.fiserv_provider_id
+        if prov and prov.code == 'fiserv' and (prov.fiserv_branch or '').strip():
+            return str(prov.fiserv_branch).strip()
+        branch = self.fiserv_branch
+        if (branch is None or branch is False or str(branch).strip() == '') and self.codigo_sucursal is not None:
+            branch = str(self.codigo_sucursal)
+        return str(branch or '').strip()
+
+    def _fiserv_itd_client_app_id_for_payload(self):
+        """
+        ClientAppId ITD: prioriza el configurado en el proveedor Fiserv.
+
+        Returns:
+            str: Identificador de aplicación cliente ITD.
+        """
+        self.ensure_one()
+        prov = self.fiserv_provider_id
+        if prov and prov.code == 'fiserv' and (prov.fiserv_client_app_id or '').strip():
+            return str(prov.fiserv_client_app_id).strip()
+        return str(self.client_app_id or '1').strip()
+
     def enviar_pago(self, data, pos_session_id, has_refunded_line):
         self.ensure_one()
         if not has_refunded_line:
@@ -258,18 +455,14 @@ class PosPaymentMethod(models.Model):
             tuple: (base_url_endpoint, response_json)
         """
         self.ensure_one()
-        base_url_endpoint = (self.sudo().url_webservice or '').rstrip('/')
-        endpoint = base_url_endpoint + '/processFinancialPurchase'
-        req = requests.post(
-            endpoint,
-            json=data,
-            headers={'Content-Type': 'application/json'},
-            timeout=30,
+        base_url_endpoint = self._fiserv_itd_base_url_webservice()
+        return fiserv_itd_http_post(
+            base_url_endpoint,
+            '/processFinancialPurchase',
+            data,
+            'processFinancialPurchase',
+            extra_999_pos_warning=True,
         )
-        response_json = req.json()
-        _fiserv_normalize_itd_http_response(response_json)
-        _logger.info('processFinancialPurchase Response:\n%s', pprint.pformat(response_json))
-        return base_url_endpoint, response_json
 
     def _fiserv_http_post_void_by_ticket(self, data):
         """
@@ -282,18 +475,14 @@ class PosPaymentMethod(models.Model):
             tuple: (base_url_endpoint, response_json)
         """
         self.ensure_one()
-        base_url_endpoint = (self.sudo().url_webservice or '').rstrip('/')
-        endpoint = base_url_endpoint + '/processFinancialPurchaseVoidByTicket'
-        req = requests.post(
-            endpoint,
-            json=data,
-            headers={'Content-Type': 'application/json'},
-            timeout=30,
+        base_url_endpoint = self._fiserv_itd_base_url_webservice()
+        return fiserv_itd_http_post(
+            base_url_endpoint,
+            '/processFinancialPurchaseVoidByTicket',
+            data,
+            'processFinancialPurchaseVoidByTicket',
+            extra_999_pos_warning=False,
         )
-        response_json = req.json()
-        _fiserv_normalize_itd_http_response(response_json)
-        _logger.info('processFinancialPurchaseVoidByTicket Response:\n%s', pprint.pformat(response_json))
-        return base_url_endpoint, response_json
 
     @api.model
     def fiserv_run_purchase_query_loop(
@@ -313,7 +502,7 @@ class PosPaymentMethod(models.Model):
         sin eso el pinpad queda en «Enviando al host» y Query devuelve 12 en bucle.
 
         Args:
-            payment_method (pos.payment.method): Método Fiserv (terminal ITD).
+            payment_method (pos.payment.method|payment.provider): Driver ITD (TPV o solo proveedor).
             query_data (dict): Payload de consulta (TransactionId, PosID, etc.).
             base_url_endpoint (str): URL base ITD.
             transaction_id: ID ITD (referencia de logs).
@@ -551,9 +740,7 @@ class PosPaymentMethod(models.Model):
                     _('La sesión POS y el pago deben ser de la misma compañía.')
                 )
 
-        branch = self.fiserv_branch
-        if (branch is None or branch is False or str(branch).strip() == '') and self.codigo_sucursal is not None:
-            branch = str(self.codigo_sucursal)
+        branch = self._fiserv_itd_branch_for_payload()
 
         amount_cents = int(round(account_payment.amount * 100))
         if amount_cents <= 0:
@@ -570,11 +757,21 @@ class PosPaymentMethod(models.Model):
         # --- PosID: terminal explícito en pago contable (multi-POS) o código del método ---
         pos_id = self._fiserv_resolve_pos_id_for_account_payment(account_payment)
 
+        system_id = self._fiserv_itd_system_id_for_payload()
+        if not system_id:
+            raise UserError(
+                _(
+                    'Falta SystemId para ITD: en el método de pago POS «%(m)s» enlace el proveedor Fiserv '
+                    'y complete «SystemId» en ese proveedor (Pagos en línea), o indique código sistema en el método.'
+                )
+                % {'m': self.display_name}
+            )
+
         return {
             'PosID': pos_id,
-            'SystemId': self.codigo_sistema,
+            'SystemId': system_id,
             'Branch': branch or '',
-            'ClientAppId': self.client_app_id or '1',
+            'ClientAppId': self._fiserv_itd_client_app_id_for_payload(),
             'UserId': str(self.env.user.id),
             'TransactionDateTimeyyyyMMddHHmmssSSS': self.get_formatted_timestamp(),
             'Amount': str(amount_cents),
@@ -625,9 +822,7 @@ class PosPaymentMethod(models.Model):
                 _('La transacción de pago seleccionada no tiene número de ticket ITD; no se puede anular por ticket.')
             )
 
-        branch = self.fiserv_branch
-        if (branch is None or branch is False or str(branch).strip() == '') and self.codigo_sucursal is not None:
-            branch = str(self.codigo_sucursal)
+        branch = self._fiserv_itd_branch_for_payload()
 
         acquirer = source_transaction.acquirer
         if acquirer is None or acquirer is False:
@@ -638,12 +833,22 @@ class PosPaymentMethod(models.Model):
         # --- PosID alineado con el cobro / selección en account.payment ---
         pos_id = self._fiserv_resolve_pos_id_for_account_payment(account_payment)
 
+        system_id = self._fiserv_itd_system_id_for_payload()
+        if not system_id:
+            raise UserError(
+                _(
+                    'Falta SystemId para ITD: en el método de pago POS «%(m)s» enlace el proveedor Fiserv '
+                    'y complete «SystemId» en ese proveedor, o indique código sistema en el método.'
+                )
+                % {'m': self.display_name}
+            )
+
         # --- Mismo cuerpo mínimo que el TPV en devolución (processFinancialPurchaseVoidByTicket) ---
         return {
             'PosID': pos_id,
-            'SystemId': self.codigo_sistema,
+            'SystemId': system_id,
             'Branch': branch or '',
-            'ClientAppId': self.client_app_id or '1',
+            'ClientAppId': self._fiserv_itd_client_app_id_for_payload(),
             'UserId': str(self.env.user.id),
             'TransactionDateTimeyyyyMMddHHmmssSSS': self.get_formatted_timestamp(),
             'TicketNumber': ticket,
@@ -974,7 +1179,9 @@ class PosPaymentMethod(models.Model):
                         # --- Vincular tx al pago estándar (account_payment / portal) si el campo existe ---
                         if tx and 'payment_transaction_id' in pay._fields:
                             vals_pending['payment_transaction_id'] = tx.id
-                        pay.write(vals_pending)
+                        # --- Mismo criterio que action_post: el hilo corre con run_uid que puede
+                        #     quedar bloqueado por ir.rule al actualizar flags técnicos. ---
+                        pay.sudo().write(vals_pending)
                         state = env['payment.transaction']._get_transaction_state_with_pos_response(
                             str(result.get('ResponseCode', '999')).strip(),
                             result,
@@ -1058,7 +1265,7 @@ class PosPaymentMethod(models.Model):
                         env2 = api.Environment(cr2, run_uid, {})
                         p2 = env2['account.payment'].browse(account_payment_id)
                         if p2.exists() and p2.fiserv_async_terminal_pending:
-                            p2.write({'fiserv_async_terminal_pending': False})
+                            p2.sudo().write({'fiserv_async_terminal_pending': False})
                         cr2.commit()
 
     def _update_stored_transaction(self, transaction_id, final_result):
@@ -1293,7 +1500,7 @@ class PosPaymentMethod(models.Model):
 
         _logger.info('cancelFinancialPurchase by user #%d:\n%s', self.env.uid, pprint.pformat(data))
 
-        base_url = (self.sudo().url_webservice or '').rstrip('/')
+        base_url = self._fiserv_itd_base_url_webservice()
         endpoint = base_url + '/cancelFinancialPurchase'
         headers = {
             'Content-Type': 'application/json',
@@ -1454,6 +1661,66 @@ class PosPaymentMethod(models.Model):
         except Exception as e:
             _logger.error('Error al persistir transacción Fiserv tras Query: %s', str(e))
 
+    @api.model
+    def fiserv_persist_after_query_generic(
+        self,
+        transaction_id,
+        final_result,
+        pos_session_id,
+        account_payment_id=None,
+    ):
+        """
+        Persiste el resultado del bucle Query cuando el driver ITD es ``payment.provider``.
+
+        Replica la lógica de ``_fiserv_persist_transaction_after_query`` sin exigir un
+        ``pos.payment.method`` (cobro solo desde contabilidad con proveedor Fiserv).
+
+        Args:
+            transaction_id: ID ITD.
+            final_result (dict): Última respuesta del bucle Query.
+            pos_session_id: Sesión POS o False.
+            account_payment_id (int|None): Pago contable si aplica.
+        """
+        try:
+            tid_key = str(transaction_id).strip()
+            transaction = self.env['payment.transaction'].sudo().search(
+                [('fiserv_transaction_id', '=', tid_key)],
+                limit=1,
+            )
+            if transaction:
+                transaction.update_fiserv_transaction(final_result)
+                _logger.info(
+                    'Fiserv: transacción actualizada tras Query (id ITD=%s, driver=provider)',
+                    tid_key,
+                )
+            elif account_payment_id:
+                self.env['payment.transaction'].sudo().create_fiserv_transaction_with_complete_data(
+                    itd_response=final_result,
+                    pos_order=None,
+                    pos_payment=None,
+                    transaction_id=tid_key,
+                    account_payment_id=account_payment_id or False,
+                )
+                _logger.info(
+                    'Fiserv: transacción creada tras Query (account.payment, id ITD=%s)',
+                    tid_key,
+                )
+            else:
+                pm = self.search([('use_payment_terminal', '=', 'fiserv')], limit=1)
+                if pm:
+                    pm._fiserv_persist_transaction_after_query(
+                        transaction_id,
+                        final_result,
+                        pos_session_id,
+                        account_payment_id=account_payment_id,
+                    )
+                else:
+                    _logger.error(
+                        'Fiserv: no se pudo persistir Query (sin tx, sin account.payment, sin PM Fiserv)'
+                    )
+        except Exception as err:
+            _logger.error('Fiserv fiserv_persist_after_query_generic: %s', str(err))
+
     def _find_related_pos_order_by_transaction(self, transaction_id, pos_session_id):
         """
         Busca el pedido POS relacionado con una transacción.
@@ -1509,4 +1776,174 @@ class PosPaymentMethod(models.Model):
             transaction_id,
             pos_session_id,
         )
-        return self.env['pos.payment'] 
+        return self.env['pos.payment']
+
+
+def fiserv_itd_background_worker_account_payment(
+    pool,
+    provider_id,
+    run_uid,
+    data,
+    bus_channel_name,
+    id_config,
+    transaction_id,
+    base_url_endpoint,
+    pos_session_id,
+    account_payment_id=None,
+):
+    """
+    Hilo ITD cuando el cobro contable usa ``payment.provider`` (sin ``pos.payment.method``).
+
+    Replica ``_procesar_en_segundo_plano`` usando el proveedor como driver del bucle Query
+    (misma API HTTP que el TPV; no requiere diario vinculado al POS).
+    """
+    effective_uid = run_uid if run_uid is not None else SUPERUSER_ID
+    tid_norm = str(transaction_id).strip()
+    with pool.cursor() as new_cr:
+        env = api.Environment(new_cr, effective_uid, {})
+        try:
+            prov = env['payment.provider'].browse(provider_id)
+            query_data = {
+                'PosID': data['PosID'],
+                'SystemId': data['SystemId'],
+                'Branch': data['Branch'],
+                'ClientAppId': data['ClientAppId'],
+                'UserId': data['UserId'],
+                'TransactionDateTimeyyyyMMddHHmmssSSS': prov.get_formatted_timestamp(),
+                'TransactionId': transaction_id,
+            }
+            result = env['pos.payment.method'].fiserv_run_purchase_query_loop(
+                prov,
+                query_data,
+                base_url_endpoint,
+                transaction_id,
+                pos_session_id,
+                original_purchase_data=data,
+            )
+            try:
+                env['pos.payment.method'].fiserv_persist_after_query_generic(
+                    tid_norm,
+                    result,
+                    pos_session_id,
+                    account_payment_id=account_payment_id,
+                )
+            except Exception as err_upd:
+                _logger.error('Error al actualizar transacción en segundo plano (provider): %s', str(err_upd))
+
+            result.update({
+                'id_config': id_config,
+                'origin_transaction_id': transaction_id,
+            })
+            send_bus = not account_payment_id
+            if send_bus and bus_channel_name:
+                try:
+                    env['bus.bus'].sudo()._sendone(
+                        bus_channel_name, 'FISERV_LATEST_RESPONSE', result
+                    )
+                except Exception as bus_err:
+                    _logger.error('Error al enviar mensaje bus: %s', str(bus_err))
+
+            if account_payment_id:
+                pay = env['account.payment'].browse(account_payment_id)
+                bus_posted = False
+                bus_message = ''
+                if pay.exists():
+                    tx = env['payment.transaction'].sudo().search(
+                        [('fiserv_transaction_id', '=', tid_norm)],
+                        limit=1,
+                    )
+                    if tx:
+                        tx.write(
+                            {
+                                'account_payment_id': account_payment_id,
+                                'transaction_origin': 'account_payment',
+                            }
+                        )
+                    vals_pending = {'fiserv_async_terminal_pending': False}
+                    if tx and 'payment_transaction_id' in pay._fields:
+                        vals_pending['payment_transaction_id'] = tx.id
+                    pay.sudo().write(vals_pending)
+                    state = env['payment.transaction']._get_transaction_state_with_pos_response(
+                        str(result.get('ResponseCode', '999')).strip(),
+                        result,
+                    )
+                    new_cr.commit()
+                    pay = env['account.payment'].browse(account_payment_id)
+                    if state == 'done':
+                        try:
+                            pay.action_post()
+                            bus_posted = True
+                            bus_message = _(
+                                'El cobro en el terminal finalizó y el pago quedó registrado.'
+                            )
+                        except Exception as post_err:
+                            _logger.exception(
+                                'Fiserv: ITD aprobado pero action_post falló (pay=%s)',
+                                account_payment_id,
+                            )
+                            err_txt = getattr(post_err, 'name', None) or str(post_err)
+                            pay.message_post(
+                                body=_(
+                                    'Fiserv ITD: el cobro quedó aprobado en el terminal y la transacción '
+                                    'quedó vinculada a este pago, pero al registrar en contabilidad falló:\n'
+                                    '%(err)s\n\n'
+                                    'Corrija la causa (p. ej. diarios, multimoneda, localización) y pulse '
+                                    'Confirmar otra vez: no se volverá a enviar al pinpad.'
+                                )
+                                % {'err': err_txt}
+                            )
+                            bus_message = _(
+                                'El terminal aprobó el cobro, pero falló el registro contable. '
+                                'Revise el chatter de este pago.'
+                            )
+                    else:
+                        if pay.payment_type == 'outbound':
+                            body_txt = _(
+                                'Fiserv ITD (devolución): la anulación no quedó aprobada en el terminal '
+                                '(estado %(st)s). %(msg)s'
+                            ) % {'st': state, 'msg': result.get('msg') or ''}
+                        else:
+                            body_txt = _(
+                                'Fiserv ITD: el cobro no quedó aprobado en el terminal '
+                                '(estado %(st)s). %(msg)s'
+                            ) % {'st': state, 'msg': result.get('msg') or ''}
+                        pay.message_post(body=body_txt)
+                        bus_message = body_txt
+                    env['account.payment']._fiserv_bus_notify_after_terminal(
+                        effective_uid,
+                        account_payment_id,
+                        bus_posted,
+                        bus_message,
+                    )
+            new_cr.commit()
+        except Exception:
+            _logger.exception(
+                'Fiserv fiserv_itd_background_worker_account_payment falló (account_payment_id=%s, tx=%s)',
+                account_payment_id,
+                tid_norm,
+            )
+            new_cr.rollback()
+            if account_payment_id and effective_uid:
+                try:
+                    with pool.cursor() as cr_bus:
+                        env_bus = api.Environment(cr_bus, effective_uid, {})
+                        env_bus['account.payment']._fiserv_bus_notify_after_terminal(
+                            effective_uid,
+                            account_payment_id,
+                            False,
+                            _(
+                                'Error al procesar la respuesta del terminal Fiserv. '
+                                'Revise el registro de pago y el chatter.'
+                            ),
+                        )
+                        cr_bus.commit()
+                except Exception:
+                    _logger.exception('Fiserv: notificación bus tras error en hilo (provider)')
+        finally:
+            if account_payment_id:
+                with pool.cursor() as cr2:
+                    env2 = api.Environment(cr2, effective_uid, {})
+                    p2 = env2['account.payment'].browse(account_payment_id)
+                    if p2.exists() and p2.fiserv_async_terminal_pending:
+                        p2.sudo().write({'fiserv_async_terminal_pending': False})
+                    cr2.commit()

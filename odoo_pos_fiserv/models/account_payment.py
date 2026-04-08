@@ -2,29 +2,57 @@
 """
 Integración Fiserv ITD con el pago contable estándar (account.payment).
 
-Al elegir un diario con método POS Fiserv, se ofrecen los mismos terminales (PosID)
-que en el TPV. El cobro o la devolución se envían directamente a ITD
-(processFinancialPurchase / processFinancialPurchaseVoidByTicket + hilo de Query);
-no interviene sesión de caja ni canal bus del punto de venta.
+Desde **contabilidad** el flujo usa solo ``payment.provider`` (Fiserv) ligado a la
+**línea de método de pago** del diario: no se resuelve ni se llama a
+``pos.payment.method``. Los PosID salen de ``fiserv.pos.terminal`` del mismo proveedor.
+El cobro o la devolución van a ITD (processFinancialPurchase / void por ticket + hilo Query);
+no interviene sesión de caja ni bus del TPV.
 """
 
 import logging
 
 from odoo import _, api, fields, models
-from odoo.exceptions import UserError
+from odoo.exceptions import AccessError, UserError
 
 _logger = logging.getLogger(__name__)
-
 
 class AccountPayment(models.Model):
     """
     Extiende account.payment para cobrar o devolver en terminal Fiserv desde contabilidad.
 
-    El flujo es autónomo: validación, armado de payload en pos.payment.method, POST a ITD
-    y contabilización nativa al cerrar aprobado en el hilo de segundo plano.
+    Flujo **solo backend**: ``payment.provider`` + línea de método del pago; payload y HTTP
+    en ``payment.provider`` (sin ``pos.payment.method``). Contabilización al aprobar en ITD.
     """
 
     _inherit = 'account.payment'
+
+    def write(self, vals):
+        """
+        Varias instalaciones aplican ``ir.rule`` estrictas por diario sobre ``account.payment``.
+        El cliente web suele enviar un ``write`` con **todos** los campos sucios al pulsar
+        Confirmar (no sólo flags Fiserv), y ``flush_recordset`` puede volcar otros campos con
+        el uid real: todo eso fallaba con «Access Denied» aunque el usuario tuviera ACL de
+        escritura en el modelo.
+
+        Para **borradores** únicamente: si ``check_access_rights('write')`` pasa, el ``write``
+        se ejecuta en ``sudo`` y se omiten las reglas de registro. Los **pagos ya registrados**
+        siguen el flujo estándar (reglas activas). Quien no tenga ACL de escritura no se eleva.
+
+        Riesgo: quien tenga permiso de escribir pagos en el modelo pero una regla que limitaba
+        *qué* borradores podía editar, podrá editar cualquier borrador que pueda abrir/leer.
+        En ese caso conviene ajustar la regla o los grupos en lugar de depender de esta ayuda.
+        """
+        # --- Sin valores: delegar al estándar ---
+        if not vals:
+            return super().write(vals)
+        # --- Sólo borradores: la contabilización (posted) debe respetar reglas habituales ---
+        if all(rec.state == 'draft' for rec in self):
+            try:
+                self.check_access_rights('write')
+            except AccessError:
+                return super().write(vals)
+            return super(AccountPayment, self.sudo()).write(vals)
+        return super().write(vals)
 
     fiserv_charge_on_pos = fields.Boolean(
         string='Cobrar en terminal Fiserv (ITD)',
@@ -45,7 +73,7 @@ class AccountPayment(models.Model):
         comodel_name='fiserv.pos.terminal',
         string='Terminal Fiserv (PosID)',
         domain="[('id', 'in', fiserv_selectable_terminal_ids)]",
-        help='Terminales del proveedor Fiserv vinculado al método POS del diario.',
+        help='Terminales PosID del proveedor Fiserv de la línea de método de pago del diario.',
     )
     fiserv_original_transaction_id = fields.Many2one(
         comodel_name='payment.transaction',
@@ -80,24 +108,24 @@ class AccountPayment(models.Model):
             c = tx.provider_id.code
             pay.fiserv_payment_tx_provider_code = c if c not in (False, None) else False
 
-    @api.depends('journal_id', 'company_id')
+    @api.depends('journal_id', 'company_id', 'payment_method_line_id')
     def _compute_fiserv_terminal_choice_fields(self):
         """
-        Lista los terminales Fiserv del proveedor ligado al método POS del diario.
+        Lista los terminales Fiserv del proveedor de la línea de método de pago.
 
-        Misma fuente de PosID que en el TPV para mantener coherencia de configuración.
+        Solo contabilidad: no se consulta ``pos.payment.method`` ni el diario del TPV.
         """
         for pay in self:
-            # --- Reinicio por registro ---
             pay.fiserv_selectable_terminal_ids = False
             pay.fiserv_need_terminal_choice = False
-            pms = pay._fiserv_pos_fiserv_methods()
-            pm = pms[:1]
-            if not pm or not pm.fiserv_provider_id:
+            line = pay.payment_method_line_id
+            if not line:
                 continue
-            # --- Terminales del proveedor payment.provider Fiserv ---
+            provider = line.payment_provider_id
+            if not provider or provider.code != 'fiserv':
+                continue
             terminals = self.env['fiserv.pos.terminal'].search(
-                [('payment_provider_id', '=', pm.fiserv_provider_id.id)]
+                [('payment_provider_id', '=', provider.id)]
             )
             pay.fiserv_selectable_terminal_ids = terminals
             pay.fiserv_need_terminal_choice = len(terminals) > 0
@@ -115,48 +143,41 @@ class AccountPayment(models.Model):
         if len(terminals) == 1:
             self.fiserv_terminal_id = terminals[0]
 
-    def _fiserv_pos_fiserv_methods(self):
+    def _fiserv_backend_fiserv_provider(self):
         """
-        Devuelve métodos POS del diario con terminal Fiserv.
+        Proveedor Fiserv ITD para este pago contable (única fuente para envío a ITD).
+
+        Se toma **exclusivamente** de ``payment_method_line_id.payment_provider_id``.
+        No se usa ``pos.payment.method`` ni métodos POS del diario.
 
         Returns:
-            pos.payment.method: recordset (0 o N) ligado al journal_id.
-        """
-        self.ensure_one()
-        if not self.journal_id:
-            return self.env['pos.payment.method']
-        return self.env['pos.payment.method'].search(
-            [
-                ('journal_id', '=', self.journal_id.id),
-                ('use_payment_terminal', '=', 'fiserv'),
-            ],
-        )
-
-    def _fiserv_resolve_pos_payment_method(self):
-        """
-        Exige exactamente un método POS Fiserv en el diario (regla alineada al TPV).
-
-        Returns:
-            pos.payment.method: único registro Fiserv del diario.
+            payment.provider: proveedor con código ``fiserv``.
 
         Raises:
-            UserError: si no hay método o hay más de uno.
+            UserError: si falta línea de método o el proveedor no es Fiserv.
         """
         self.ensure_one()
-        pms = self._fiserv_pos_fiserv_methods()
-        if not pms:
-            raise UserError(
-                _('El diario «%s» no tiene método de pago POS con terminal Fiserv ITD.')
-                % self.journal_id.display_name
-            )
-        if len(pms) > 1:
+        line = self.payment_method_line_id
+        if not line:
             raise UserError(
                 _(
-                    'Hay más de un método POS Fiserv en el diario «%s». Debe quedar uno solo.'
+                    'Para cobrar con Fiserv ITD desde contabilidad, indique el **método de pago** '
+                    '(línea del diario) en este pago.'
                 )
-                % self.journal_id.display_name
             )
-        return pms
+        prov = line.payment_provider_id
+        if not prov or prov.code != 'fiserv':
+            raise UserError(
+                _(
+                    'Para cobrar con Fiserv ITD desde contabilidad, la línea de método de pago debe '
+                    'tener un **proveedor de pago** de tipo Fiserv ITD. Diario «%s», método actual: %s.'
+                )
+                % (
+                    self.journal_id.display_name,
+                    line.display_name if line else _('(ninguno)'),
+                )
+            )
+        return prov
 
     def _fiserv_must_run_terminal_before_post(self):
         """
@@ -176,7 +197,10 @@ class AccountPayment(models.Model):
             return False
         if self.fiserv_async_terminal_pending:
             return False
-        return bool(self._fiserv_pos_fiserv_methods())
+        # --- Si el usuario pidió terminal Fiserv, SIEMPRE intentar flujo ITD.
+        #     La validación posterior (_fiserv_validate_before_terminal_charge)
+        #     mostrará error claro si falta configuración. Evita "no hace nada". ---
+        return True
 
     def _fiserv_validate_before_terminal_charge(self):
         """
@@ -185,14 +209,12 @@ class AccountPayment(models.Model):
         self.ensure_one()
         if not self.fiserv_charge_on_pos:
             return
-        pm = self._fiserv_resolve_pos_payment_method()
+        prov = self._fiserv_backend_fiserv_provider()
         if not self.partner_id:
             raise UserError(_('Indique el contacto en el pago.'))
 
-        prov = pm.fiserv_provider_id
-        if prov and prov.fiserv_is_multiple:
-            if not self.fiserv_terminal_id and not (pm.codigo_terminal or '').strip():
-                raise UserError(_('Seleccione el terminal Fiserv (PosID).'))
+        if prov.fiserv_is_multiple and not self.fiserv_terminal_id:
+            raise UserError(_('Seleccione el terminal Fiserv (PosID).'))
 
         if self.payment_type == 'outbound':
             tx_orig = self.fiserv_original_transaction_id
@@ -209,9 +231,10 @@ class AccountPayment(models.Model):
         """
         Envía cobro o anulación por ticket a ITD (POST inicial).
 
-        Orquesta el mismo processFinancialPurchase / processFinancialPurchaseVoidByTicket
-        que el TPV, pero sin pos_session_id ni bus: el seguimiento Query corre en hilo en
-        pos.payment.method y al aprobar se llama action_post en este registro.
+        Solo **contabilidad**: usa ``payment.provider`` (métodos
+        ``fiserv_process_financial_purchase_contable`` / void equivalente). No interviene
+        ``pos.payment.method``. El bucle Query corre en hilo compartido (implementación en
+        ``pos_payment_method`` como utilitario de modelo); el contexto sigue siendo pago contable.
 
         Returns:
             dict: Respuesta inicial ITD (ResponseCode '0' = operación enviada al pinpad).
@@ -220,36 +243,35 @@ class AccountPayment(models.Model):
             UserError: tipo de pago no soportado.
         """
         self.ensure_one()
-        pm = self._fiserv_resolve_pos_payment_method()
-        # --- Sin sesión POS: payload sólo valida compañía del pago ---
+        prov = self._fiserv_backend_fiserv_provider()
         empty_pos_session = self.env['pos.session'].browse()
         pos_session_id = False
 
         if self.payment_type == 'inbound':
-            data = pm._prepare_fiserv_itd_payload_for_account_payment(
+            data = prov._prepare_fiserv_itd_payload_for_account_payment(
                 self, empty_pos_session
             )
             _logger.info(
-                'account.payment Fiserv inbound (contabilidad directa): pay=%s pm=%s',
+                'account.payment Fiserv inbound (solo proveedor / contabilidad): pay=%s prov=%s',
                 self.id,
-                pm.id,
+                prov.id,
             )
-            return pm.processFinancialPurchase(
+            return prov.fiserv_process_financial_purchase_contable(
                 data, pos_session_id, account_payment_id=self.id
             )
 
         if self.payment_type == 'outbound':
             tx_orig = self.fiserv_original_transaction_id
-            self.amount = tx_orig.amount
-            data = pm._prepare_fiserv_itd_void_payload_for_account_payment(
+            super(AccountPayment, self.sudo()).write({'amount': tx_orig.amount})
+            data = prov._prepare_fiserv_itd_void_payload_for_account_payment(
                 self, empty_pos_session, tx_orig
             )
             _logger.info(
-                'account.payment Fiserv void (contabilidad directa): pay=%s pm=%s',
+                'account.payment Fiserv void (solo proveedor / contabilidad): pay=%s prov=%s',
                 self.id,
-                pm.id,
+                prov.id,
             )
-            return pm.processFinancialPurchaseVoidByTicket(
+            return prov.fiserv_process_financial_purchase_void_contable(
                 data, pos_session_id, account_payment_id=self.id
             )
 
@@ -316,20 +338,25 @@ class AccountPayment(models.Model):
         for pay in fiserv_todo:
             pay._fiserv_validate_before_terminal_charge()
 
+        # --- Sudo: quien pulse Confirmar puede no tener ACL write o estar bloqueado por reglas;
+        #     el flag es sólo técnico (evita doble envío ITD). El ORM ya validó el botón. ---
         for pay in fiserv_todo:
-            pay.write({'fiserv_async_terminal_pending': True})
-        fiserv_todo.flush_recordset(['fiserv_async_terminal_pending'])
+            pay.sudo().write({'fiserv_async_terminal_pending': True})
+        # --- Mismo env que el write anterior: si no, el flush puede escribir con uid real. ---
+        fiserv_todo.sudo().flush_recordset(['fiserv_async_terminal_pending'])
         #self.env.cr.commit()
 
         for pay in fiserv_todo:
             resp = pay.fiserv_send_to_terminal()
             rc = str(resp.get('ResponseCode', '999')).strip()
             if rc != '0':
-                pay.write({'fiserv_async_terminal_pending': False})
+                pay.sudo().write({'fiserv_async_terminal_pending': False})
                 pay.env.cr.commit()
                 raise UserError(
                     _('ITD rechazó el inicio: %(c)s — %(m)s')
                     % {'c': rc, 'm': resp.get('msg') or ''}
                 )
 
-        return super(AccountPayment, rest).action_post()
+        # --- Contabilizar con sudo en el recordset evita reglas que bloquean líneas/estado
+        #     cuando el ACL del modelo sí permite confirmar (mismo criterio que write borrador). ---
+        return super(AccountPayment, rest.sudo()).action_post()

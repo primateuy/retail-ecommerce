@@ -20,7 +20,7 @@ campos y vistas; no lo instale si ya tiene odoo_pos_oca (campos duplicados).
     "author": "PRIMATE",
     "website": "https://www.primate.com",
     "category": "Point of Sale",
-    "version": "17.0.1.6.6",
+    "version": "17.0.1.7.0",
     "depends": [
         "base",
         "bus",

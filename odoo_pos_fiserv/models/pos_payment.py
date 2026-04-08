@@ -81,14 +81,12 @@ class PosPayment(models.Model):
 
         self._fiserv_require_itd_pos_payment_fields()
 
-        branch = payment_method.fiserv_branch or ""
-        if not branch and payment_method.codigo_sucursal is not None:
-            branch = str(payment_method.codigo_sucursal)
+        branch = payment_method._fiserv_itd_branch_for_payload()
         return {
             "PosID": payment_method.codigo_terminal,
-            "SystemId": payment_method.codigo_sistema,
+            "SystemId": payment_method._fiserv_itd_system_id_for_payload(),
             "Branch": branch,
-            "ClientAppId": payment_method.client_app_id,
+            "ClientAppId": payment_method._fiserv_itd_client_app_id_for_payload(),
             "UserId": self.env.user.id,
             "Amount": self.amount,
             "Currency": self.currency_id.name,

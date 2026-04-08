@@ -4,7 +4,7 @@
         <!--
             Los campos Fiserv deben ir FUERA de group2 (Diario / método de pago).
             Insertarlos tras payment_method_line_id rompía el layout de dos columnas y
-            las etiquetas de Diario, Método de pago y campos siguientes (p. ej. sesión POS).
+            las etiquetas de Diario, Método de pago y campos siguientes del formulario estándar.
         -->
         <record id="account_payment_form_fiserv_terminal" model="ir.ui.view">
             <field name="name">account.payment.form.fiserv.terminal</field>
@@ -29,7 +29,7 @@
                         <field name="fiserv_terminal_id"
                                options="{'no_create': True}"
                                readonly="state != 'draft'"
-                               invisible="not fiserv_charge_on_pos or (state == 'draft' and not fiserv_need_terminal_choice) or (state != 'draft' and not fiserv_terminal_id)"/>
+                               invisible="not fiserv_charge_on_pos or (state != 'draft' and not fiserv_terminal_id)"/>
                         <field name="payment_transaction_id"
                                string="Transacción Fiserv (payment.transaction)"
                                options="{'no_create': True}"
