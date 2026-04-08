@@ -4,10 +4,18 @@ import { MercadoPagoQRPanel } from "@pos_mercadopago/components/popup_qr/popup_q
 import { register_payment_method } from "@point_of_sale/app/store/pos_store";
 import { patch } from "@web/core/utils/patch";
 import { PaymentScreen } from "@point_of_sale/app/screens/payment_screen/payment_screen";
+import { ProductScreen } from "@point_of_sale/app/screens/product_screen/product_screen";
 
 patch(PaymentScreen, {
     components: {
         ...PaymentScreen.components,
+        MercadoPagoQRPanel,
+    },
+});
+
+patch(ProductScreen, {
+    components: {
+        ...(ProductScreen.components || {}),
         MercadoPagoQRPanel,
     },
 });
@@ -89,10 +97,18 @@ export class PaymentMercadoPagoQR extends PaymentMercadoPago {
                     ? this.pos.store_till.qr_url
                     : parsedOrder.data.qr_data;
 
-            this.pos.mpQrPanel = {
+            const pendingData = {
                 qrSrc: qrSrc,
                 orderReference: parsedOrder.order_reference,
+                qrType: this.pos.qr_type,
             };
+            if (orderFrontend.setMpPendingOrder) {
+                orderFrontend.setMpPendingOrder(pendingData);
+            } else {
+                orderFrontend.mp_pending_order = pendingData;
+                orderFrontend.save_to_db?.();
+            }
+            this.pos.mpQrPanel = pendingData;
         } catch (error) {
             console.error("Error al procesar la orden", error);
             return this._showMsg("Hubo un error al procesar la orden", "| Error al procesar la orden");
