@@ -1,80 +1,118 @@
 # Translation of Odoo Server.
 # This file contains the translation of the following modules:
-# * pos_forum_employee_controls
+# 	* pos_forum_employee_controls
 #
 msgid ""
 msgstr ""
-"Project-Id-Version: Odoo Server 17.0\n"
-"Language: es_UY\n"
+"Project-Id-Version: Odoo Server 17.0+e-20250203\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-04-08 12:31+0000\n"
+"PO-Revision-Date: 2026-04-08 12:31+0000\n"
+"Last-Translator: \n"
+"Language-Team: \n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
-"Content-Transfer-Encoding: 8bit\n"
-"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"Content-Transfer-Encoding: \n"
+"Plural-Forms: \n"
 
 #. module: pos_forum_employee_controls
+#. odoo-javascript
+#: code:addons/pos_forum_employee_controls/static/src/overrides/selection_popup.xml:0
+#, python-format
+msgid "Buscar..."
+msgstr "Buscar..."
+
+#. module: pos_forum_employee_controls
+#: model_terms:ir.ui.view,arch_db:pos_forum_employee_controls.hr_employee_view_form_pos_permissions
 msgid "Control Buttons"
 msgstr "Botones de control"
 
 #. module: pos_forum_employee_controls
+#: model:ir.model,name:pos_forum_employee_controls.model_hr_employee
+msgid "Employee"
+msgstr "Empleado"
+
+#. module: pos_forum_employee_controls
+#: model_terms:ir.ui.view,arch_db:pos_forum_employee_controls.hr_employee_view_form_pos_permissions
 msgid "Loyalty Buttons"
 msgstr "Botones de lealtad"
 
 #. module: pos_forum_employee_controls
+#: model_terms:ir.ui.view,arch_db:pos_forum_employee_controls.hr_employee_view_form_pos_permissions
 msgid "Numpad Controls"
-msgstr "Control teclado numérico"
+msgstr "Controles del teclado numerico"
 
 #. module: pos_forum_employee_controls
+#: model_terms:ir.ui.view,arch_db:pos_forum_employee_controls.hr_employee_view_form_pos_permissions
 msgid "POS Permissions"
-msgstr "Permisos en PDV"
+msgstr "Permisos en POS"
 
 #. module: pos_forum_employee_controls
+#: model:ir.model.fields,field_description:pos_forum_employee_controls.field_hr_employee__pos_allow_customer_note_button
 msgid "POS: Allow Customer Note Button"
-msgstr "POS: Autorizar botón de nota de cliente"
+msgstr "POS: Permitir Boton de Notas al Empleado"
 
 #. module: pos_forum_employee_controls
+#: model:ir.model.fields,field_description:pos_forum_employee_controls.field_hr_employee__pos_allow_discount_button
 msgid "POS: Allow Discount Button"
-msgstr "POS: Autorizar botón de descuento"
+msgstr "POS: Permitir boton de descuento"
 
 #. module: pos_forum_employee_controls
-msgid "POS: Allow eWallet Button"
-msgstr "POS: Autorizar botón de monedero"
-
-#. module: pos_forum_employee_controls
+#: model:ir.model.fields,field_description:pos_forum_employee_controls.field_hr_employee__pos_allow_numpad_discount
 msgid "POS: Allow Numpad Discount"
-msgstr "POS: Autorizar descuento en teclado numérico"
+msgstr "POS: Permitir descuento en teclado numerico"
 
 #. module: pos_forum_employee_controls
+#: model:ir.model.fields,field_description:pos_forum_employee_controls.field_hr_employee__pos_allow_numpad_price
 msgid "POS: Allow Numpad Price"
-msgstr "POS: Autorizar cambio de precio en teclado numérico"
+msgstr "POS: Permitir precio en teclado numerico"
 
 #. module: pos_forum_employee_controls
+#: model:ir.model.fields,field_description:pos_forum_employee_controls.field_hr_employee__pos_allow_pricelist_button
 msgid "POS: Allow Pricelist Button"
-msgstr "POS: Autorizar botón de lista de precios"
+msgstr "POS: Permitir boton de lista de precios"
 
 #. module: pos_forum_employee_controls
+#: model:ir.model.fields,field_description:pos_forum_employee_controls.field_hr_employee__pos_allow_promo_code_button
 msgid "POS: Allow Promo Code Button"
-msgstr "POS: Autorizar botón de código promocional"
+msgstr "POS: Permitir boton de codigo promocional"
 
 #. module: pos_forum_employee_controls
+#: model:ir.model.fields,field_description:pos_forum_employee_controls.field_hr_employee__pos_allow_quotation_button
 msgid "POS: Allow Quotation Button"
-msgstr "POS: Autorizar botón de cotización"
+msgstr "POS: Permitir boton de cotizacion"
 
 #. module: pos_forum_employee_controls
+#: model:ir.model.fields,field_description:pos_forum_employee_controls.field_hr_employee__pos_allow_refund_button
 msgid "POS: Allow Refund Button"
-msgstr "POS: Autorizar botón de devolución"
+msgstr "POS: Permitir boton de devolucion"
 
 #. module: pos_forum_employee_controls
+#: model:ir.model.fields,field_description:pos_forum_employee_controls.field_hr_employee__pos_allow_reset_programs_button
 msgid "POS: Allow Reset Programs Button"
-msgstr "POS: Autorizar botón de restablecer programas"
+msgstr "POS: Permitir boton de reinicio de programas"
 
 #. module: pos_forum_employee_controls
+#: model:ir.model.fields,field_description:pos_forum_employee_controls.field_hr_employee__pos_allow_reward_button
 msgid "POS: Allow Reward Button"
-msgstr "POS: Autorizar botón de recompensa"
+msgstr "POS: Permitir boton de recompensa"
 
 #. module: pos_forum_employee_controls
+#: model:ir.model.fields,field_description:pos_forum_employee_controls.field_hr_employee__pos_allow_salesperson_button
 msgid "POS: Allow Salesperson Button"
-msgstr "POS: Autorizar botón de vendedor"
+msgstr "POS: Permitir boton de vendedor"
 
 #. module: pos_forum_employee_controls
+#: model:ir.model.fields,field_description:pos_forum_employee_controls.field_hr_employee__pos_allow_z_report_button
 msgid "POS: Allow Z Report Button"
-msgstr "POS: Autorizar botón de reporte Z"
+msgstr "POS: Permitir boton de reporte Z"
+
+#. module: pos_forum_employee_controls
+#: model:ir.model.fields,field_description:pos_forum_employee_controls.field_hr_employee__pos_allow_ewallet_button
+msgid "POS: Allow eWallet Button"
+msgstr "POS: Permitir boton de monedero electronico"
+
+#. module: pos_forum_employee_controls
+#: model:ir.model,name:pos_forum_employee_controls.model_pos_session
+msgid "Point of Sale Session"
+msgstr "Sesión del punto de venta"
