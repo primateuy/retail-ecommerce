@@ -21,23 +21,56 @@ export class MercadoPagoQRPanel extends Component {
         return this.pos.mpQrPanel?.orderReference;
     }
 
+    clearPendingState(order) {
+        if (!order) {
+            return;
+        }
+        if (order.clearMpPendingOrder) {
+            order.clearMpPendingOrder();
+        } else {
+            order.mp_pending_order = null;
+            order.save_to_db?.();
+        }
+    }
+
     async onComprobar() {
         this.state.checking = true;
         try {
-            const result = await this.orm.searchRead(
-                "pos.order",
-                [["name", "=", this.orderReference]],
-                ["name", "state"]
-            );
+            const result = await this.pos.orm.rpc("/pos/check-mp-order-status", {
+                order_reference: this.orderReference,
+            });
+            const parsed = JSON.parse(result);
 
-            if (result.length === 0) {
+            if (parsed.status === "pending") {
                 this.notification.add("La orden aun sigue sin recibir el pago", {
                     type: "warning",
                 });
                 return;
             }
 
+            if (parsed.status === "expired") {
+                this.notification.add("La orden esta vencida.", {
+                    type: "warning",
+                });
+                return;
+            }
+
+            if (parsed.status === "processing") {
+                this.notification.add("El pago fue recibido y Odoo aun lo esta procesando.", {
+                    type: "info",
+                });
+                return;
+            }
+
+            if (parsed.status === "not_found") {
+                this.notification.add("No se encontro la orden en Odoo ni en Mercado Pago.", {
+                    type: "danger",
+                });
+                return;
+            }
+
             const frontendOrder = this.pos.get_order();
+            this.clearPendingState(frontendOrder);
             frontendOrder.finalized = true;
             this.pos.db.remove_unpaid_order(frontendOrder);
             this.pos.mpQrPanel = null;
@@ -61,10 +94,20 @@ export class MercadoPagoQRPanel extends Component {
 
             const parsed = JSON.parse(result);
             if (parsed.error === false) {
+                const frontendOrder = this.pos.get_order();
+                this.clearPendingState(frontendOrder);
                 this.pos.mpQrPanel = null;
+                this.pos.removeOrder(frontendOrder, false);
+                const orderList = this.pos.get_order_list();
+                if (orderList.length > 0) {
+                    this.pos.set_order(orderList[0]);
+                } else {
+                    this.pos.add_new_order();
+                }
+                this.pos.showScreen("ProductScreen");
             } else {
                 this.notification.add(parsed.message || "Error al eliminar la orden", {
-                    type: "danger",
+                    type: parsed.status === "expired" ? "warning" : "danger",
                 });
             }
         } catch (err) {

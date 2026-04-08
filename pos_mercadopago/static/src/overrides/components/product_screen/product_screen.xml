@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+    <t t-inherit="point_of_sale.ProductScreen" t-inherit-mode="extension">
+        <xpath expr="//div[1]" position="inside">
+            <div t-if="pos.mpQrPanel"
+                 style="position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.6);
+                        display:flex;align-items:center;justify-content:center;">
+                <div style="background:white;border-radius:12px;padding:24px;
+                            min-width:300px;box-shadow:0 8px 32px rgba(0,0,0,0.3);">
+                    <h5 style="text-align:center;margin-bottom:16px;font-weight:600;">
+                        Orden MercadoPago pendiente
+                    </h5>
+                    <MercadoPagoQRPanel />
+                </div>
+            </div>
+        </xpath>
+    </t>
+</templates>
