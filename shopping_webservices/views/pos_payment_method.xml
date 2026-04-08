@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+
+    <record id="view_pos_payment_method_form_inherit_shopping" model="ir.ui.view">
+        <field name="name">pos.payment.method.form.inherit.shopping</field>
+        <field name="model">pos.payment.method</field>
+        <field name="inherit_id" ref="point_of_sale.pos_payment_method_view_form"/>
+        <field name="arch" type="xml">
+
+            <xpath expr="//group[@name='Payment methods']" position="after">
+                <group string="Shopping" name="shopping_pos_group">
+                    <field name="is_pos_shopping"/>
+                    <field name="shopping_payment_method_id"
+                           invisible="not is_pos_shopping"
+                           required="is_pos_shopping"/>
+                </group>
+            </xpath>
+
+        </field>
+    </record>
+
+</odoo>

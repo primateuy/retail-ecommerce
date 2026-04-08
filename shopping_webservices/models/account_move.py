@@ -805,15 +805,10 @@ class AccountMove(models.Model):
         
         metodoPago = metodoPago[0]
         
-        # Determinar código de forma de pago según el tipo
-        if metodoPago.esContado():
-            codigoFormaPago = '00'  # Contado
-        elif metodoPago.esCredito():
-            codigoFormaPago = '17'  # Otros Créditos (no tarjetas)
-        elif metodoPago.esDebito():
-            codigoFormaPago = '91'  # Tarjetas de débito
-        else:
-            raise UserError("Tipo de método de pago no reconocido")
+        # Usar directamente el código configurado en el método de pago
+        codigoFormaPago = metodoPago.payment_code
+        if not codigoFormaPago:
+            raise UserError("El método de pago no tiene un código configurado")
 
         pagoTotalSinIva, pagoTotalConIva = self._calcular_totales_iva()
 

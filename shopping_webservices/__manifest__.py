@@ -12,10 +12,10 @@
     'website': "https://avancesoftware.us/",
 
     'category': 'Accounting',
-    'version': '0.1',
+    'version': '0.2',
 
     
-    'depends': ['base', 'web', 'l10n_uy', 'l10n_uy_edi', 'l10n_uy_einvoice_uruware', 'account', 'account_accountant', 'sale_management', 'loyalty'],
+    'depends': ['base', 'web', 'l10n_uy', 'l10n_uy_edi', 'l10n_uy_einvoice_uruware', 'account', 'account_accountant', 'sale_management', 'loyalty', 'odoo_pos_oca', 'payment'],
 
     'data': [
         'security/ir.model.access.csv',
@@ -27,6 +27,9 @@
         'views/account_move.xml',
         'views/message_wizard.xml',
         'views/ventas_log.xml',
+        'views/payment_method.xml',
+        'views/pos_payment_method.xml',
+        'views/payment_transaction.xml',
         'data/ir_cron.xml',
     ],
 
