@@ -287,6 +287,34 @@ class MercadoPagoController(http.Controller):
             "Authorization": f"Bearer {self._get_access_token()}",
         }
 
+    def _get_mp_order_status(self, order_reference, pending_exists=True):
+        existing_order = request.env['pos.order'].sudo().search(
+            [('name', '=', order_reference)], limit=1
+        )
+        if existing_order:
+            return 'paid'
+
+        if not pending_exists:
+            return 'not_found'
+
+        try:
+            url = f"https://api.mercadopago.com/merchant_orders?external_reference={order_reference}"
+            response = requests.get(url, headers=self.get_headers(), timeout=5)
+            response.raise_for_status()
+            elements = response.json().get('elements', [])
+            if not elements:
+                return 'pending'
+
+            mp_status = elements[0].get('status', '')
+            if mp_status == 'closed':
+                return 'processing'
+            if mp_status == 'expired':
+                return 'expired'
+            return 'pending'
+        except Exception as e:
+            _logger.error("Error consultando estado MP %s: %s", order_reference, str(e))
+            return 'pending'
+
     def get_payment_endpoint(self, payment_id):
         try:
             url = f"https://api.mercadopago.com/v1/payments/{payment_id}"
@@ -351,6 +379,11 @@ class MercadoPagoController(http.Controller):
             session = request.env['pos.session'].sudo().browse(kwards["session_id"])
             currency_name = session.currency_id.name if session.currency_id else 'UYU'
             order_reference = session.config_id.sequence_id.next_by_id()
+            till = request.env["store.tills"].search(
+                [("id", "=", kwards["store_till_id"])], limit=1
+            )
+            if not till:
+                return json.dumps({"error": True, "message": "Caja no encontrada"})
 
             order_lines = []
             order_mp_lines = []
@@ -418,28 +451,6 @@ class MercadoPagoController(http.Controller):
                 else sum(p["amount"] for p in kwards["paymentLines"])
             )
 
-            request.env['mp.pending.order'].sudo().create({
-                'name': order_reference,
-                'session_id': session.id,
-                'order_data': json.dumps({
-                    "user_id": kwards["user_id"],
-                    "employee_id": kwards.get("employee_id") or False,
-                    "partner_id": kwards.get("partner_id") or False,
-                    "cashier_id": kwards.get("cashier_id") or False,
-                    "company_id": kwards["company_id"],
-                    "amount_tax": amount_tax,
-                    "amount_total": amount_total,
-                    "lines": order_lines,
-                    "payment_lines": kwards["paymentLines"],
-                }),
-            })
-
-            till = request.env["store.tills"].search(
-                [("id", "=", kwards["store_till_id"])], limit=1
-            )
-            if not till:
-                return json.dumps({"error": True, "message": "Caja no encontrada"})
-
             _logger.info(
                 "Creando orden MP — Till: %s (ID: %s) | Sucursal: %s | Usuario MP: %s",
                 till.name, till.id,
@@ -458,6 +469,22 @@ class MercadoPagoController(http.Controller):
                     "items": order_mp_lines,
                 })
 
+            request.env['mp.pending.order'].sudo().create({
+                'name': order_reference,
+                'session_id': session.id,
+                'order_data': json.dumps({
+                    "user_id": kwards["user_id"],
+                    "employee_id": kwards.get("employee_id") or False,
+                    "partner_id": kwards.get("partner_id") or False,
+                    "cashier_id": kwards.get("cashier_id") or False,
+                    "company_id": kwards["company_id"],
+                    "amount_tax": amount_tax,
+                    "amount_total": amount_total,
+                    "lines": order_lines,
+                    "payment_lines": kwards["paymentLines"],
+                }),
+            })
+
             return json.dumps({
                 "error": False,
                 "message": "QR generado correctamente, por favor escanee el QR",
@@ -469,31 +496,103 @@ class MercadoPagoController(http.Controller):
             _logger.exception("Error al crear la orden de pago")
             return json.dumps({"error": True, "message": "Error al crear la orden de pago"})
 
+    @http.route('/pos/check-mp-order-status', type='json', auth='user', csrf=False)
+    def check_mp_order_status(self, **kwargs):
+        """
+        Retorna el estado de una orden MP:
+          - 'paid'      → pos.order ya existe (webhook procesó el pago)
+          - 'processing' → Mercado Pago cerró la orden pero Odoo aún no creó pos.order
+          - 'pending'   → mp.pending.order existe, esperando pago
+          - 'expired'   → el QR venció en MP
+          - 'not_found' → no existe ni en Odoo ni en MP
+        """
+        order_reference = kwargs.get('order_reference')
+        if not order_reference:
+            return json.dumps({'status': 'not_found'})
+
+        pending = request.env['mp.pending.order'].sudo().search(
+            [('name', '=', order_reference)], limit=1
+        )
+        if not pending:
+            existing_order = request.env['pos.order'].sudo().search(
+                [('name', '=', order_reference)], limit=1
+            )
+            if existing_order:
+                return json.dumps({'status': 'paid'})
+            return json.dumps({'status': 'not_found'})
+
+        return json.dumps({'status': self._get_mp_order_status(order_reference, pending_exists=True)})
+
     @http.route('/pos/delete-order', type='json', auth='user', csrf=False)
     def delete_pos_order(self, **kwards):
         try:
             order_reference = kwards.get("order_reference")
-
             pending = request.env['mp.pending.order'].sudo().search(
                 [("name", "=", order_reference)], limit=1
             )
-            if pending:
-                pending.sudo().unlink()
-            else:
-                existing = request.env['pos.order'].sudo().search(
-                    [("name", "=", order_reference)], limit=1
-                )
-                if existing:
-                    return json.dumps({
-                        "error": True,
-                        "message": "El pago ya fue procesado, no se puede cancelar"
-                    })
+            status = self._get_mp_order_status(order_reference, pending_exists=bool(pending))
+
+            if status == 'paid':
+                return json.dumps({
+                    "error": True,
+                    "status": status,
+                    "message": "El pago ya fue procesado, no se puede cancelar"
+                })
+            if status == 'processing':
+                return json.dumps({
+                    "error": True,
+                    "status": status,
+                    "message": "El pago fue recibido y aun se esta procesando en Odoo"
+                })
+            if status == 'expired':
+                return json.dumps({
+                    "error": True,
+                    "status": status,
+                    "message": "La orden esta vencida"
+                })
+            if not pending:
+                return json.dumps({
+                    "error": True,
+                    "status": 'not_found',
+                    "message": "No se encontro la orden pendiente"
+                })
 
             delete_url = (
                 f"https://api.mercadopago.com/instore/qr/seller/collectors"
                 f"/{kwards['user_id']}/pos/{kwards['external_id']}/orders"
             )
-            requests.delete(delete_url, headers=self.get_headers())
+            response = requests.delete(delete_url, headers=self.get_headers(), timeout=5)
+            if response.status_code >= 400:
+                _logger.warning(
+                    "Mercado Pago devolvio %s al eliminar la orden %s: %s",
+                    response.status_code, order_reference, response.text
+                )
+                refreshed_status = self._get_mp_order_status(order_reference, pending_exists=True)
+                if refreshed_status == 'expired':
+                    return json.dumps({
+                        "error": True,
+                        "status": refreshed_status,
+                        "message": "La orden esta vencida"
+                    })
+                if refreshed_status == 'paid':
+                    return json.dumps({
+                        "error": True,
+                        "status": refreshed_status,
+                        "message": "El pago ya fue procesado, no se puede cancelar"
+                    })
+                if refreshed_status == 'processing':
+                    return json.dumps({
+                        "error": True,
+                        "status": refreshed_status,
+                        "message": "El pago fue recibido y aun se esta procesando en Odoo"
+                    })
+                return json.dumps({
+                    "error": True,
+                    "status": refreshed_status,
+                    "message": "No se pudo eliminar la orden en Mercado Pago"
+                })
+
+            pending.sudo().unlink()
 
             return json.dumps({"error": False, "message": "Orden eliminada correctamente"})
 
