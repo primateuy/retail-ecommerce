@@ -5,7 +5,7 @@
         "Acción en listado de payment.transaction para agrupar por diario del "
         "proveedor y generar transferencias internas hacia un diario destino."
     ),
-    "version": "17.0.1.0.0",
+    "version": "17.0.1.1.3",
     "author": "PRIMATE",
     "website": "https://www.primate.uy",
     "category": "Accounting/Payment",

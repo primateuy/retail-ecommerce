@@ -97,6 +97,23 @@ class PaymentTransactionTransferWizard(models.TransientModel):
                 _("El diario destino debe pertenecer a la misma compañía que las transacciones.")
             )
 
+        # Bloque: no incluir transacciones ya «Contabilizadas» en una transferencia desde el asistente.
+        already_transferred = transactions.filtered(
+            lambda t: t.transfer_state == "posted"
+        )
+        if already_transferred:
+            refs = ", ".join(already_transferred.mapped("reference")[:10])
+            more = len(already_transferred) - 10
+            suffix = _(" (y %s más…)") % more if more > 0 else ""
+            raise UserError(
+                _(
+                    "Estas transacciones ya figuran en una transferencia interna "
+                    "contabilizada; cancele o ponga en borrador esa transferencia "
+                    "para volver a incluirlas: %(refs)s%(suffix)s"
+                )
+                % {"refs": refs, "suffix": suffix}
+            )
+
         # Bloque: solo transacciones confirmadas contablemente (`done`); otros estados no suman para la transferencia.
         allowed_states = ("done",)
         invalid = transactions.filtered(lambda t: t.state not in allowed_states)
@@ -191,6 +208,13 @@ class PaymentTransactionTransferWizard(models.TransientModel):
             payment = Payment.create(payment_vals)
             # Sub-bloque: confirmar para generar el par de pagos y asientos como en la UI manual.
             payment.action_post()
+            # Sub-bloque: vincular cada transacción del grupo al pago origen y marcar estado «Contabilizado».
+            tx_group.write(
+                {
+                    "transfer_payment_id": payment.id,
+                    "transfer_state": "posted",
+                }
+            )
             created |= payment
 
         # Bloque: resultado visible para el usuario (listado de pagos creados).

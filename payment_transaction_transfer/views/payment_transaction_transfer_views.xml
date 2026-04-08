@@ -28,4 +28,93 @@
         <field name="binding_view_types">list</field>
         <field name="groups_id" eval="[(4, ref('account.group_account_invoice'))]"/>
     </record>
+
+    <!-- Formulario payment.transaction: transferencia interna y estado funcional -->
+    <record id="payment_transaction_form_transfer" model="ir.ui.view">
+        <field name="name">payment.transaction.form.transfer</field>
+        <field name="model">payment.transaction</field>
+        <field name="inherit_id" ref="payment.payment_transaction_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//group[@name='transaction_details']" position="after">
+                <group
+                    string="Transferencia interna"
+                    name="payment_transaction_transfer"
+                    groups="account.group_account_invoice"
+                >
+                    <field name="transfer_state"/>
+                    <field name="transfer_payment_id"/>
+                </group>
+            </xpath>
+        </field>
+    </record>
+
+    <!--
+        Vista árbol (type=tree en ir.ui.view). En esta instalación «list» no es valor válido
+        para ir.ui.view.type; el listado sigue usando la etiqueta <tree> en el XML.
+        Sirve de respaldo y para tree_view_ref en One2many.
+    -->
+    <record id="view_payment_transaction_transfer_list_root" model="ir.ui.view">
+        <field name="name">payment.transaction.list.transfer.root</field>
+        <field name="model">payment.transaction</field>
+        <field name="type">tree</field>
+        <field name="priority">32</field>
+        <field name="arch" type="xml">
+            <tree string="Transacciones de pago" create="false" edit="false" delete="false">
+                <field name="reference"/>
+                <field name="amount"/>
+                <field name="state"/>
+                <field name="provider_id" optional="show"/>
+                <field name="transfer_state" optional="show"/>
+            </tree>
+        </field>
+    </record>
+
+    <!-- Listado payment.transaction: columna opcional de estado de transferencia -->
+    <record id="payment_transaction_list_transfer" model="ir.ui.view">
+        <field name="name">payment.transaction.list.transfer</field>
+        <field name="model">payment.transaction</field>
+        <field name="inherit_id" ref="payment.payment_transaction_list"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='amount']" position="after">
+                <field name="transfer_state" optional="show"/>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- Pago contable: transacciones de pago que originaron la transferencia interna -->
+    <record id="view_account_payment_form_payment_transaction_transfer" model="ir.ui.view">
+        <field name="name">account.payment.form.payment.transaction.transfer</field>
+        <field name="model">account.payment</field>
+        <field name="inherit_id" ref="account.view_account_payment_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//sheet" position="inside">
+                <group
+                    string="Transacciones de pago (transferencia interna)"
+                    name="payment_transaction_transfer_group"
+                    invisible="not is_internal_transfer"
+                >
+                    <!-- tree_view_ref fuerza la vista árbol del comodel (type=tree en ir.ui.view). -->
+                    <field
+                        name="payment_transaction_ids"
+                        nolabel="1"
+                        colspan="2"
+                        mode="tree"
+                        readonly="1"
+                        invisible="not payment_transaction_ids"
+                        context="{'tree_view_ref': 'payment_transaction_transfer.view_payment_transaction_transfer_list_root'}"
+                    />
+                    <!-- Extremo emparejado: las transacciones están en el otro account.payment. -->
+                    <field
+                        name="transfer_paired_transaction_ids"
+                        nolabel="1"
+                        colspan="2"
+                        mode="tree"
+                        readonly="1"
+                        invisible="payment_transaction_ids or not transfer_paired_transaction_ids"
+                        context="{'tree_view_ref': 'payment_transaction_transfer.view_payment_transaction_transfer_list_root'}"
+                    />
+                </group>
+            </xpath>
+        </field>
+    </record>
 </odoo>
