@@ -48,9 +48,11 @@ class AccountJournal(models.Model):
         
         return super(AccountJournal, self).write(vals)
     
-    def create(self, vals):
-        if vals.get('integracionShopping') and (not vals.get('codigoShopping') or not vals.get('nroContrato') or not vals.get('codigoCanal') or not vals.get('tecnologia') or not vals.get('url') or not vals.get('password')):
-            raise ValidationError("Para activar la integración con Shopping, debe completar todos los campos requeridos: Código Shopping, Nro Contrato, Código Canal, Tecnología, URL y Password.")
-        
-        return super(AccountJournal, self).create(vals)
+    @api.model_create_multi
+    def create(self, vals_list):
+        for vals in vals_list:
+            if vals.get('integracionShopping') and (not vals.get('codigoShopping') or not vals.get('nroContrato') or not vals.get('codigoCanal') or not vals.get('tecnologia') or not vals.get('url') or not vals.get('password')):
+                raise ValidationError("Para activar la integración con Shopping, debe completar todos los campos requeridos: Código Shopping, Nro Contrato, Código Canal, Tecnología, URL y Password.")
+
+        return super(AccountJournal, self).create(vals_list)
     

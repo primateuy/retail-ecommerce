@@ -9,6 +9,8 @@
             <tree>
                 <field name="shopping_code"/>
                 <field name="payment_code"/>
+                <field name="payment_label"/>
+                <field name="payment_type"/>
             </tree>
         </field>
     </record>
@@ -24,8 +26,9 @@
                         <group>
                             <field name="shopping_code"/>
                             <field name="payment_code"/>
+                            <field name="payment_label" placeholder="ej: VISA, MasterCard, etc."/>
+                            <field name="payment_type"/>
                         </group>
-                       
                     </group>
                 </sheet>
             </form>

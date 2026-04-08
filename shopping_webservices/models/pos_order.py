@@ -1,0 +1,80 @@
+import json
+import logging
+
+from odoo import models
+
+_logger = logging.getLogger(__name__)
+
+
+class PosOrder(models.Model):
+    _inherit = 'pos.order'
+
+    def _create_invoice(self, move_vals):
+        new_move = super()._create_invoice(move_vals)
+
+        if not new_move.journal_id.integracionShopping:
+            return new_move
+
+        distribution = self._build_shopping_payment_distribution(new_move.journal_id)
+        if distribution:
+            new_move.payment_distribution = json.dumps(distribution)
+            _logger.info(
+                'Shopping: payment_distribution generado para factura %s: %s',
+                new_move.name or new_move.id, distribution
+            )
+
+        return new_move
+
+    def _build_shopping_payment_distribution(self, journal):
+        distribution = []
+        shopping_code = journal.codigoShopping
+
+        contado_method = journal.shopping_payment_method_ids.filtered(
+            lambda m: m.payment_type == 'contado'
+        )[:1]
+
+        for payment in self.payment_ids:
+            if payment.amount <= 0:
+                continue
+
+            pos_method = payment.payment_method_id
+            shopping_method = None
+
+            if pos_method.is_pos_shopping and pos_method.shopping_payment_method_id:
+                shopping_method = pos_method.shopping_payment_method_id
+
+            if not shopping_method and payment.payment_transaction_id:
+                tx_code = payment.payment_transaction_id.shopping_payment_code
+                if tx_code and shopping_code:
+                    shopping_method = self.env['shopping.payment.method'].search([
+                        ('payment_code', '=', tx_code),
+                        ('shopping_code', '=', shopping_code),
+                    ], limit=1)
+
+            if not shopping_method:
+                if contado_method:
+                    _logger.warning(
+                        'Shopping: sin método para pago PDV %s (%s). Asignando Contado.',
+                        payment.id, pos_method.name
+                    )
+                    shopping_method = contado_method
+                else:
+                    _logger.warning(
+                        'Shopping: sin método para pago PDV %s (%s) y sin Contado en diario %s. Se omite.',
+                        payment.id, pos_method.name, shopping_code
+                    )
+                    continue
+
+            existing = next(
+                (d for d in distribution if d['payment_method_id'] == shopping_method.id),
+                None
+            )
+            if existing:
+                existing['amount'] += payment.amount
+            else:
+                distribution.append({
+                    'payment_method_id': shopping_method.id,
+                    'amount': payment.amount,
+                })
+
+        return distribution
