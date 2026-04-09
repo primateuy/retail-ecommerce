@@ -150,7 +150,42 @@ class PosPayment(models.Model):
             # Obtener los valores de forma segura para evitar errores de cursor
             payment_name = getattr(self, 'name', 'Unknown') or 'Unknown'
             payment_amount = getattr(self, 'amount', 0.0)
-            
+
+            # Bloque: priorizar transaction_id del terminal (varios pagos con el mismo monto).
+            payment_tid = str(getattr(self, 'transaction_id', None) or '').strip()
+            if payment_tid:
+                oca_provider = self.env['payment.provider'].sudo().search(
+                    [('code', '=', 'oca')], limit=1
+                )
+                if oca_provider:
+                    tx_by_ref = self.env['payment.transaction'].sudo().search([
+                        ('oca_transaction_id', '=', payment_tid),
+                        ('provider_id', '=', oca_provider.id),
+                        ('state', 'in', ['pending', 'done']),
+                    ], order='id desc', limit=1)
+                    if tx_by_ref:
+                        other = tx_by_ref.pos_payment_id
+                        if not other or other.id == self.id:
+                            tx_by_ref.pos_payment_id = self.id
+                            self.payment_transaction_id = tx_by_ref.id
+                            if not tx_by_ref.pos_order_id and self.pos_order_id:
+                                tx_by_ref.pos_order_id = self.pos_order_id.id
+                                order_nm = getattr(self.pos_order_id, 'name', None)
+                                if order_nm:
+                                    tx_by_ref.invoice_number = order_nm
+                            _logger.info(
+                                'OCA: pago %s asociado por transaction_id=%s',
+                                payment_name,
+                                payment_tid,
+                            )
+                            return
+                        _logger.warning(
+                            'OCA: transaction_id=%s ya en otro pago; no se reasigna a %s',
+                            payment_tid,
+                            payment_name,
+                        )
+                        return
+
             _logger.info('Buscando transacciones OCA para asociar con pago: %s (Monto: %s)', 
                         payment_name, payment_amount)
             

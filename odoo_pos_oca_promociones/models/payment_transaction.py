@@ -87,10 +87,9 @@ class PaymentTransaction(models.Model):
             
             transaction.write(update_vals)
             _logger.info('Información de promoción almacenada en transacción OCA creada: %s', transaction.oca_transaction_id)
-            
-            # Si la transacción tiene una orden asociada, intentar agregar la línea de descuento
-            if transaction.pos_order_id and promotion_info.get('is_promotion'):
-                transaction._add_promotion_discount_to_order()
+            # Bloque: NO agregar línea de descuento aquí. El POS ya la insertó vía RPC
+            # (add_promotion_discount_line) en processPromotionAndConfirm; volver a llamar
+            # duplicaba el descuento y disparaba montos (-500, -300) y totales incorrectos.
         
         return transaction
     
@@ -177,33 +176,6 @@ class PaymentTransaction(models.Model):
     
     def write(self, vals):
         """
-        Sobrescribe write para agregar línea de descuento cuando se asocia la transacción con una orden
+        Sobrescribe write (sin agregar líneas de descuento: eso solo desde el POS por cobro).
         """
-        # Verificar si se está asociando con una orden ANTES de escribir
-        # para poder acceder a self.is_promotion antes de que cambie
-        should_add_discount = False
-        pos_order_id_to_check = None
-        
-        if 'pos_order_id' in vals and vals.get('pos_order_id'):
-            # Verificar si la transacción es una promoción ANTES de escribir
-            # (porque después de escribir, self.is_promotion podría cambiar)
-            if self.is_promotion:
-                should_add_discount = True
-                pos_order_id_to_check = vals['pos_order_id']
-        
-        result = super().write(vals)
-        
-        # Si se debe agregar el descuento, hacerlo después de escribir
-        if should_add_discount and pos_order_id_to_check:
-            try:
-                pos_order = self.env['pos.order'].browse(pos_order_id_to_check)
-                if pos_order.exists():
-                    _logger.info('Transacción OCA %s asociada con orden %s, agregando descuento de promoción', 
-                               self.oca_transaction_id, pos_order.name)
-                    self._add_promotion_discount_to_order()
-            except Exception as e:
-                _logger.error('Error al agregar descuento después de asociar transacción con orden: %s', str(e))
-                import traceback
-                _logger.error('Traceback: %s', traceback.format_exc())
-        
-        return result
+        return super().write(vals)

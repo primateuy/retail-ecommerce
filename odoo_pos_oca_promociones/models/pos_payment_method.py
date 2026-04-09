@@ -703,14 +703,22 @@ class PosPaymentMethod(models.Model):
                                     # El bucle seguirá consultando hasta que ResponseCode = '0' (transacción completada)
                                 else:
                                     # Promoción encontrada: calcular descuento (solo si promotion es válido)
-                                    original_amount = float(data.get('Amount', 0)) / 100.0  # Convertir de centavos a pesos
+                                    # Bloque: monto de ESTE cobro (pago parcial), no el total del pedido.
+                                    original_amount = float(data.get('Amount', 0)) / 100.0
                                     discount_percent = promotion.discount_percent
-                                    # Calcular base del descuento según tipo
+                                    full_taxable = float(data.get('TaxableAmount', 0)) / 100.0
+                                    full_invoice = float(data.get('InvoiceAmount', 0)) / 100.0
+                                    # Bloque: base del descuento según tipo — siempre respecto al importe
+                                    # enviado en Amount (lo que se intenta debitar en esta operación).
                                     if promotion.discount_type == 'percentage_untaxed':
-                                        # Descuento sobre subtotal sin impuestos
-                                        base_amount = float(data.get('TaxableAmount', 0)) / 100.0
+                                        if full_invoice > 0:
+                                            payment_untaxed_share = full_taxable * (
+                                                original_amount / full_invoice
+                                            )
+                                        else:
+                                            payment_untaxed_share = full_taxable
+                                        base_amount = payment_untaxed_share
                                     else:
-                                        # Descuento sobre total (por defecto)
                                         base_amount = original_amount
                                     discount_amount = base_amount * (discount_percent / 100.0)
                                     new_amount = original_amount - discount_amount
@@ -923,7 +931,12 @@ class PosPaymentMethod(models.Model):
 
     @api.model
     def get_promotion_info(
-        self, card_data, pos_session_id, pos_order_id=False, applied_loyalty_program_ids=None
+        self,
+        card_data,
+        pos_session_id,
+        pos_order_id=False,
+        applied_loyalty_program_ids=None,
+        payment_amount=0.0,
     ):
         """
         Obtiene información de promoción basada en datos de la tarjeta
@@ -939,6 +952,9 @@ class PosPaymentMethod(models.Model):
             pos_session_id (int): ID de la sesión POS
             pos_order_id (int|False): pos.order opcional para calcular montos de descuento.
             applied_loyalty_program_ids (list|None): IDs de lealtad del carrito (POS); si es None se usan sesión + borrador.
+            payment_amount (float): Importe TTC de la línea de pago que se está cobrando (pago parcial).
+                Si es > 0, el descuento % se aplica sobre ese monto (o su parte proporcional sin impuestos),
+                no sobre el total del pedido.
         
         Returns:
             dict: Información de promoción con keys:
@@ -1062,18 +1078,45 @@ class PosPaymentMethod(models.Model):
                     'promotionId': promotion.id,
                 }
             
-            # Calcular descuento según tipo de promoción
-            if promotion.discount_type == 'percentage_untaxed':
-                base_amount = pos_order.amount_untaxed
+            # Bloque: calcular descuento según tipo — sobre el pago actual si viene payment_amount.
+            try:
+                pay_amt = float(payment_amount or 0.0)
+            except (TypeError, ValueError):
+                pay_amt = 0.0
+
+            if pay_amt > 0:
+                if promotion.discount_type == 'percentage_untaxed':
+                    order_total = float(pos_order.amount_total or 0.0)
+                    order_untaxed = float(pos_order.amount_untaxed or 0.0)
+                    if order_total > 0:
+                        untaxed_share = order_untaxed * (pay_amt / order_total)
+                    else:
+                        untaxed_share = 0.0
+                    disc_untaxed = untaxed_share * (promotion.discount_percent / 100.0)
+                    # Bloque: el alta de línea espera impacto en términos de total con IVA del pedido;
+                    # reexpresar el descuento neto como equivalente TTC usando la relación del pedido.
+                    if order_untaxed > 0:
+                        discount_amount = disc_untaxed * (order_total / order_untaxed)
+                    else:
+                        discount_amount = disc_untaxed
+                else:
+                    discount_amount = pay_amt * (promotion.discount_percent / 100.0)
             else:
-                base_amount = pos_order.amount_total
-            
-            discount_amount = base_amount * (promotion.discount_percent / 100.0)
-            
-            _logger.info('Promoción aplicable encontrada: %s (ID: %s) - %s%% de descuento sobre %s = %s', 
-                       promotion.name, promotion.id, promotion.discount_percent, 
-                       'subtotal' if promotion.discount_type == 'percentage_untaxed' else 'total',
-                       discount_amount)
+                # Bloque: compatibilidad — sin monto de pago, comportamiento anterior (todo el pedido).
+                if promotion.discount_type == 'percentage_untaxed':
+                    base_amount = pos_order.amount_untaxed
+                else:
+                    base_amount = pos_order.amount_total
+                discount_amount = base_amount * (promotion.discount_percent / 100.0)
+
+            _logger.info(
+                'Promoción aplicable: %s (ID: %s) - %s%% | payment_amount=%s | descuento TTC línea=%s',
+                promotion.name,
+                promotion.id,
+                promotion.discount_percent,
+                pay_amt,
+                discount_amount,
+            )
             
             return {
                 'hasPromotion': True,

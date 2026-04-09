@@ -389,8 +389,20 @@ class PosOrder(models.Model):
                         ('state', 'in', ['pending', 'done']),
                     ], order='id desc', limit=1)
                     if tx_by_ref:
-                        # --- No reutilizar una transacción ya ligada a otra orden ---
+                        # --- No reutilizar tx ya ligada a otro pos.payment ---
                         if (
+                            tx_by_ref.pos_payment_id
+                            and tx_by_ref.pos_payment_id.id != oca_payment.id
+                        ):
+                            _logger.warning(
+                                'OCA POS: transacción oca_transaction_id=%s ya en pago %s; '
+                                'no se reasigna a %s.',
+                                tid_key,
+                                getattr(tx_by_ref.pos_payment_id, 'name', tx_by_ref.pos_payment_id.id),
+                                payment_name,
+                            )
+                        # --- No reutilizar una transacción ya ligada a otra orden ---
+                        elif (
                             tx_by_ref.pos_order_id
                             and tx_by_ref.pos_order_id.id != self.id
                         ):
@@ -427,6 +439,8 @@ class PosOrder(models.Model):
                     for transaction in orphaned_transactions:
                         if transaction.pos_order_id:
                             continue
+                        if transaction.pos_payment_id:
+                            continue
                         score = 0
                         if abs(transaction.amount - payment_amount) < 0.01:
                             score = 100
@@ -456,6 +470,33 @@ class PosOrder(models.Model):
                         'No se encontró transacción OCA para el pago: %s (Monto: %s, transaction_id=%s)',
                         payment_name, payment_amount, payment_tid or '(vacío)'
                     )
+
+            # Bloque: coherencia final — no dos pagos con la misma tx si la tx ya tiene otro pos_payment_id;
+            # ni pago con transaction_id distinto al oca_transaction_id de la fila enlazada.
+            for oca_pay in self.payment_ids.filtered(
+                lambda p: p.payment_method_id.use_payment_terminal == 'oca'
+            ):
+                tx = oca_pay.payment_transaction_id
+                if not tx:
+                    continue
+                pay_nm = getattr(oca_pay, 'name', None) or str(oca_pay.id)
+                if tx.pos_payment_id and tx.pos_payment_id.id != oca_pay.id:
+                    _logger.warning(
+                        'OCA POS: pago %s desvinculado (tx %s ya asignada a otro pago)',
+                        pay_nm,
+                        tx.oca_transaction_id,
+                    )
+                    oca_pay.payment_transaction_id = False
+                    continue
+                tid_on_pay = str(getattr(oca_pay, 'transaction_id', None) or '').strip()
+                if tid_on_pay and tx.oca_transaction_id and str(tx.oca_transaction_id).strip() != tid_on_pay:
+                    _logger.warning(
+                        'OCA POS: pago %s desvinculado (tid pago=%s ≠ oca_transaction_id=%s)',
+                        pay_nm,
+                        tid_on_pay,
+                        tx.oca_transaction_id,
+                    )
+                    oca_pay.payment_transaction_id = False
 
             self._diagnose_oca_associations()
 

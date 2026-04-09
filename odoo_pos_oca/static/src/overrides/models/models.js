@@ -12,11 +12,20 @@ patch(Payment.prototype, {
     },
     //@override
     export_as_JSON() {
+        // Bloque: persistir el TransactionId OCA en el backend (pos.payment.transaction_id)
+        // para que _associate_oca_transactions enlace por referencia y no por monto
+        // cuando hay varios pagos parciales del mismo importe.
         const json = super.export_as_JSON(...arguments);
+        if (this.transaction_id !== undefined && this.transaction_id !== false && this.transaction_id !== null) {
+            json.transaction_id = this.transaction_id;
+        }
         return json;
     },
     //@override
     init_from_JSON(json) {
         super.init_from_JSON(...arguments);
+        if (json && json.transaction_id !== undefined && json.transaction_id !== false) {
+            this.transaction_id = json.transaction_id;
+        }
     },
 });

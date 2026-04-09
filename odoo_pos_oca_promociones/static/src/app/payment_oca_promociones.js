@@ -288,6 +288,13 @@ patch(PaymentOCA.prototype, {
         var amount_to_send_by_100 = Math.round(Math.abs(line.amount) * 100);
         var amount_to_send_float = Math.abs(line.amount);
 
+        // Bloque: snapshot del pedido al iniciar este cobro OCA (para confirmar con proporción
+        // correcta en pagos parciales; el total del pedido en cliente puede quedar desactualizado
+        // tras RPC de descuento).
+        line._oca_promo_base_payment_float = amount_to_send_float;
+        line._oca_promo_order_invoice_cents = total_order_amount;
+        line._oca_promo_order_taxable_cents = total_order_amount_without_tax;
+
         var currency = this.pos.currency.name;
         var currency_code = currency === "USD" ? "840" : "858";
 
@@ -464,11 +471,16 @@ patch(PaymentOCA.prototype, {
                 JSON.stringify(appliedLoyaltyIds),
                 serverOrderId
             );
+            // Bloque: el % promo debe aplicarse sobre lo que se cobra en ESTA línea (ej. 500), no sobre el total del pedido.
+            const payAmountForPromo = Math.abs(
+                paymentLine.get_amount ? paymentLine.get_amount() : paymentLine.amount
+            );
             const promotionInfo = await this.getPromotionInfo(
                 cardData,
                 order.pos_session_id,
                 serverOrderId,
-                appliedLoyaltyIds
+                appliedLoyaltyIds,
+                payAmountForPromo
             );
 
             if (promotionInfo.blockedByIncompatibility) {
@@ -516,37 +528,35 @@ patch(PaymentOCA.prototype, {
                     }
                     return this.confirmFinancialPurchaseWithoutPromotion(cardData, paymentLine);
                 }
-                
-                // 3. Obtener nuevo monto total de la orden (desde backend)
-                const orderData = await this.getOrderUpdatedTotals(serverOrderId || order.id);
 
-                // 3b. Actualizar el monto de la línea de pago al total con descuento aplicado.
-                //     Usar set_amount() para que el POS actualice redondeo y estado interno.
-                //     Así el pos.payment que se cree tendrá el importe correcto (con promoción).
-                //     Al probar: en consola del navegador debe verse el log con montos antes/después.
-                const amountBefore = paymentLine.get_amount ? paymentLine.get_amount() : paymentLine.amount;
-                const newTotal = orderData.newTotal != null ? orderData.newTotal : orderData.newInvoiceAmount;
-                const amountWithDiscount = Math.abs(newTotal);
-                if (typeof paymentLine.set_amount === 'function') {
-                    paymentLine.set_amount(amountWithDiscount);
+                // 2b. Ajustar YA el importe de la línea al cobrado real (pago - descuento de este pago)
+                //     para que el resumen del POS y el JSON al validar lleven 450 y no 500.
+                const chargedAfterPromo = Math.max(
+                    0,
+                    payAmountForPromo - promotionInfo.discountAmount
+                );
+                if (typeof paymentLine.set_amount === "function") {
+                    paymentLine.set_amount(chargedAfterPromo);
                 } else {
-                    paymentLine.amount = amountWithDiscount;
+                    paymentLine.amount = chargedAfterPromo;
                 }
-                const amountAfter = paymentLine.get_amount ? paymentLine.get_amount() : paymentLine.amount;
+                
+                // 3. Refrescar totales en servidor tras el descuento.
+                const orderData = await this.getOrderUpdatedTotals(serverOrderId || order.id);
+                const amountCurrent = paymentLine.get_amount ? paymentLine.get_amount() : paymentLine.amount;
+                const newTotal = orderData.newTotal != null ? orderData.newTotal : orderData.newInvoiceAmount;
                 console.log(
-                    '[OCA Promociones] Monto de línea de pago actualizado para que pos.payment quede correcto:',
-                    'antes=', amountBefore,
-                    'después (con descuento)=', amountAfter,
-                    'newTotal=', newTotal
+                    '[OCA Promociones] Línea ajustada a cobro neto | lineAmount=',
+                    amountCurrent,
+                    '| total orden backend=',
+                    newTotal
                 );
 
-                // 4. Preparar datos para confirmación con nuevo monto
+                // 4. Confirmar al pinpad (sigue usando snapshot _oca_promo_* del cobro original 500)
                 const confirmData = this.prepareConfirmData(
                     cardData,
                     paymentLine,
-                    orderData.newTotal,
-                    orderData.newTaxableAmount,
-                    orderData.newInvoiceAmount
+                    promotionInfo.discountAmount
                 );
                 
                 // 5. Llamar a processConfirmFinancialPurchase
@@ -554,7 +564,6 @@ patch(PaymentOCA.prototype, {
                 
                 // 6. Continuar esperando respuesta final
                 if (confirmResponse.ResponseCode === '10' || confirmResponse.ResponseCode === '0') {
-                    // Continuar con el flujo normal de espera
                     return this.waitForPaymentConfirmation();
                 } else {
                     // Error en confirmación
@@ -582,7 +591,8 @@ patch(PaymentOCA.prototype, {
         cardData,
         sessionId,
         posOrderId = false,
-        appliedLoyaltyProgramIds = null
+        appliedLoyaltyProgramIds = null,
+        paymentAmount = 0
     ) {
         return this.env.services.orm.silent
             .call("pos.payment.method", "get_promotion_info", [
@@ -591,6 +601,7 @@ patch(PaymentOCA.prototype, {
                 sessionId,
                 posOrderId || false,
                 appliedLoyaltyProgramIds,
+                paymentAmount,
             ])
             .catch((error) => {
                 console.error("Error al obtener información de promoción:", error);
@@ -654,25 +665,52 @@ patch(PaymentOCA.prototype, {
      * NOTA: En promociones NO enviamos la cantidad de cuotas al POS;
      * las cuotas se eligen y manejan en el pinpad físico.
      */
-    prepareConfirmData(cardData, paymentLine, newTotal, newTaxableAmount, newInvoiceAmount) {
+    /**
+     * Arma processConfirmFinancialPurchase para ESTE cobro: importe debitado = línea - descuento promo,
+     * con TaxableAmount proporcional al snapshot tomado al enviar_pago (pedido completo en ese instante).
+     */
+    prepareConfirmData(cardData, paymentLine, discountAmountGross) {
         const order = this.pos.get_order();
-        const currency = this.pos.currency.name;
-        const currency_code = currency === "USD" ? "840" : "858";
-        
-        // Convertir montos a centavos
-        const amount_in_cents = Math.round(Math.abs(newTotal) * 100);
-        const taxable_amount_in_cents = Math.round(Math.abs(newTaxableAmount) * 100);
-        const invoice_amount_in_cents = Math.round(Math.abs(newInvoiceAmount) * 100);
-        
+        const currency_code = this.pos.currency.name === "USD" ? "840" : "858";
+
+        const origPay =
+            paymentLine._oca_promo_base_payment_float != null
+                ? paymentLine._oca_promo_base_payment_float
+                : Math.abs(
+                      paymentLine.get_amount ? paymentLine.get_amount() : paymentLine.amount
+                  );
+        const disc = Math.max(0, Number(discountAmountGross) || 0);
+        const charged = Math.max(0, origPay - disc);
+
+        const invFullCents =
+            paymentLine._oca_promo_order_invoice_cents != null
+                ? paymentLine._oca_promo_order_invoice_cents
+                : Math.round(Math.abs(order.get_total_with_tax()) * 100);
+        const taxFullCents =
+            paymentLine._oca_promo_order_taxable_cents != null
+                ? paymentLine._oca_promo_order_taxable_cents
+                : Math.round(Math.abs(order.get_total_without_tax()) * 100);
+
+        const origPayCents = Math.round(origPay * 100);
+        const taxableShareCents =
+            invFullCents > 0
+                ? Math.round((taxFullCents * origPayCents) / invFullCents)
+                : taxFullCents;
+        const chargedCents = Math.round(charged * 100);
+        const newTaxableCents =
+            origPayCents > 0
+                ? Math.round((taxableShareCents * chargedCents) / origPayCents)
+                : 0;
+
         const data = this.get_base_data();
         data.TransactionId = paymentLine.transaction_id;
-        data.Amount = `${amount_in_cents}`;
+        data.Amount = `${chargedCents}`;
         data.Plan = "0";
         data.Currency = currency_code;
-        data.TaxableAmount = `${taxable_amount_in_cents}`;
-        data.InvoiceAmount = `${invoice_amount_in_cents}`;
+        data.TaxableAmount = `${newTaxableCents}`;
+        data.InvoiceAmount = `${chargedCents}`;
         data.InvoiceNumber = order.name || "1";
-        
+
         return data;
     },
 
@@ -697,19 +735,36 @@ patch(PaymentOCA.prototype, {
      */
     async confirmFinancialPurchaseWithoutPromotion(cardData, paymentLine) {
         const order = this.pos.get_order();
-        const currency = this.pos.currency.name;
-        const currency_code = currency === "USD" ? "840" : "858";
-        
-        const total_order_amount = Math.round(Math.abs(order.get_total_with_tax()) * 100);
-        const total_order_amount_without_tax = Math.round(Math.abs(order.get_total_without_tax()) * 100);
-        
+        const currency_code = this.pos.currency.name === "USD" ? "840" : "858";
+
+        // Bloque: sin promo, confirmar el importe de esta línea (pago parcial), no el total del pedido.
+        const origPay =
+            paymentLine._oca_promo_base_payment_float != null
+                ? paymentLine._oca_promo_base_payment_float
+                : Math.abs(
+                      paymentLine.get_amount ? paymentLine.get_amount() : paymentLine.amount
+                  );
+        const invFullCents =
+            paymentLine._oca_promo_order_invoice_cents != null
+                ? paymentLine._oca_promo_order_invoice_cents
+                : Math.round(Math.abs(order.get_total_with_tax()) * 100);
+        const taxFullCents =
+            paymentLine._oca_promo_order_taxable_cents != null
+                ? paymentLine._oca_promo_order_taxable_cents
+                : Math.round(Math.abs(order.get_total_without_tax()) * 100);
+        const origPayCents = Math.round(origPay * 100);
+        const taxablePaymentCents =
+            invFullCents > 0
+                ? Math.round((taxFullCents * origPayCents) / invFullCents)
+                : taxFullCents;
+
         const data = this.get_base_data();
         data.TransactionId = paymentLine.transaction_id;
-        data.Amount = `${total_order_amount}`;
+        data.Amount = `${origPayCents}`;
         data.Plan = "0";
         data.Currency = currency_code;
-        data.TaxableAmount = `${total_order_amount_without_tax}`;
-        data.InvoiceAmount = `${total_order_amount}`;
+        data.TaxableAmount = `${taxablePaymentCents}`;
+        data.InvoiceAmount = `${origPayCents}`;
         data.InvoiceNumber = order.name || "1";
         
         const confirmResponse = await this.confirmFinancialPurchase(data);

@@ -7,6 +7,7 @@ Este módulo agrega funcionalidad para:
 - Obtener totales actualizados de órdenes
 """
 
+import json
 import logging
 
 from odoo import models, api
@@ -20,6 +21,147 @@ class PosOrder(models.Model):
     Extensión del modelo pos.order para promociones OCA
     """
     _inherit = 'pos.order'
+
+    def _associate_oca_transactions(self):
+        """
+        Tras enlazar transacciones OCA, alinea pos.payment.amount con el importe real
+        cobrado en el pinpad (payment.transaction.amount) cuando hay promoción.
+        El POS suele enviar el importe previo al descuento (500); la tx queda en 400.
+
+        También recalcula cabecera de la orden por si la factura ya pasó y solo queda
+        alinear totales en pantalla.
+        """
+        super()._associate_oca_transactions()
+        for order in self:
+            order._oca_promo_sync_payment_amounts_from_transactions()
+            order._oca_promo_recompute_pos_order_header_amounts()
+
+    def _oca_promo_get_oca_transaction_for_pos_payment(self, pay):
+        """
+        Resuelve ``payment.transaction`` OCA para un ``pos.payment`` usando el
+        many2one o, si falta, el ``transaction_id`` del pinpad (char).
+
+        Usado para alinear importes y sumar descuentos antes de facturar aunque
+        ``payment_transaction_id`` aún no esté persistido.
+        """
+        tx = pay.payment_transaction_id
+        if tx:
+            return tx.sudo()
+        tid = str(getattr(pay, 'transaction_id', None) or '').strip()
+        if not tid:
+            return self.env['payment.transaction']
+        oca_provider = self.env['payment.provider'].sudo().search(
+            [('code', '=', 'oca')], limit=1
+        )
+        if not oca_provider:
+            return self.env['payment.transaction']
+        return self.env['payment.transaction'].sudo().search(
+            [
+                ('oca_transaction_id', '=', tid),
+                ('provider_id', '=', oca_provider.id),
+                ('state', 'in', ['pending', 'done']),
+            ],
+            order='id desc',
+            limit=1,
+        )
+
+    def _oca_promo_recompute_pos_order_header_amounts(self):
+        """
+        En Odoo 17, ``amount_total``, ``amount_tax`` y ``amount_paid`` en
+        ``pos.order`` son Float persistidos (no ``@api.depends``). Tras modificar
+        líneas o importes de pago hay que recalcularlos; el estándar es
+        ``_compute_batch_amount_all`` (agrega líneas y pagos en BD).
+        """
+        self.ensure_one()
+        if hasattr(self, '_compute_batch_amount_all'):
+            self._compute_batch_amount_all()
+            _logger.info(
+                'OCA promo: cabecera pos.order recalculada | orden=%s total=%s paid=%s tax=%s',
+                self.name,
+                self.amount_total,
+                self.amount_paid,
+                self.amount_tax,
+            )
+        elif hasattr(self, '_onchange_amount_all'):
+            self._onchange_amount_all()
+            self.env.cr.flush()
+
+    def _oca_promo_sync_payment_amounts_from_transactions(self):
+        """
+        Para cada pago OCA con transacción promocional, escribe amount = tx.amount
+        si hay diferencia relevante.
+        """
+        for pay in self.payment_ids.filtered(
+            lambda p: p.payment_method_id.use_payment_terminal == 'oca'
+        ):
+            tx = self._oca_promo_get_oca_transaction_for_pos_payment(pay)
+            if not tx:
+                continue
+            if not pay.payment_transaction_id:
+                pay.sudo().write({'payment_transaction_id': tx.id})
+            if not getattr(tx, 'is_promotion', False):
+                continue
+            tx_amt = float(tx.amount or 0.0)
+            pay_amt = float(pay.amount or 0.0)
+            if abs(pay_amt - tx_amt) < 0.01:
+                continue
+            _logger.info(
+                'OCA promo: alineando pos.payment id=%s amount %.2f -> %.2f (tx %s, orden %s)',
+                pay.id,
+                pay_amt,
+                tx_amt,
+                tx.oca_transaction_id,
+                self.name,
+            )
+            pay.sudo().write({'amount': tx_amt})
+            try:
+                pay.sudo().write({'is_promotion': True})
+            except Exception:
+                pass
+
+    def _oca_promo_collect_discount_totals_from_payments(self):
+        """
+        Suma discount_amount (TTC) de promotion_info en todas las transacciones OCA
+        promocionales ligadas a los pagos de esta orden.
+
+        Returns:
+            tuple: (total_discount_ttc, product_id, description, promotion_id)
+        """
+        self.ensure_one()
+        total_ttc = 0.0
+        product_id = False
+        description = 'Descuento Promoción'
+        promotion_id = False
+        for payment in self.payment_ids.filtered(
+            lambda p: p.payment_method_id.use_payment_terminal == 'oca'
+        ):
+            tx = self._oca_promo_get_oca_transaction_for_pos_payment(payment)
+            if not tx or not tx.is_promotion:
+                continue
+            try:
+                complete_response = json.loads(tx.oca_complete_response or '{}')
+                promotion_info = complete_response.get('promotion_info', {})
+                if isinstance(promotion_info, str):
+                    promotion_info = json.loads(promotion_info) or {}
+            except (TypeError, ValueError, json.JSONDecodeError) as err:
+                _logger.warning(
+                    'OCA promo: promotion_info inválido en tx %s: %s',
+                    tx.oca_transaction_id,
+                    err,
+                )
+                continue
+            if not promotion_info or not promotion_info.get('is_promotion'):
+                continue
+            try:
+                amt = float(promotion_info.get('discount_amount', 0) or 0.0)
+            except (TypeError, ValueError):
+                amt = 0.0
+            total_ttc += amt
+            if not product_id and promotion_info.get('product_id'):
+                product_id = promotion_info.get('product_id')
+                description = promotion_info.get('description') or description
+                promotion_id = promotion_info.get('promotion_id') or False
+        return total_ttc, product_id, description, promotion_id
 
     @api.model
     def create(self, vals):
@@ -106,7 +248,6 @@ class PosOrder(models.Model):
                 
                 if oca_transaction:
                     # Obtener información de promoción de la transacción
-                    import json
                     try:
                         complete_response = json.loads(oca_transaction.oca_complete_response or '{}')
                         promotion_info = complete_response.get('promotion_info', {})
@@ -155,26 +296,25 @@ class PosOrder(models.Model):
                                             raise ValidationError(block_msg)
                                 
                                 if should_apply:
-                                    # Agregar línea de descuento a la orden
-                                    discount_result = order.add_promotion_discount_line(
-                                        discount_amount,
-                                        product_id,
-                                        description,
-                                        promotion_id=promotion_id
+                                    # Bloque: no insertar línea aquí — el POS ya la agrega por cobro vía RPC
+                                    # (add_promotion_discount_line con el descuento de ESE pago). Hacerlo también
+                                    # desde create duplicaba montos (ej. -500) y desalineaba pagos.
+                                    _logger.info(
+                                        'OCA promo en create: sin add_promotion_discount_line | orden=%s | tx=%s',
+                                        order.name,
+                                        oca_transaction.oca_transaction_id,
                                     )
-                                    
-                                    if discount_result.get('success'):
-                                        # Asociar la transacción con la orden
-                                        oca_transaction.pos_order_id = order.id
-                                        # También asociar con el pago si hay uno
+                                    try:
+                                        if not oca_transaction.pos_order_id:
+                                            oca_transaction.pos_order_id = order.id
                                         if oca_payments and oca_payments[0]:
                                             oca_transaction.pos_payment_id = oca_payments[0].id
-                                            # Actualizar el payment_transaction_id en el pago
                                             oca_payments[0].payment_transaction_id = oca_transaction.id
-                                        _logger.info('Línea de descuento de promoción agregada a orden %s desde transacción OCA %s (Descuento: %s)', 
-                                                   order.name, oca_transaction.oca_transaction_id, discount_amount)
-                                    else:
-                                        _logger.error('Error al agregar línea de descuento: %s', discount_result.get('error'))
+                                    except Exception as link_err:
+                                        _logger.warning(
+                                            'OCA promo create: error al enlazar transacción: %s',
+                                            link_err,
+                                        )
                             else:
                                 _logger.warning('Información de promoción incompleta: discount_amount=%s, product_id=%s', 
                                               discount_amount, product_id)
@@ -267,143 +407,115 @@ class PosOrder(models.Model):
                     'error': f'Orden en estado inválido: {self.state}'
                 }
             
-            # Verificar si ya existe una línea de descuento de promoción para esta orden
-            # (opcional: evitar duplicados)
+            # Bloque: localizar línea de descuento existente (mismo producto) para acumular
+            # varios cobros OCA parciales (ej. 50 + 50 = 100 de descuento TTC total).
             existing_discount_line = self.lines.filtered(
                 lambda l: l.product_id.id == product_id and l.price_unit < 0
             )
-            
+
+            # Bloque: descuento TTC acumulado = lo ya reflejado en la línea + incremento de este cobro.
+            prev_gross_ttc = 0.0
             if existing_discount_line:
-                _logger.warning('Ya existe línea de descuento de promoción en la orden. Actualizando...')
-                # Actualizar la línea existente
-                price_unit = -abs(discount_amount)  # Negativo para descuento
-                qty = 1.0
-                # Calcular price_subtotal explícitamente
-                price_subtotal = price_unit * qty
-                price_subtotal_incl = price_subtotal  # Sin impuestos, son iguales
-                
-                existing_discount_line[0].write({
-                    'price_unit': price_unit,
-                    'price_subtotal': price_subtotal,  # Establecer explícitamente
-                    'price_subtotal_incl': price_subtotal_incl,  # También establecer price_subtotal_incl
-                    'name': description or f'Descuento Promoción - {product.name}',
-                    'qty': qty,
-                    'discount': 0.0,  # Sin descuento adicional
-                })
-                # Forzar recálculo de campos calculados
+                el = existing_discount_line[0]
+                prev_gross_ttc = abs(float(el.price_subtotal_incl or 0.0))
+                if prev_gross_ttc < 1e-6:
+                    prev_gross_ttc = abs(float(el.price_subtotal or 0.0))
+                    if el.tax_ids and prev_gross_ttc > 1e-6:
+                        total_tax_rate = sum(t.amount for t in el.tax_ids) / 100.0
+                        if not any(t.price_include for t in el.tax_ids):
+                            prev_gross_ttc = prev_gross_ttc * (1.0 + total_tax_rate)
+            cumulative_gross_ttc = prev_gross_ttc + float(discount_amount)
+            _logger.info(
+                'OCA promo línea descuento: incremento TTC=%s | acumulado TTC=%s (orden %s)',
+                discount_amount,
+                cumulative_gross_ttc,
+                self.name,
+            )
+
+            # Bloque: impuestos de la línea de descuento (mismos criterios que antes).
+            tax_ids = []
+            for line in self.lines:
+                if line.product_id.id != product_id and line.tax_ids:
+                    for tax in line.tax_ids:
+                        if tax.id not in tax_ids:
+                            tax_ids.append(tax.id)
+            if not tax_ids and product.taxes_id:
+                tax_ids = product.taxes_id.ids
+            if not tax_ids:
+                basic_tax = self.env['account.tax'].search([
+                    ('amount', '=', 22.0),
+                    ('type_tax_use', '=', 'sale'),
+                    ('company_id', '=', self.company_id.id)
+                ], limit=1)
+                if basic_tax:
+                    tax_ids = [basic_tax.id]
+
+            # Bloque: a partir del descuento TTC acumulado, obtener price_unit y subtotales
+            # (misma lógica para alta y actualización; antes la rama "update" ponía mal price_subtotal_incl).
+            qty = 1.0
+            if tax_ids:
+                taxes = self.env['account.tax'].browse(tax_ids)
+                price_include = any(tax.price_include for tax in taxes)
+                if price_include:
+                    price_unit = -abs(cumulative_gross_ttc)
+                else:
+                    total_tax_rate = sum(tax.amount for tax in taxes) / 100.0
+                    discount_net = cumulative_gross_ttc / (1.0 + total_tax_rate)
+                    price_unit = -abs(discount_net)
+            else:
+                price_unit = -abs(cumulative_gross_ttc)
+
+            calculated_price_subtotal = price_unit * qty
+            if tax_ids:
+                taxes = self.env['account.tax'].browse(tax_ids)
+                total_tax_rate = sum(tax.amount for tax in taxes) / 100.0
+                if any(t.price_include for t in taxes):
+                    calculated_price_subtotal_incl = calculated_price_subtotal
+                else:
+                    calculated_price_subtotal_incl = calculated_price_subtotal * (1.0 + total_tax_rate)
+            else:
+                calculated_price_subtotal_incl = calculated_price_subtotal
+
+            line_vals = {
+                'product_id': product_id,
+                'qty': qty,
+                'price_unit': price_unit,
+                'name': description or f'Descuento Promoción - {product.name}',
+                'tax_ids': [(6, 0, tax_ids)] if tax_ids else [(5, 0, 0)],
+                'full_product_name': description or f'Descuento Promoción - {product.name}',
+                'discount': 0.0,
+                'price_subtotal': calculated_price_subtotal,
+                'price_subtotal_incl': calculated_price_subtotal_incl,
+            }
+
+            if existing_discount_line:
+                _logger.warning(
+                    'Actualizando línea de descuento promoción existente (acumulado TTC=%s)',
+                    cumulative_gross_ttc,
+                )
+                existing_discount_line[0].write(line_vals)
                 try:
                     existing_discount_line[0]._compute_amount_line_all()
                 except AttributeError:
-                    # Si el método no existe, forzar recálculo de otra forma
-                    existing_discount_line[0]._compute_amount()
+                    try:
+                        existing_discount_line[0]._compute_amount()
+                    except Exception:
+                        pass
                 except Exception as e:
-                    _logger.warning('No se pudo recalcular campos calculados de línea de descuento existente: %s', str(e))
+                    _logger.warning('No se pudo recalcular línea de descuento: %s', str(e))
                 line_id = existing_discount_line[0].id
             else:
-                # Crear nueva línea de descuento
-                # El descuento debe tener los mismos impuestos que las líneas a las que se aplica
-                # para que el CFE calcule correctamente el MntNetoIVATasaBasica
-                tax_ids = []
-                for line in self.lines:
-                    if line.product_id.id != product_id and line.tax_ids:  # Excluir la línea de descuento si ya existe
-                        # Obtener todos los impuestos de la línea (no solo tasa básica)
-                        # porque el descuento debe reducir el monto neto con los mismos impuestos
-                        for tax in line.tax_ids:
-                            if tax.id not in tax_ids:
-                                tax_ids.append(tax.id)
-                
-                # Si no se encontraron impuestos, usar los del producto de descuento si los tiene
-                if not tax_ids and product.taxes_id:
-                    tax_ids = product.taxes_id.ids
-                
-                # Si aún no hay impuestos, buscar el impuesto a tasa básica por defecto (22%)
-                if not tax_ids:
-                    basic_tax = self.env['account.tax'].search([
-                        ('amount', '=', 22.0),
-                        ('type_tax_use', '=', 'sale'),
-                        ('company_id', '=', self.company_id.id)
-                    ], limit=1)
-                    if basic_tax:
-                        tax_ids = [basic_tax.id]
-                
-                # Calcular el price_unit correcto según si hay impuestos
-                # IMPORTANTE: El descuento_amount que se recibe es el descuento sobre el total (con impuestos incluidos)
-                # 
-                # Para CFE, el método precio_unitario_cfe() usa precio_unitario(), que:
-                # - Si el IVA está incluido: divide price_unit por (1 + tasa) para obtener el neto
-                # - Si el IVA NO está incluido: usa price_unit directamente
-                #
-                # Como el descuento_amount es sobre el total (con impuestos), necesitamos:
-                # - Si el IVA está incluido: usar discount_amount como price_unit (precio_unitario() lo ajustará)
-                # - Si el IVA NO está incluido: calcular el descuento neto dividiendo por (1 + tasa)
-                qty = 1.0
-                if tax_ids:
-                    taxes = self.env['account.tax'].browse(tax_ids)
-                    # Verificar si los impuestos están incluidos en el precio
-                    # En POS, generalmente los impuestos NO están incluidos, pero verificamos para estar seguros
-                    price_include = any(tax.price_include for tax in taxes)
-                    
-                    if price_include:
-                        # Impuestos incluidos: usar el descuento total como price_unit
-                        # precio_unitario() lo dividirá por (1 + tasa) para obtener el neto correcto
-                        # Esto asegura que precio_unitario_cfe() muestre el descuento neto correcto
-                        price_unit = -abs(discount_amount)  # Negativo para descuento
-                        _logger.info('Descuento con impuestos incluidos: price_unit=%s (descuento total), precio_unitario() calculará el neto', price_unit)
-                    else:
-                        # Impuestos NO incluidos: calcular el descuento neto
-                        # El descuento_amount es sobre el total (con impuestos), necesitamos el neto
-                        total_tax_rate = sum(tax.amount for tax in taxes) / 100.0
-                        discount_net = discount_amount / (1.0 + total_tax_rate)
-                        price_unit = -abs(discount_net)  # Negativo para descuento
-                        _logger.info('Descuento con impuestos NO incluidos: discount_amount=%s, discount_net=%s, price_unit=%s', 
-                                   discount_amount, discount_net, price_unit)
-                else:
-                    # Sin impuestos, el price_unit es directamente el descuento
-                    price_unit = -abs(discount_amount)  # Negativo para descuento
-                    _logger.info('Descuento sin impuestos: price_unit=%s', price_unit)
-                
-                # Crear la línea usando new() primero para que Odoo calcule los campos automáticamente
-                # Esto es necesario porque en esta base de datos price_subtotal tiene NOT NULL a nivel SQL.
                 discount_line_new = self.env['pos.order.line'].new({
                     'order_id': self.id,
-                    'product_id': product_id,
-                    'qty': qty,
-                    'price_unit': price_unit,
-                    'name': description or f'Descuento Promoción - {product.name}',
-                    'tax_ids': [(6, 0, tax_ids)] if tax_ids else [(5, 0, 0)],
-                    'full_product_name': description or f'Descuento Promoción - {product.name}',
-                    'discount': 0.0,
+                    **line_vals,
                 })
-
-                # Forzar cálculo de campos calculados antes de crear
                 try:
                     discount_line_new._onchange_qty()
                 except AttributeError:
                     pass
-
-                # Asegurar que price_subtotal y price_subtotal_incl tengan valores
-                calculated_price_subtotal = price_unit * qty
-
-                if not discount_line_new.price_subtotal:
-                    discount_line_new.price_subtotal = calculated_price_subtotal
-
-                if not discount_line_new.price_subtotal_incl:
-                    if tax_ids:
-                        taxes = self.env['account.tax'].browse(tax_ids)
-                        total_tax_rate = sum(tax.amount for tax in taxes) / 100.0
-                        discount_line_new.price_subtotal_incl = calculated_price_subtotal * (1.0 + total_tax_rate)
-                    else:
-                        discount_line_new.price_subtotal_incl = calculated_price_subtotal
-
-                # Convertir a diccionario para create()
                 discount_line_vals = discount_line_new._convert_to_write(discount_line_new._cache)
-
-                # Reforzar que nunca vayan NULL a la base
-                if discount_line_vals.get('price_subtotal') is None:
-                    discount_line_vals['price_subtotal'] = calculated_price_subtotal
-                if discount_line_vals.get('price_subtotal_incl') is None:
-                    discount_line_vals['price_subtotal_incl'] = calculated_price_subtotal
-
+                discount_line_vals.setdefault('price_subtotal', calculated_price_subtotal)
+                discount_line_vals.setdefault('price_subtotal_incl', calculated_price_subtotal_incl)
                 discount_line = self.env['pos.order.line'].create(discount_line_vals)
                 line_id = discount_line.id
             
@@ -417,12 +529,19 @@ class PosOrder(models.Model):
             # Hacer flush para asegurar que los cambios se reflejen en la base de datos
             # sin hacer commit (el commit lo maneja el contexto de transacción)
             self.env.cr.flush()
+
+            # Bloque: Odoo 17 — cabecera pos.order desde líneas y pagos reales
+            self._oca_promo_recompute_pos_order_header_amounts()
             
             # Log detallado del descuento calculado para verificación
             discount_line = self.env['pos.order.line'].browse(line_id)
             _logger.info('Línea de descuento agregada exitosamente a orden %s: Línea ID %s', 
                         self.name, line_id)
-            _logger.info('  Descuento recibido (total con impuestos): %s', discount_amount)
+            _logger.info(
+                '  Descuento incremento TTC (este cobro): %s | acumulado en línea (TTC): %s',
+                discount_amount,
+                cumulative_gross_ttc,
+            )
             _logger.info('  price_unit establecido: %s', discount_line.price_unit)
             _logger.info('  price_subtotal: %s', discount_line.price_subtotal)
             _logger.info('  price_subtotal_incl: %s', discount_line.price_subtotal_incl)
@@ -463,17 +582,25 @@ class PosOrder(models.Model):
         self.ensure_one()
         
         try:
-            # Los totales se calculan automáticamente en Odoo
-            # No es necesario llamar a ningún método explícitamente
-            
+            # Bloque: Odoo 17 — amount_total/amount_paid son Float persistidos; refrescar con API estándar.
+            if hasattr(self, '_compute_batch_amount_all'):
+                self._compute_batch_amount_all()
+            elif hasattr(self, '_compute_amount_all'):
+                self._compute_amount_all()
+            lines = self.lines
+            amount_total_from_lines = sum(lines.mapped('price_subtotal_incl'))
+            amount_untaxed_from_lines = sum(lines.mapped('price_subtotal'))
+
             return {
                 'newTotal': self.amount_total,
                 'newTaxableAmount': self.amount_untaxed,
-                'newInvoiceAmount': self.amount_total
+                'newInvoiceAmount': self.amount_total,
+                'newTotalFromLines': amount_total_from_lines,
+                'newTaxableFromLines': amount_untaxed_from_lines,
             }
         except Exception as e:
             _logger.error('Error al obtener totales de orden %s: %s', self.name, str(e))
-            # Retornar valores actuales como fallback
+            # Bloque: fallback seguro con montos de cabecera si el cálculo por líneas falla.
             return {
                 'newTotal': self.amount_total,
                 'newTaxableAmount': self.amount_untaxed,
@@ -482,105 +609,94 @@ class PosOrder(models.Model):
     
     def _generate_pos_order_invoice(self):
         """
-        Sobrescribe el método para asegurar que el descuento de promoción
-        se agregue ANTES de generar la factura, para que CFE reciba el monto correcto
-        
-        Este método se llama cuando se genera la factura de la orden POS.
-        Interceptamos aquí para agregar el descuento antes de que se cree la factura.
+        Antes de ``super()`` (creación de factura y ``account.payment``):
+
+        1. Alinear ``pos.payment.amount`` con ``payment.transaction.amount`` en
+           promos OCA. Si esto ocurre solo en ``_associate_oca_transactions``
+           (después de facturar), los asientos quedan en 500+300 en lugar de 400+400.
+
+        2. Completar línea de descuento con la suma de descuentos de todas las txs.
+
+        3. Recalcular cabecera ``pos.order`` (Odoo 17: ``amount_total`` no se
+           actualiza solo al agregar líneas; hace falta ``_compute_batch_amount_all``).
         """
-        # Buscar transacciones OCA con promoción asociadas a esta orden
-        # que aún no tengan el descuento aplicado
-        try:
-            # Buscar pagos OCA en esta orden
-            oca_payments = self.payment_ids.filtered(
-                lambda p: p.payment_method_id.use_payment_terminal == 'oca'
-            )
-            
-            if oca_payments:
-                # Buscar transacciones OCA con promoción asociadas a estos pagos
-                for payment in oca_payments:
-                    if payment.payment_transaction_id and payment.payment_transaction_id.is_promotion:
-                        transaction = payment.payment_transaction_id
-                        
-                        # Verificar si ya tiene el descuento aplicado
-                        import json
-                        try:
-                            complete_response = json.loads(transaction.oca_complete_response or '{}')
-                            promotion_info = complete_response.get('promotion_info', {})
-
-                            # Normalizar promotion_info para asegurar que sea un dict
-                            if isinstance(promotion_info, str):
-                                try:
-                                    promotion_info = json.loads(promotion_info) or {}
-                                except Exception as norm_error:
-                                    _logger.error(
-                                        'promotion_info almacenado como string no JSON para transacción %s: %s',
-                                        transaction.oca_transaction_id, str(norm_error)
-                                    )
-                                    promotion_info = {}
-                            
-                            if promotion_info and promotion_info.get('is_promotion'):
-                                discount_amount = promotion_info.get('discount_amount', 0)
-                                product_id = promotion_info.get('product_id', False)
-                                description = promotion_info.get('description', 'Descuento Promoción')
-                                promotion_id = promotion_info.get('promotion_id', False)
-
-                                # Verificar si ya existe una línea de descuento en la orden
-                                existing_discount_line = self.lines.filtered(
-                                    lambda l: l.product_id.id == product_id and l.price_unit < 0
+        for order in self:
+            order._oca_promo_sync_payment_amounts_from_transactions()
+            try:
+                total_ttc, product_id, description, promotion_id = (
+                    order._oca_promo_collect_discount_totals_from_payments()
+                )
+                if total_ttc > 0 and product_id:
+                    if promotion_id:
+                        promotion = order.env['payment.method.promotion'].browse(
+                            promotion_id
+                        )
+                        if promotion.exists():
+                            applied_ids = order.env[
+                                'payment.method.promotion'
+                            ].collect_applied_loyalty_program_ids_from_pos_order(order)
+                            blocked, block_msg = (
+                                promotion.get_incompatibility_payment_block_for_applied_programs(
+                                    applied_ids
                                 )
+                            )
+                            if blocked:
+                                _logger.warning(
+                                    'Factura bloqueada por promo OCA incompatible: %s',
+                                    block_msg,
+                                )
+                                raise ValidationError(block_msg)
 
-                                # Si no existe aún la línea de descuento y los datos de la promoción son válidos,
-                                # se vuelve a verificar incompatibilidades ANTES de generar la factura.
-                                # Si hay incompatibilidad, se lanza ValidationError para bloquear la
-                                # generación de la factura y que el POS reciba la validación.
-                                if not existing_discount_line and discount_amount > 0 and product_id:
-                                    if promotion_id:
-                                        promotion = self.env['payment.method.promotion'].browse(promotion_id)
-                                        if promotion.exists():
-                                            applied_ids = self.env[
-                                                "payment.method.promotion"
-                                            ].collect_applied_loyalty_program_ids_from_pos_order(self)
-                                            blocked, block_msg = promotion.get_incompatibility_payment_block_for_applied_programs(
-                                                applied_ids
-                                            )
-                                            if blocked:
-                                                _logger.warning(
-                                                    'No se puede aplicar promoción %s (ID: %s) antes de facturar: %s',
-                                                    promotion.name,
-                                                    promotion.id,
-                                                    block_msg,
-                                                )
-                                                raise ValidationError(block_msg)
+                    existing_discount_line = order.lines.filtered(
+                        lambda l, pid=product_id: l.product_id.id == pid
+                        and l.price_unit < 0
+                    )
+                    current_gross = 0.0
+                    if existing_discount_line:
+                        el = existing_discount_line[0]
+                        current_gross = abs(float(el.price_subtotal_incl or 0.0))
+                        if current_gross < 1e-6:
+                            current_gross = abs(float(el.price_subtotal or 0.0))
+                            if el.tax_ids and current_gross > 1e-6:
+                                total_tax_rate = sum(t.amount for t in el.tax_ids) / 100.0
+                                if not any(t.price_include for t in el.tax_ids):
+                                    current_gross = current_gross * (
+                                        1.0 + total_tax_rate
+                                    )
 
-                                    # Agregar el descuento ANTES de generar la factura
-                                    _logger.info(
-                                        'Agregando descuento de promoción a orden %s ANTES de generar factura (Descuento: %s)',
-                                        self.name,
-                                        discount_amount,
-                                    )
-                                    discount_result = self.add_promotion_discount_line(
-                                        discount_amount,
-                                        product_id,
-                                        description,
-                                        promotion_id=promotion_id,
-                                    )
-                                    
-                                    if discount_result.get('success'):
-                                        _logger.info('Descuento agregado exitosamente a orden %s antes de generar factura', self.name)
-                                    else:
-                                        _logger.error('Error al agregar descuento antes de generar factura: %s', 
-                                                    discount_result.get('error'))
-                        except Exception as e:
-                            _logger.error('Error al procesar información de promoción antes de generar factura: %s', str(e))
-                            import traceback
-                            _logger.error('Traceback: %s', traceback.format_exc())
-        except Exception as e:
-            _logger.error('Error al verificar promociones antes de generar factura para orden %s: %s', self.name, str(e))
-            import traceback
-            _logger.error('Traceback: %s', traceback.format_exc())
-        
-        # Llamar al método base para generar la factura
-        # Ahora la factura se generará con el descuento ya aplicado
+                    increment = max(0.0, float(total_ttc) - current_gross)
+                    if increment > 0.01:
+                        _logger.info(
+                            'OCA promo factura: descuento TTC total en txs=%s | ya en línea=%s | '
+                            'incremento a aplicar=%s | orden=%s',
+                            total_ttc,
+                            current_gross,
+                            increment,
+                            order.name,
+                        )
+                        discount_result = order.add_promotion_discount_line(
+                            increment,
+                            product_id,
+                            description,
+                            promotion_id=promotion_id,
+                        )
+                        if not discount_result.get('success'):
+                            _logger.error(
+                                'Error al completar descuento promo antes de facturar: %s',
+                                discount_result.get('error'),
+                            )
+            except ValidationError:
+                raise
+            except Exception as e:
+                _logger.error(
+                    'Error al verificar promociones antes de generar factura para orden %s: %s',
+                    order.name,
+                    str(e),
+                )
+                import traceback
+                _logger.error('Traceback: %s', traceback.format_exc())
+
+            order._oca_promo_recompute_pos_order_header_amounts()
+
         return super(PosOrder, self)._generate_pos_order_invoice()
     
