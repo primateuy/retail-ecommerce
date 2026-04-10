@@ -31,6 +31,9 @@
                         <setting id="fenicio_cantidad_stock_bydefault_setting" help="Cantidad de stock a mostrar por defecto para Fenicio">
                             <field name="cantidad_stock_bydefault" class="oe_inline"/>
                         </setting>
+                        <setting id="fenicio_sale_order_type_setting" help="Tipo de orden de venta predeterminado para las ventas procesadas por Fenicio">
+                            <field name="fenicio_sale_order_type_id" class="oe_inline"/>
+                        </setting>
                         <setting id="fenicio_compania_setting" help="Compañía actual para la que se está configurando Fenicio">
                             <field name="fenicio_compania_id" class="oe_inline"/>
                         </setting>

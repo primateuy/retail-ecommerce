@@ -55,6 +55,14 @@ class ResConfigSettings(models.TransientModel):
         readonly=False,
     )
 
+    fenicio_sale_order_type_id = fields.Many2one(
+        'sale.order.type',
+        string='Tipo de Orden de Venta Fenicio',
+        related='company_id.fenicio_sale_order_type_id',
+        readonly=False,
+        help='Tipo de orden de venta predeterminado para las ventas procesadas por Fenicio'
+    )
+
     fenicio_stock_location_ids = fields.Many2many(
         'stock.location',
         string='Ubicaciones de Stock Fenicio',

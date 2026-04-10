@@ -23,16 +23,34 @@ class AccountMove(models.Model):
                 payment_ids.cancel()
             return False
 
-        journal_id = self.env['account.journal'].search([
-            ('code', '=', json_data_pago['codigo']),
-            ('company_id', '=', fenicio_compania.id)
-        ], limit=1)
+        # El diario lo define el tipo de orden de venta; si no tiene, se usa el diario Fenicio (feni)
+        journal_id = False
+        sale_order = self.line_ids.sale_line_ids.order_id[:1]
+        if sale_order and sale_order.type_id and sale_order.type_id.journal_id:
+            journal_id = sale_order.type_id.journal_id
         if not journal_id:
-            raise UserError('No se encontró diario para registrar el pago, codigo: %s' % json_data_pago['codigo'])
+            journal_id = self.env['account.journal'].search([
+                ('code', '=', 'feni'),
+                ('company_id', '=', fenicio_compania.id)
+            ], limit=1)
+        if not journal_id:
+            raise UserError('No se encontró diario para registrar el pago Fenicio (feni)')
 
-        payment_method_line = journal_id.inbound_payment_method_line_ids and journal_id.inbound_payment_method_line_ids[0] or False
+        payment_method_line = journal_id.inbound_payment_method_line_ids[:1]
         if not payment_method_line:
-            raise UserError('El diario %s no tiene configurado un método de pago inbound' % journal_id.name)
+            # Agregar automáticamente el método Manual si el diario no tiene ninguno configurado
+            manual_method = self.env['account.payment.method'].search([
+                ('code', '=', 'manual'),
+                ('payment_type', '=', 'inbound'),
+            ], limit=1)
+            if manual_method:
+                payment_method_line = self.env['account.payment.method.line'].create({
+                    'name': manual_method.name,
+                    'payment_method_id': manual_method.id,
+                    'journal_id': journal_id.id,
+                })
+            else:
+                raise UserError('El diario %s no tiene configurado un método de pago inbound' % journal_id.name)
 
         payment_register_id = self.env['account.payment.register'].with_context(active_ids=self.ids, active_model='account.move', active_id=self.id).create({
             'journal_id': journal_id.id,

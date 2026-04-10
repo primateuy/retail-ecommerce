@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 
+import json
 import logging
 
 import pytz
@@ -94,16 +95,36 @@ class SaleOrder(models.Model):
 
                 
             
+            codigo_pago = (json_data_pago.get('codigo') or '').lower()
+            payment_method = False
+            if codigo_pago:
+                payment_method = self.env['payment.method'].search(
+                    [('code', '=', codigo_pago)], limit=1
+                )
+            if not payment_method:
+                payment_method = self.env['payment.method'].search(
+                    [('code', '=', 'fenicio')], limit=1
+                )
+
             transaction = self.env['payment.transaction'].create({
                 'reference': id_externo,
                 'amount': float(json_data_pago.get('importe', 0)),
                 'currency_id': currency.id,
                 'partner_id': self.partner_id.id,
                 'provider_id': provider.id,
-                'payment_method_id': self.env['payment.method'].search([('name', '=', 'Fenicio')], limit=1).id,
+                'payment_method_id': payment_method.id if payment_method else False,
                 'payment_id': payment_id.id if payment_id else False,
                 'state': 'done' if json_data_pago.get('estado') in ['APROBADO', 'CANCELADO'] else 'pending',
                 'sale_order_ids': [(6, 0, [self.id])],
+                'fenicio_numero_tarjeta': json_data_pago.get('numeroTarjeta'),
+                'fenicio_terminacion_tarjeta': json_data_pago.get('terminacionTarjeta'),
+                'fenicio_bin': json_data_pago.get('bin'),
+                'fenicio_titular_tarjeta': json_data_pago.get('titularTarjeta'),
+                'fenicio_cuotas': json_data_pago.get('cuotas') or 0,
+                'fenicio_banco': json_data_pago.get('banco'),
+                'fenicio_autorizacion': json_data_pago.get('autorizacion'),
+                'fenicio_conector': json_data_pago.get('conector'),
+                'fenicio_raw_pago': json.dumps(json_data_pago, ensure_ascii=False, indent=2),
                 'company_id': fenicio_compania.id,
             })
             
@@ -117,19 +138,18 @@ class SaleOrder(models.Model):
     def create_or_update_order(self, json_data, token):
         try:
 
-            fenicio_compania = self.env['api.internal'].verificar_token(token)
-            
+            fenicio_website = self.env['api.internal'].verificar_token(token)
+            fenicio_compania = fenicio_website.company_id
+
             partner_id = self.env['res.partner'].sudo().with_context(skip_vat_check=True).get_partner_orden_venta(json_data)
             if not partner_id:
                 raise ValidationError("Error: No se pudo crear o obtener el cliente")
-            
+
             partner_invoice_id = partner_id.get_partner_invoice_address_orden_venta(json_data)
-            
             partner_shipping_id = partner_id.get_partner_shipping_address_orden_venta(json_data)
-            
 
-
-            tarifa_id = self.env['res.company'].search([('id', '=', fenicio_compania.id)], limit=1).fenicio_pricelist_venta_id;
+            tarifa_id = fenicio_website.fenicio_pricelist_venta_id
+            sale_order_type_id = fenicio_website.fenicio_sale_order_type_id
 
 
             
@@ -149,16 +169,17 @@ class SaleOrder(models.Model):
             effective_date = parse(json_data['fechaFin'])
 
             lines = []
+            # Precios calculados por índice de línea para aplicar después de crear la orden
+            precios_por_linea = []
+
             if self.id and len(self.order_line) != 0:
                 self.write({'order_line': [(5,)]})
 
-            
             validate_qty = self.validate_qty(json_data)
             if validate_qty:
                 _logger.error("Error en validación de cantidades: %s", validate_qty)
                 return False, validate_qty
 
-            
             if 'lineas' in json_data:
                 for idx, line_data in enumerate(json_data['lineas']):
                     try:
@@ -167,8 +188,7 @@ class SaleOrder(models.Model):
                             error_msg = f"No se encuentra producto con sku {line_data['sku']}"
                             _logger.error(error_msg)
                             return False, error_msg
-                        
-                        
+
                         precio_fenicio = line_data['precio']
                         descuentos = ('descuentos' in line_data and line_data['descuentos']) or []
                         precio_unitario = None
@@ -200,15 +220,14 @@ class SaleOrder(models.Model):
                                 total_descuentos = sum(d.get('monto', 0) for d in descuentos)
                                 precio_unitario = max(0, precio_unitario - total_descuentos)
 
-                        
+                        # Crear línea solo con producto y cantidad para que Odoo cargue
+                        # impuestos y defaults nativamente via onchange
                         vals = {
                             'product_id': product_id.id,
-                            'name': product_id.name,
                             'product_uom_qty': line_data['cantidad'],
-                            'price_unit': precio_unitario,
-                            'tax_id': [(5,)],
                         }
                         lines.append((0, 0, vals))
+                        precios_por_linea.append(precio_unitario)
                     except Exception as e:
                         error_msg = f"Error procesando línea {idx}: {str(e)}"
                         raise ValidationError(error_msg)
@@ -221,7 +240,36 @@ class SaleOrder(models.Model):
             direccion_envio = horario.get('direccionEnvio') or {}
             observaciones = direccion_envio.get('observaciones', '')
 
+            # Si la entrega es de tipo RETIRO, agregar el producto del local a la orden
+            _logger.info("RETIRO DEBUG — tipo: %s | local: %s", entrega.get('tipo'), entrega.get('local'))
+            if entrega.get('tipo') == 'RETIRO':
+                local_sku = entrega.get('local')
+                if local_sku:
+                    local_product = self.env['product.product'].search(
+                        [('default_code', '=', local_sku)], limit=1
+                    )
+                    if local_product:
+                        lines.append((0, 0, {
+                            'product_id': local_product.id,
+                            'product_uom_qty': 1,
+                        }))
+                        precios_por_linea.append(local_product.lst_price)
+                        _logger.info("RETIRO: agregado producto '%s' (SKU: %s)", local_product.name, local_sku)
+                    else:
+                        _logger.warning("RETIRO: no se encontró producto con SKU '%s'", local_sku)
+
             
+
+            # Si algún producto de las líneas corresponde al producto de un carrier con tipo de orden, usarlo
+            line_product_ids = [cmd[2]['product_id'] for cmd in lines if cmd[2].get('product_id')]
+            if line_product_ids:
+                carrier = self.env['delivery.carrier'].search([
+                    ('product_id', 'in', line_product_ids),
+                    ('sale_order_type_id', '!=', False),
+                    ('company_id', 'in', [fenicio_compania.id, False]),
+                ], limit=1)
+                if carrier:
+                    sale_order_type_id = carrier.sale_order_type_id
 
             journal_id = self.env['account.journal'].search([
                 ('code', '=', 'fenv'),
@@ -251,13 +299,19 @@ class SaleOrder(models.Model):
                 'observaciones': observaciones,
                 'order_line': lines,
                 'company_id': fenicio_compania.id,
+                'type_id': sale_order_type_id.id if sale_order_type_id else False,
+                'website_id': fenicio_website.id,
             }
+            if sale_order_type_id and sale_order_type_id.warehouse_id:
+                vals['warehouse_id'] = sale_order_type_id.warehouse_id.id
 
             # Crear o actualizar orden
             if not self.id:
                 try:
                     order = self.env['sale.order'].create([vals])
-
+                    # Actualizar precios una vez que las líneas ya tienen impuestos cargados
+                    for line, precio in zip(order.order_line, precios_por_linea):
+                        line.write({'price_unit': precio})
                     return order, ''
                 except Exception as e:
                     error_msg = f"Error al crear la orden: {str(e)}"
@@ -270,7 +324,10 @@ class SaleOrder(models.Model):
                         error_msg = "No se pudo actualizar el estado de la orden"
                         _logger.error(error_msg)
                         return False, error_msg
-                    return self.search([('id_order_fenicio', '=', json_data['idOrden'])], limit=1), ''
+                    order = self.search([('id_order_fenicio', '=', json_data['idOrden'])], limit=1)
+                    for line, precio in zip(order.order_line, precios_por_linea):
+                        line.write({'price_unit': precio})
+                    return order, ''
                 except Exception as e:
                     error_msg = f"Error al actualizar la orden: {str(e)}"
                     _logger.error(error_msg)
@@ -342,23 +399,27 @@ class SaleOrder(models.Model):
 
         try:
             self.ensure_one()
-            
-            # Obtener el website_id desde la compañía
-            fenicio_website_id = self.env.company.fenicio_website_id.id
+
+            fenicio_website_id = self.website_id.id
 
             if not fenicio_website_id:
-                _logger.error("No está configurado el sitio web de Fenicio en la compañía.");
-                return False;
+                _logger.error("No está configurado el sitio web en la orden de venta Fenicio.")
+                return False
 
-            self.write({'website_id': fenicio_website_id});
+            from datetime import datetime as dt
+            uy_date = dt.now(pytz.timezone('America/Montevideo')).date()
 
-
-            
             modal_sale_invoice = self.env['sale.advance.payment.inv'].with_context(active_ids=[self.id]).create({
                 'deduct_down_payments': True,
                 'has_down_payments': False,
             })
             modal_sale_invoice.with_context(active_ids=[self.id]).create_invoices()
+
+            # Forzar fecha Uruguay en las facturas creadas para evitar problemas de tipo de cambio
+            self.invoice_ids.filtered(lambda inv: inv.state == 'draft').write({
+                'invoice_date': uy_date,
+            })
+
             return True
         except Exception as e:
             _logger.error("Error al crear la factura: %s", str(e))

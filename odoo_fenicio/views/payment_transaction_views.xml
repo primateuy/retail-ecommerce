@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <record model="ir.ui.view" id="payment_transaction_form_inherit_fenicio">
+            <field name="name">payment.transaction.form.inherit.fenicio</field>
+            <field name="model">payment.transaction</field>
+            <field name="inherit_id" ref="payment.payment_transaction_form"/>
+            <field name="arch" type="xml">
+                <xpath expr="//sheet" position="inside">
+                    <group name="fenicio_pago" string="Datos de Pago Fenicio" invisible="not fenicio_raw_pago">
+                        <group>
+                            <field name="fenicio_numero_tarjeta"/>
+                            <field name="fenicio_terminacion_tarjeta"/>
+                            <field name="fenicio_bin"/>
+                            <field name="fenicio_titular_tarjeta"/>
+                        </group>
+                        <group>
+                            <field name="fenicio_cuotas"/>
+                            <field name="fenicio_banco"/>
+                            <field name="fenicio_autorizacion"/>
+                            <field name="fenicio_conector"/>
+                        </group>
+                        <group string="JSON de Pago" colspan="2">
+                            <field name="fenicio_raw_pago" nolabel="1"/>
+                        </group>
+                    </group>
+                </xpath>
+            </field>
+        </record>
+    </data>
+</odoo>
