@@ -68,7 +68,7 @@
                             <input class="detail form-control" id="mobile_person" name="mobile" t-model="changes.mobile" t-att-placeholder="mobilePlaceholder" t-att="{'disabled': isFieldCommercialAndPartnerIsChild('mobile')}" t-on-change="onMobileChange" />
                         </div>
                         <div class="partner-detail col">
-                            <label class="form-label label" for="phone_person"><t t-esc="phoneLabel" /></label>
+                            <label class="form-label label" for="phone_person">Teléfono</label>
                             <input class="detail form-control" id="phone_person" name="phone" t-model="changes.phone" t-att-placeholder="phonePlaceholder" t-att="{'disabled': isFieldCommercialAndPartnerIsChild('phone')}" t-on-change="onPhoneChange" />
                         </div>
                         <div class="partner-detail col">
@@ -136,7 +136,7 @@
                             <input class="detail form-control" id="mobile_company" name="mobile" t-model="changes.mobile" t-att-placeholder="mobilePlaceholder" t-att="{'disabled': isFieldCommercialAndPartnerIsChild('mobile')}" t-on-change="onMobileChange" />
                         </div>
                         <div class="partner-detail col">
-                            <label class="form-label label" for="phone_company"><t t-esc="phoneLabel" /></label>
+                            <label class="form-label label" for="phone_company">Teléfono</label>
                             <input class="detail form-control" id="phone_company" name="phone" t-model="changes.phone" t-att-placeholder="phonePlaceholder" t-att="{'disabled': isFieldCommercialAndPartnerIsChild('phone')}" t-on-change="onPhoneChange" />
                         </div>
                         <div class="partner-detail col">

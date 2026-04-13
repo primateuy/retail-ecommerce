@@ -2,6 +2,7 @@
 
 import { _t } from "@web/core/l10n/translation";
 import { ErrorPopup } from "@point_of_sale/app/errors/popups/error_popup";
+import { ConfirmPopup } from "@point_of_sale/app/popups/confirm_popup/confirm_popup";
 import { PartnerDetailsEdit } from "@point_of_sale/app/screens/partner_list/partner_editor/partner_editor";
 import { patch } from "@web/core/utils/patch";
 import { useService } from "@web/core/utils/hooks";
@@ -74,11 +75,14 @@ patch(PartnerDetailsEdit.prototype, {
     },
 
     /**
-     * Tipos de documento disponibles en el POS (CI, RUT, OTROS, etc.).
-     * Se muestran todos los cargados para que el usuario pueda elegir cualquier tipo.
+     * Tipos de documento disponibles en el POS filtrados por tipo de partner.
+     * Empresas: solo tipos con is_vat=True (RUT, RUC).
+     * Personas: solo tipos con is_vat=False (CI, DNI, etc.).
      */
     get identificationTypes() {
-        return this.pos.identification_types || [];
+        const allTypes = this.pos.identification_types || [];
+        const isCompany = Boolean(this.changes.is_company);
+        return allTypes.filter((doc) => (isCompany ? doc.is_vat : !doc.is_vat));
     },
 
     /**
@@ -433,7 +437,7 @@ patch(PartnerDetailsEdit.prototype, {
         this.changes.company_type = data.company_type || this.changes.company_type;
     },
 
-    saveChanges() {
+    async saveChanges() {
         // Si partner_firstname no esta disponible, evitar enviar campos inexistentes
         if (!this.partnerFirstnameEnabled) {
             delete this.changes.firstname;
@@ -454,11 +458,19 @@ patch(PartnerDetailsEdit.prototype, {
             return;
         }
 
+        // Si el email esta vacio, pedir confirmacion antes de continuar
+        if (!this.changes.email) {
+            const { confirmed } = await this.popup.add(ConfirmPopup, {
+                title: _t("Email vacío"),
+                body: _t("¿Desea continuar sin ingresar un correo electrónico?"),
+            });
+            if (!confirmed) {
+                return;
+            }
+        }
+
         // Validar campos obligatorios
         const missing = [];
-        if (!this.changes.email) {
-            missing.push(_t("Email"));
-        }
         if (!this.changes.mobile) {
             missing.push(_t("Mobile"));
         }
@@ -532,6 +544,6 @@ patch(PartnerDetailsEdit.prototype, {
 
         // Delegar en el guardado estandar del POS para que cierre el popup y actualice
         // la lista de clientes. Nuestras validaciones ya se ejecutaron arriba.
-        return super.saveChanges(...arguments);
+        super.saveChanges();
     },
 });
