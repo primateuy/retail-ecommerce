@@ -713,12 +713,12 @@ class ApiInternal(models.Model):
 
                         invoice_id.create_payment_fenicio(json_data_pago, mode_update=(len(payment_ids) > 0), payment_ids=payment_ids)
 
-
-                if estado == 'APROBADA' and sale_order_id.invoice_ids:
-                    transaction_result = sale_order_id.create_payment_transaction(json_data)
-                    # Si hay error en la transacción, lanzar error para rollback total
-                    if 'error' in transaction_result:
-                        raise UserError(transaction_result['error'])
+            # La transacción de pago se crea siempre que el estado sea APROBADA,
+            # independientemente de si se generó factura automática o no
+            if estado == 'APROBADA' and 'pago' in json_data and json_data['pago']:
+                transaction_result = sale_order_id.create_payment_transaction(json_data)
+                if 'error' in transaction_result:
+                    raise UserError(transaction_result['error'])
             
             return {
                 'referencia': sale_order_id.display_name,
