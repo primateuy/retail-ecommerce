@@ -1,0 +1,76 @@
+# Translation of Odoo Server.
+# This file contains the translation of the following modules:
+# 	* partner_statement_auto_mail_queue
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: Odoo Server 17.0+e-20250203\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-04-08 12:31+0000\n"
+"PO-Revision-Date: 2026-04-08 12:31+0000\n"
+"Last-Translator: \n"
+"Language-Team: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: \n"
+"Plural-Forms: \n"
+
+#. module: partner_statement_auto_mail_queue
+#: model:ir.model,name:partner_statement_auto_mail_queue.model_res_partner
+msgid "Contact"
+msgstr "Contacto"
+
+#. module: partner_statement_auto_mail_queue
+#: model:ir.model.fields,field_description:partner_statement_auto_mail_queue.field_res_partner__enviar_estado_cuenta
+msgid "Enviar Estado de Cuenta"
+msgstr "Enviar estado de cuenta"
+
+#. module: partner_statement_auto_mail_queue
+#: model:ir.model.fields,field_description:partner_statement_auto_mail_queue.field_res_partner__planilla_estado_cuenta_id
+msgid "Planilla Estado de Cuenta"
+msgstr "Planilla estado de cuenta"
+
+#. module: partner_statement_auto_mail_queue
+#: model:ir.model.fields,field_description:partner_statement_auto_mail_queue.field_res_partner__enviar_estado_pendiente
+msgid "Enviar Estado de Pendientes"
+msgstr "Enviar estado de pendientes"
+
+#. module: partner_statement_auto_mail_queue
+#: model:ir.model.fields,field_description:partner_statement_auto_mail_queue.field_res_partner__planilla_estado_pendiente_id
+msgid "Planilla Estado Pendiente"
+msgstr "Planilla estado pendiente"
+
+#. module: partner_statement_auto_mail_queue
+#: model:ir.model.fields,field_description:partner_statement_auto_mail_queue.field_res_partner__email_alternativo
+msgid "Email alternativo"
+msgstr "Email alternativo"
+
+#. module: partner_statement_auto_mail_queue
+#: model:ir.model.fields,field_description:partner_statement_auto_mail_queue.field_res_partner__numero_veces
+msgid "Ejecutar cada"
+msgstr "Ejecutar cada"
+
+#. module: partner_statement_auto_mail_queue
+#: model:ir.model.fields,field_description:partner_statement_auto_mail_queue.field_res_partner__periodo
+msgid "Periodo"
+msgstr "Periodo"
+
+#. module: partner_statement_auto_mail_queue
+#: model:ir.model.fields,field_description:partner_statement_auto_mail_queue.field_res_partner__proximo_envio
+msgid "Próximo envío"
+msgstr "Próximo envío"
+
+#. module: partner_statement_auto_mail_queue
+#: model:ir.model.fields,field_description:partner_statement_auto_mail_queue.field_res_partner__ultimo_envio
+msgid "Último envío"
+msgstr "Último envío"
+
+#. module: partner_statement_auto_mail_queue
+#: model:ir.model.fields,field_description:partner_statement_auto_mail_queue.field_res_partner__only_company_ids
+msgid "Solo enviar en compañías"
+msgstr "Solo enviar en compañías"
+
+#. module: partner_statement_auto_mail_queue
+#: model_terms:ir.ui.view,arch_db:partner_statement_auto_mail_queue.res_partner_form
+msgid "Seguimiento de deuda"
+msgstr "Seguimiento de deuda"

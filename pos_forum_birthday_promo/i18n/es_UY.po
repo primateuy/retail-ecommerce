@@ -1,0 +1,90 @@
+# Translation of Odoo Server.
+# This file contains the translation of the following modules:
+# 	* pos_forum_birthday_promo
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: Odoo Server 17.0+e-20250203\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-04-08 12:31+0000\n"
+"PO-Revision-Date: 2026-04-08 12:31+0000\n"
+"Last-Translator: \n"
+"Language-Team: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: \n"
+"Plural-Forms: \n"
+
+#. module: pos_forum_birthday_promo
+#: model:ir.model,name:pos_forum_birthday_promo.model_pos_config
+msgid "Point of Sale Configuration"
+msgstr "Configuración del punto de venta"
+
+#. module: pos_forum_birthday_promo
+#: model:ir.model,name:pos_forum_birthday_promo.model_pos_session
+msgid "Point of Sale Session"
+msgstr "Sesión del punto de venta"
+
+#. module: pos_forum_birthday_promo
+#: model:ir.model.fields,field_description:pos_forum_birthday_promo.field_pos_config__forum_birthday_promo_active
+msgid "Promoción cumpleaños (POS)"
+msgstr "Promoción de cumpleaños (POS)"
+
+#. module: pos_forum_birthday_promo
+#: model:ir.model.fields,field_description:pos_forum_birthday_promo.field_pos_config__forum_birthday_discount_percent
+msgid "Porcentaje de descuento"
+msgstr "Porcentaje de descuento"
+
+#. module: pos_forum_birthday_promo
+#: model:ir.model.fields,field_description:pos_forum_birthday_promo.field_pos_config__forum_birthday_tolerance_days
+msgid "Tolerancia (días)"
+msgstr "Tolerancia (días)"
+
+#. module: pos_forum_birthday_promo
+#: model:ir.model.fields,field_description:pos_forum_birthday_promo.field_pos_config__forum_birthday_first_order_only
+msgid "Solo primera orden del día"
+msgstr "Solo primera orden del día"
+
+#. module: pos_forum_birthday_promo
+#: model:ir.model.fields,field_description:pos_forum_birthday_promo.field_pos_config__forum_birthday_max_uses_per_period
+msgid "Máximo usos con descuento en el período"
+msgstr "Máximo de usos con descuento en el período"
+
+#. module: pos_forum_birthday_promo
+#: model:ir.model.fields,field_description:pos_forum_birthday_promo.field_pos_config__forum_birthday_product_id
+msgid "Producto de la promoción"
+msgstr "Producto de la promoción"
+
+#. module: pos_forum_birthday_promo
+#: model:ir.model.fields,field_description:pos_forum_birthday_promo.field_pos_config__forum_birthday_reward_id
+msgid "Recompensa lealtad (técnico)"
+msgstr "Recompensa de lealtad (técnico)"
+
+#. module: pos_forum_birthday_promo
+#: code:addons/pos_forum_birthday_promo/models/pos_config.py:104
+#, python-format
+msgid "El porcentaje de descuento debe ser mayor que cero."
+msgstr "El porcentaje de descuento debe ser mayor que cero."
+
+#. module: pos_forum_birthday_promo
+#: code:addons/pos_forum_birthday_promo/models/pos_config.py:107
+#, python-format
+msgid "La tolerancia en días no puede ser negativa."
+msgstr "La tolerancia en días no puede ser negativa."
+
+#. module: pos_forum_birthday_promo
+#: code:addons/pos_forum_birthday_promo/models/pos_config.py:110
+#, python-format
+msgid "Debe indicarse el producto de la promoción de cumpleaños."
+msgstr "Debe indicarse el producto de la promoción de cumpleaños."
+
+#. module: pos_forum_birthday_promo
+#: code:addons/pos_forum_birthday_promo/models/pos_config.py:115
+#, python-format
+msgid "El máximo de usos en el período no puede ser negativo."
+msgstr "El máximo de usos en el período no puede ser negativo."
+
+#. module: pos_forum_birthday_promo
+#: model_terms:ir.ui.view,arch_db:pos_forum_birthday_promo.pos_config_view_form_forum_birthday
+msgid "Forum — Promoción cumpleaños (POS)"
+msgstr "Forum — Promoción de cumpleaños (POS)"

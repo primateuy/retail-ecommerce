@@ -1,0 +1,351 @@
+# Translation of Odoo Server.
+# This file contains the translation of the following modules:
+# 	* pos_forum_manual_payment
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: Odoo Server 17.0+e-20250203\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-04-08 12:31+0000\n"
+"PO-Revision-Date: 2026-04-08 12:31+0000\n"
+"Last-Translator: \n"
+"Language-Team: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: \n"
+"Plural-Forms: \n"
+
+#. module: pos_forum_manual_payment
+#: model:ir.model,name:pos_forum_manual_payment.model_manual_payment_request_field
+msgid "Campo a solicitar en pago manual"
+msgstr "Campo a solicitar en pago manual"
+
+#. module: pos_forum_manual_payment
+#: model:ir.model,name:pos_forum_manual_payment.model_manual_payment_field_config
+msgid "Configuración de campos de pago manual"
+msgstr "Configuración de campos de pago manual"
+
+#. module: pos_forum_manual_payment
+#: model:ir.model,name:pos_forum_manual_payment.model_payment_provider
+msgid "Payment Provider"
+msgstr "Proveedor de pago"
+
+#. module: pos_forum_manual_payment
+#: model:ir.model,name:pos_forum_manual_payment.model_pos_payment_method
+msgid "POS Payment Method"
+msgstr "Método de pago POS"
+
+#. module: pos_forum_manual_payment
+#: model:ir.model,name:pos_forum_manual_payment.model_pos_payment
+msgid "POS Payment"
+msgstr "Pago POS"
+
+#. module: pos_forum_manual_payment
+#: model:ir.model,name:pos_forum_manual_payment.model_payment_transaction
+msgid "Payment Transaction"
+msgstr "Transacción de pago"
+
+#. module: pos_forum_manual_payment
+#: model:ir.model,name:pos_forum_manual_payment.model_pos_order
+msgid "POS Order"
+msgstr "Pedido POS"
+
+#. module: pos_forum_manual_payment
+#: model:ir.model,name:pos_forum_manual_payment.model_pos_session
+msgid "Point of Sale Session"
+msgstr "Sesión del punto de venta"
+
+#. module: pos_forum_manual_payment
+#: model:ir.model.fields,field_description:pos_forum_manual_payment.field_manual_payment_request_field__sequence
+#: model:ir.model.fields,field_description:pos_forum_manual_payment.field_manual_payment_field_config__sequence
+msgid "Secuencia"
+msgstr "Secuencia"
+
+#. module: pos_forum_manual_payment
+#: model:ir.model.fields,field_description:pos_forum_manual_payment.field_manual_payment_request_field__name
+msgid "Nombre"
+msgstr "Nombre"
+
+#. module: pos_forum_manual_payment
+#: model:ir.model.fields,field_description:pos_forum_manual_payment.field_manual_payment_request_field__code
+msgid "Código técnico"
+msgstr "Código técnico"
+
+#. module: pos_forum_manual_payment
+#: model:ir.model.fields,field_description:pos_forum_manual_payment.field_manual_payment_request_field__field_type
+#: model:ir.model.fields,field_description:pos_forum_manual_payment.field_manual_payment_field_config__request_field_type
+msgid "Tipo de campo"
+msgstr "Tipo de campo"
+
+#. module: pos_forum_manual_payment
+#: model:ir.model.fields,field_description:pos_forum_manual_payment.field_manual_payment_request_field__relation_model_id
+msgid "Entidad relacionada"
+msgstr "Entidad relacionada"
+
+#. module: pos_forum_manual_payment
+#: model:ir.model.fields,field_description:pos_forum_manual_payment.field_manual_payment_request_field__active
+msgid "Activo"
+msgstr "Activo"
+
+#. module: pos_forum_manual_payment
+#: model:ir.model.fields,field_description:pos_forum_manual_payment.field_payment_provider__manual_pos_provider
+msgid "Proveedor manual para POS"
+msgstr "Proveedor manual para POS"
+
+#. module: pos_forum_manual_payment
+#: model:ir.model.fields,field_description:pos_forum_manual_payment.field_payment_provider__has_multiple_pos
+msgid "Múltiples POS"
+msgstr "Múltiples POS"
+
+#. module: pos_forum_manual_payment
+#: model:ir.model.fields,field_description:pos_forum_manual_payment.field_payment_provider__multiple_pos_ids
+msgid "POS permitidos"
+msgstr "POS permitidos"
+
+#. module: pos_forum_manual_payment
+#: model:ir.model.fields,field_description:pos_forum_manual_payment.field_payment_provider__manual_merchant_number
+msgid "Número de comercio"
+msgstr "Número de comercio"
+
+#. module: pos_forum_manual_payment
+#: model:ir.model.fields,field_description:pos_forum_manual_payment.field_payment_provider__manual_journal_id
+msgid "Diario de pago"
+msgstr "Diario de pago"
+
+#. module: pos_forum_manual_payment
+#: model:ir.model.fields,field_description:pos_forum_manual_payment.field_payment_provider__manual_field_config_ids
+msgid "Campos a solicitar"
+msgstr "Campos a solicitar"
+
+#. module: pos_forum_manual_payment
+#: model:ir.model.fields,field_description:pos_forum_manual_payment.field_pos_payment_method__manual_transaction_enabled
+msgid "Crear transacciones manuales"
+msgstr "Crear transacciones manuales"
+
+#. module: pos_forum_manual_payment
+#: model:ir.model.fields,field_description:pos_forum_manual_payment.field_pos_payment_method__manual_provider_id
+msgid "Proveedor manual"
+msgstr "Proveedor manual"
+
+#. module: pos_forum_manual_payment
+#: model:ir.model.fields,field_description:pos_forum_manual_payment.field_pos_payment_method__manual_create_checks
+msgid "Crear cheques estándar"
+msgstr "Crear cheques estándar"
+
+#. module: pos_forum_manual_payment
+#: model:ir.model.fields,field_description:pos_forum_manual_payment.field_pos_payment_method__manual_payment_popup_config
+msgid "Configuración popup manual (JSON)"
+msgstr "Configuración popup manual (JSON)"
+
+#. module: pos_forum_manual_payment
+#: model:ir.model.fields,field_description:pos_forum_manual_payment.field_pos_payment__manual_payment_values_json
+msgid "Valores transacción manual (JSON)"
+msgstr "Valores de transacción manual (JSON)"
+
+#. module: pos_forum_manual_payment
+#: model:ir.model.fields,field_description:pos_forum_manual_payment.field_payment_transaction__is_pos_manual
+msgid "Transacción POS manual"
+msgstr "Transacción POS manual"
+
+#. module: pos_forum_manual_payment
+#: model:ir.model.fields,field_description:pos_forum_manual_payment.field_payment_transaction__manual_ticket_number
+msgid "Número de ticket"
+msgstr "Número de ticket"
+
+#. module: pos_forum_manual_payment
+#: model:ir.model.fields,field_description:pos_forum_manual_payment.field_payment_transaction__manual_batch_number
+msgid "Número de lote"
+msgstr "Número de lote"
+
+#. module: pos_forum_manual_payment
+#: model:ir.model.fields,field_description:pos_forum_manual_payment.field_payment_transaction__manual_auth_code
+msgid "Código de autorización"
+msgstr "Código de autorización"
+
+#. module: pos_forum_manual_payment
+#: model:ir.model.fields,field_description:pos_forum_manual_payment.field_payment_transaction__manual_card_bin
+msgid "BIN de la tarjeta"
+msgstr "BIN de la tarjeta"
+
+#. module: pos_forum_manual_payment
+#: model:ir.model.fields,field_description:pos_forum_manual_payment.field_payment_transaction__manual_last_four
+msgid "Últimos 4 dígitos"
+msgstr "Últimos 4 dígitos"
+
+#. module: pos_forum_manual_payment
+#: model:ir.model.fields,field_description:pos_forum_manual_payment.field_payment_transaction__manual_holder_name
+msgid "Nombre del titular"
+msgstr "Nombre del titular"
+
+#. module: pos_forum_manual_payment
+#: model:ir.model.fields,field_description:pos_forum_manual_payment.field_payment_transaction__manual_stamp
+msgid "Sello"
+msgstr "Sello"
+
+#. module: pos_forum_manual_payment
+#: model:ir.model.fields,field_description:pos_forum_manual_payment.field_manual_payment_field_config__provider_id
+msgid "Proveedor de pago"
+msgstr "Proveedor de pago"
+
+#. module: pos_forum_manual_payment
+#: model:ir.model.fields,field_description:pos_forum_manual_payment.field_manual_payment_field_config__request_field_id
+msgid "Campo a solicitar"
+msgstr "Campo a solicitar"
+
+#. module: pos_forum_manual_payment
+#: model:ir.model.fields,field_description:pos_forum_manual_payment.field_manual_payment_field_config__required
+msgid "Obligatorio"
+msgstr "Obligatorio"
+
+#. module: pos_forum_manual_payment
+#: model:ir.model.fields,field_description:pos_forum_manual_payment.field_manual_payment_field_config__default_char_value
+msgid "Valor por defecto (texto)"
+msgstr "Valor por defecto (texto)"
+
+#. module: pos_forum_manual_payment
+#: model:ir.model.fields,field_description:pos_forum_manual_payment.field_manual_payment_field_config__default_reference
+msgid "Valor por defecto (relación)"
+msgstr "Valor por defecto (relación)"
+
+#. module: pos_forum_manual_payment
+#: model:ir.model.fields,field_description:pos_forum_manual_payment.field_manual_payment_field_config__transaction_field_mapping
+msgid "Dato en payment.transaction"
+msgstr "Dato en payment.transaction"
+
+#. module: pos_forum_manual_payment
+#: code:addons/pos_forum_manual_payment/models/payment_transaction.py:150
+#, python-format
+msgid "El pago POS %(pay)s debe incluir los datos de transacción manual (popup). No se puede registrar sin ese JSON."
+msgstr "El pago POS %(pay)s debe incluir los datos de transacción manual (popup). No se puede registrar sin ese JSON."
+
+#. module: pos_forum_manual_payment
+#: code:addons/pos_forum_manual_payment/models/payment_transaction.py:164
+#, python-format
+msgid "El pago POS %(pay)s no está vinculado a un pedido; no se puede crear la transacción manual."
+msgstr "El pago POS %(pay)s no está vinculado a un pedido; no se puede crear la transacción manual."
+
+#. module: pos_forum_manual_payment
+#: code:addons/pos_forum_manual_payment/models/payment_transaction.py:177
+#, python-format
+msgid "El proveedor manual «%(prov)s» no tiene ningún método de pago (payment.method) configurado; asocie al menos el método «card»."
+msgstr "El proveedor manual «%(prov)s» no tiene ningún método de pago (payment.method) configurado; asocie al menos el método «card»."
+
+#. module: pos_forum_manual_payment
+#: code:addons/pos_forum_manual_payment/models/payment_transaction.py:212
+#, python-format
+msgid "Transacción manual registrada desde el Punto de Venta."
+msgstr "Transacción manual registrada desde el Punto de Venta."
+
+#. module: pos_forum_manual_payment
+#. odoo-javascript
+#: code:addons/pos_forum_manual_payment/static/src/js/manual_payment_popup.js:18
+#, python-format
+msgid "Aplicar"
+msgstr "Aplicar"
+
+#. module: pos_forum_manual_payment
+#. odoo-javascript
+#: code:addons/pos_forum_manual_payment/static/src/js/manual_payment_popup.js:19
+#, python-format
+msgid "Cancelar"
+msgstr "Cancelar"
+
+#. module: pos_forum_manual_payment
+#. odoo-javascript
+#: code:addons/pos_forum_manual_payment/static/src/js/manual_payment_popup.js:20
+#: code:addons/pos_forum_manual_payment/static/src/overrides/paymentlines_manual_popup.js:44
+#: code:addons/pos_forum_manual_payment/static/src/overrides/payment_screen_manual_validation.js:26
+#, python-format
+msgid "Datos de transacción manual"
+msgstr "Datos de transacción manual"
+
+#. module: pos_forum_manual_payment
+#. odoo-javascript
+#: code:addons/pos_forum_manual_payment/static/src/js/manual_payment_popup.js:108
+#, python-format
+msgid "Complete los campos obligatorios: "
+msgstr "Complete los campos obligatorios: "
+
+#. module: pos_forum_manual_payment
+#. odoo-javascript
+#: code:addons/pos_forum_manual_payment/static/src/overrides/payment_screen_manual_validation.js:85
+#, python-format
+msgid "Complete los datos de transacción manual para el método «%s» (campo obligatorio: %s)."
+msgstr "Complete los datos de transacción manual para el método «%s» (campo obligatorio: %s)."
+
+#. module: pos_forum_manual_payment
+#: model_terms:ir.ui.view,arch_db:pos_forum_manual_payment.view_pos_payment_method_form_pos_manual
+msgid "Pagos manuales POS"
+msgstr "Pagos manuales POS"
+
+#. module: pos_forum_manual_payment
+#: model_terms:ir.ui.view,arch_db:pos_forum_manual_payment.view_payment_provider_form_pos_manual
+msgid "POS Manual"
+msgstr "POS Manual"
+
+#. module: pos_forum_manual_payment
+#. odoo-javascript
+#: code:addons/pos_forum_manual_payment/static/src/xml/manual_payment_popup.xml:0
+#, python-format
+msgid "No hay campos configurados para este método de pago."
+msgstr "No hay campos configurados para este método de pago."
+
+#. module: pos_forum_manual_payment
+#: model:ir.model.fields.selection,name:pos_forum_manual_payment.selection__manual_payment_field_config__transaction_field_mapping__none
+msgid "Sin mapeo explícito (usa sinónimos por código de campo)"
+msgstr "Sin mapeo explícito (usa sinónimos por código de campo)"
+
+#. module: pos_forum_manual_payment
+#: model:ir.model.fields.selection,name:pos_forum_manual_payment.selection__manual_payment_field_config__transaction_field_mapping__ticket
+msgid "Número de ticket"
+msgstr "Número de ticket"
+
+#. module: pos_forum_manual_payment
+#: model:ir.model.fields.selection,name:pos_forum_manual_payment.selection__manual_payment_field_config__transaction_field_mapping__batch
+msgid "Número de lote"
+msgstr "Número de lote"
+
+#. module: pos_forum_manual_payment
+#: model:ir.model.fields.selection,name:pos_forum_manual_payment.selection__manual_payment_field_config__transaction_field_mapping__authorization
+msgid "Código de autorización"
+msgstr "Código de autorización"
+
+#. module: pos_forum_manual_payment
+#: model:ir.model.fields.selection,name:pos_forum_manual_payment.selection__manual_payment_field_config__transaction_field_mapping__card_bin
+msgid "BIN de la tarjeta"
+msgstr "BIN de la tarjeta"
+
+#. module: pos_forum_manual_payment
+#: model:ir.model.fields.selection,name:pos_forum_manual_payment.selection__manual_payment_field_config__transaction_field_mapping__last_four
+msgid "Últimos 4 dígitos"
+msgstr "Últimos 4 dígitos"
+
+#. module: pos_forum_manual_payment
+#: model:ir.model.fields.selection,name:pos_forum_manual_payment.selection__manual_payment_field_config__transaction_field_mapping__holder
+msgid "Nombre del titular"
+msgstr "Nombre del titular"
+
+#. module: pos_forum_manual_payment
+#: model:ir.model.fields.selection,name:pos_forum_manual_payment.selection__manual_payment_field_config__transaction_field_mapping__stamp
+msgid "Sello / marca (many2one → nombre)"
+msgstr "Sello / marca (many2one → nombre)"
+
+#. module: pos_forum_manual_payment
+#: model:ir.model.fields.selection,name:pos_forum_manual_payment.selection__manual_payment_request_field__field_type__char
+msgid "Texto"
+msgstr "Texto"
+
+#. module: pos_forum_manual_payment
+#: model:ir.model.fields.selection,name:pos_forum_manual_payment.selection__manual_payment_request_field__field_type__many2one
+msgid "Many2one"
+msgstr "Many2one"
+
+#. module: pos_forum_manual_payment
+#: model:ir.model.fields.selection,name:pos_forum_manual_payment.selection__payment_provider__code__forum_manual
+msgid "FORUM Manual POS"
+msgstr "FORUM Manual POS"
+
+#. module: pos_forum_manual_payment
+#: model_terms:ir.ui.view,arch_db:pos_forum_manual_payment.view_payment_provider_form_pos_manual
+msgid "POS permitidos"
+msgstr "POS permitidos"

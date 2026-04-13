@@ -1,0 +1,256 @@
+# Translation of Odoo Server.
+# This file contains the translation of the following modules:
+# 	* odoo_pos_oca_promociones
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: Odoo Server 17.0+e-20250203\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-04-08 12:31+0000\n"
+"PO-Revision-Date: 2026-04-08 12:31+0000\n"
+"Last-Translator: \n"
+"Language-Team: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: \n"
+"Plural-Forms: \n"
+
+#. module: odoo_pos_oca_promociones
+#: model:ir.model,name:odoo_pos_oca_promociones.model_payment_method_promotion
+msgid "Promoción por Método de Pago"
+msgstr "Promoción por método de pago"
+
+#. module: odoo_pos_oca_promociones
+#: model:ir.model,name:odoo_pos_oca_promociones.model_payment_method_promotion_bin
+msgid "BIN de Promoción por Método de Pago"
+msgstr "BIN de promoción por método de pago"
+
+#. module: odoo_pos_oca_promociones
+#: model:ir.model,name:odoo_pos_oca_promociones.model_pos_session
+msgid "Point of Sale Session"
+msgstr "Sesión del punto de venta"
+
+#. module: odoo_pos_oca_promociones
+#: model:ir.model,name:odoo_pos_oca_promociones.model_pos_order
+msgid "POS Order"
+msgstr "Pedido POS"
+
+#. module: odoo_pos_oca_promociones
+#: model:ir.model,name:odoo_pos_oca_promociones.model_payment_transaction
+msgid "Payment Transaction"
+msgstr "Transacción de pago"
+
+#. module: odoo_pos_oca_promociones
+#: model:ir.model.fields,field_description:odoo_pos_oca_promociones.field_payment_method_promotion__name
+msgid "Nombre de la Promoción"
+msgstr "Nombre de la promoción"
+
+#. module: odoo_pos_oca_promociones
+#: model:ir.model.fields,field_description:odoo_pos_oca_promociones.field_payment_method_promotion__active
+msgid "Activa"
+msgstr "Activa"
+
+#. module: odoo_pos_oca_promociones
+#: model:ir.model.fields,field_description:odoo_pos_oca_promociones.field_payment_method_promotion__sequence
+msgid "Secuencia"
+msgstr "Secuencia"
+
+#. module: odoo_pos_oca_promociones
+#: model:ir.model.fields,field_description:odoo_pos_oca_promociones.field_payment_method_promotion__discount_product_id
+msgid "Producto de Descuento"
+msgstr "Producto de descuento"
+
+#. module: odoo_pos_oca_promociones
+#: model:ir.model.fields,field_description:odoo_pos_oca_promociones.field_payment_method_promotion__discount_percent
+msgid "Porcentaje de Descuento"
+msgstr "Porcentaje de descuento"
+
+#. module: odoo_pos_oca_promociones
+#: model:ir.model.fields,field_description:odoo_pos_oca_promociones.field_payment_method_promotion__discount_type
+msgid "Tipo de Descuento"
+msgstr "Tipo de descuento"
+
+#. module: odoo_pos_oca_promociones
+#: model:ir.model.fields,field_description:odoo_pos_oca_promociones.field_payment_method_promotion__payment_provider_id
+msgid "Proveedor de Pago"
+msgstr "Proveedor de pago"
+
+#. module: odoo_pos_oca_promociones
+#: model:ir.model.fields,field_description:odoo_pos_oca_promociones.field_payment_method_promotion__bin_ids
+msgid "BINs Habilitados"
+msgstr "BINs habilitados"
+
+#. module: odoo_pos_oca_promociones
+#: model:ir.model.fields,field_description:odoo_pos_oca_promociones.field_payment_method_promotion__require_bin_validation
+msgid "Requiere Validación de BIN"
+msgstr "Requiere validación de BIN"
+
+#. module: odoo_pos_oca_promociones
+#: model:ir.model.fields,field_description:odoo_pos_oca_promociones.field_payment_method_promotion__incompatible_promotion_ids
+msgid "Promociones Incompatibles"
+msgstr "Promociones incompatibles"
+
+#. module: odoo_pos_oca_promociones
+#: model:ir.model.fields,field_description:odoo_pos_oca_promociones.field_payment_method_promotion__date_from
+msgid "Válida desde"
+msgstr "Válida desde"
+
+#. module: odoo_pos_oca_promociones
+#: model:ir.model.fields,field_description:odoo_pos_oca_promociones.field_payment_method_promotion__date_to
+msgid "Válida hasta"
+msgstr "Válida hasta"
+
+#. module: odoo_pos_oca_promociones
+#: model:ir.model.fields,field_description:odoo_pos_oca_promociones.field_payment_method_promotion__company_id
+msgid "Compañía"
+msgstr "Compañía"
+
+#. module: odoo_pos_oca_promociones
+#: model:ir.model.fields,field_description:odoo_pos_oca_promociones.field_payment_method_promotion__description
+#: model:ir.model.fields,field_description:odoo_pos_oca_promociones.field_payment_method_promotion_bin__description
+msgid "Descripción"
+msgstr "Descripción"
+
+#. module: odoo_pos_oca_promociones
+#: model:ir.model.fields,field_description:odoo_pos_oca_promociones.field_payment_method_promotion__times_applied
+msgid "Veces Aplicada"
+msgstr "Veces aplicada"
+
+#. module: odoo_pos_oca_promociones
+#: model:ir.model.fields,field_description:odoo_pos_oca_promociones.field_payment_method_promotion_bin__name
+msgid "BIN"
+msgstr "BIN"
+
+#. module: odoo_pos_oca_promociones
+#: model:ir.model.fields,field_description:odoo_pos_oca_promociones.field_payment_method_promotion_bin__promotion_id
+msgid "Promoción"
+msgstr "Promoción"
+
+#. module: odoo_pos_oca_promociones
+#: model:ir.model.fields,field_description:odoo_pos_oca_promociones.field_payment_method_promotion_bin__active
+msgid "Activo"
+msgstr "Activo"
+
+#. module: odoo_pos_oca_promociones
+#: model:ir.model.fields,field_description:odoo_pos_oca_promociones.field_pos_session__oca_applied_loyalty_program_ids
+msgid "OCA promos: programas de lealtad en carrito (CSV)"
+msgstr "OCA promos: programas de lealtad en carrito (CSV)"
+
+#. module: odoo_pos_oca_promociones
+#: code:addons/odoo_pos_oca_promociones/models/payment_method_promotion.py:156
+#, python-format
+msgid "El porcentaje de descuento debe ser mayor a 0"
+msgstr "El porcentaje de descuento debe ser mayor a 0"
+
+#. module: odoo_pos_oca_promociones
+#: code:addons/odoo_pos_oca_promociones/models/payment_method_promotion.py:158
+#, python-format
+msgid "El porcentaje de descuento no puede ser mayor a 100%%"
+msgstr "El porcentaje de descuento no puede ser mayor al 100%%"
+
+#. module: odoo_pos_oca_promociones
+#: code:addons/odoo_pos_oca_promociones/models/payment_method_promotion.py:168
+#, python-format
+msgid "La fecha de inicio debe ser anterior a la fecha de fin"
+msgstr "La fecha de inicio debe ser anterior a la fecha de fin"
+
+#. module: odoo_pos_oca_promociones
+#: code:addons/odoo_pos_oca_promociones/models/payment_method_promotion.py:177
+#, python-format
+msgid "Debe configurar el Proveedor de Pago"
+msgstr "Debe configurar el proveedor de pago"
+
+#. module: odoo_pos_oca_promociones
+#: code:addons/odoo_pos_oca_promociones/models/payment_method_promotion.py:380
+#, python-format
+msgid "No se puede cobrar con la promoción de tarjeta \"%(promo)s\": en el pedido hay aplicado el programa de beneficios \"%(programs)s\", incompatible con esta promoción. Quite ese beneficio o utilice otro medio de pago."
+msgstr "No se puede cobrar con la promoción de tarjeta \"%(promo)s\": en el pedido hay aplicado el programa de beneficios \"%(programs)s\", incompatible con esta promoción. Quite ese beneficio o utilice otro medio de pago."
+
+#. module: odoo_pos_oca_promociones
+#: code:addons/odoo_pos_oca_promociones/models/payment_method_promotion_bin.py:69
+#, python-format
+msgid "El BIN no puede estar vacío"
+msgstr "El BIN no puede estar vacío"
+
+#. module: odoo_pos_oca_promociones
+#: code:addons/odoo_pos_oca_promociones/models/payment_method_promotion_bin.py:73
+#, python-format
+msgid "El BIN debe contener solo dígitos (0-9) y opcionalmente asteriscos (*) como comodines"
+msgstr "El BIN debe contener solo dígitos (0-9) y opcionalmente asteriscos (*) como comodines"
+
+#. module: odoo_pos_oca_promociones
+#: code:addons/odoo_pos_oca_promociones/models/payment_method_promotion_bin.py:77
+#, python-format
+msgid "El BIN debe tener al menos 4 dígitos"
+msgstr "El BIN debe tener al menos 4 dígitos"
+
+#. module: odoo_pos_oca_promociones
+#: code:addons/odoo_pos_oca_promociones/models/payment_method_promotion_bin.py:80
+#, python-format
+msgid "El BIN no debe tener más de 8 dígitos (típicamente son 6)"
+msgstr "El BIN no debe tener más de 8 dígitos (típicamente son 6)"
+
+#. module: odoo_pos_oca_promociones
+#: model_terms:ir.ui.view,arch_db:odoo_pos_oca_promociones.payment_method_promotion_form
+msgid "Promoción por Método de Pago"
+msgstr "Promoción por método de pago"
+
+#. module: odoo_pos_oca_promociones
+#: model_terms:ir.ui.view,arch_db:odoo_pos_oca_promociones.payment_method_promotion_form
+msgid "Incrementar Contador"
+msgstr "Incrementar contador"
+
+#. module: odoo_pos_oca_promociones
+#: model_terms:ir.ui.view,arch_db:odoo_pos_oca_promociones.payment_method_promotion_form
+msgid "Configuración de Descuento"
+msgstr "Configuración de descuento"
+
+#. module: odoo_pos_oca_promociones
+#: model_terms:ir.ui.view,arch_db:odoo_pos_oca_promociones.payment_method_promotion_form
+msgid "Validación de BIN"
+msgstr "Validación de BIN"
+
+#. module: odoo_pos_oca_promociones
+#: model_terms:ir.ui.view,arch_db:odoo_pos_oca_promociones.payment_method_promotion_form
+msgid "Configuración de Validación"
+msgstr "Configuración de validación"
+
+#. module: odoo_pos_oca_promociones
+#: model_terms:ir.ui.view,arch_db:odoo_pos_oca_promociones.payment_method_promotion_form
+msgid "Información sobre BINs"
+msgstr "Información sobre BINs"
+
+#. module: odoo_pos_oca_promociones
+#: model_terms:ir.ui.view,arch_db:odoo_pos_oca_promociones.payment_method_promotion_form
+msgid "Incompatibilidades"
+msgstr "Incompatibilidades"
+
+#. module: odoo_pos_oca_promociones
+#: model_terms:ir.ui.view,arch_db:odoo_pos_oca_promociones.payment_method_promotion_tree
+msgid "Promociones por Método de Pago"
+msgstr "Promociones por método de pago"
+
+#. module: odoo_pos_oca_promociones
+#: model_terms:ir.ui.view,arch_db:odoo_pos_oca_promociones.payment_method_promotion_search
+msgid "Activas"
+msgstr "Activas"
+
+#. module: odoo_pos_oca_promociones
+#: model_terms:ir.ui.view,arch_db:odoo_pos_oca_promociones.payment_method_promotion_search
+msgid "Inactivas"
+msgstr "Inactivas"
+
+#. module: odoo_pos_oca_promociones
+#: model_terms:ir.ui.view,arch_db:odoo_pos_oca_promociones.payment_method_promotion_search
+msgid "Vigentes"
+msgstr "Vigentes"
+
+#. module: odoo_pos_oca_promociones
+#: model_terms:ir.ui.view,arch_db:odoo_pos_oca_promociones.payment_method_promotion_search
+msgid "Mi Compañía"
+msgstr "Mi compañía"
+
+#. module: odoo_pos_oca_promociones
+#: model_terms:ir.ui.view,arch_db:odoo_pos_oca_promociones.payment_method_promotion_search
+msgid "Agrupar por"
+msgstr "Agrupar por"

@@ -1,0 +1,231 @@
+# Translation of Odoo Server.
+# This file contains the translation of the following modules:
+# 	* pos_bulk_catalog
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: Odoo Server 17.0+e-20250203\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-04-08 12:31+0000\n"
+"PO-Revision-Date: 2026-04-08 12:31+0000\n"
+"Last-Translator: \n"
+"Language-Team: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: \n"
+"Plural-Forms: \n"
+
+#. module: pos_bulk_catalog
+#: model:ir.model,name:pos_bulk_catalog.model_pos_bulk_catalog_settings
+msgid "POS Bulk Catalog Settings"
+msgstr "Configuración de catálogo masivo POS"
+
+#. module: pos_bulk_catalog
+#: model:ir.model,name:pos_bulk_catalog.model_pos_bulk_catalog_chunk
+msgid "POS Bulk Catalog Chunk"
+msgstr "Fragmento de catálogo masivo POS"
+
+#. module: pos_bulk_catalog
+#: model:ir.model,name:pos_bulk_catalog.model_pos_config
+msgid "Point of Sale Configuration"
+msgstr "Configuración del punto de venta"
+
+#. module: pos_bulk_catalog
+#: model:ir.model.fields,field_description:pos_bulk_catalog.field_pos_bulk_catalog_settings__company_id
+msgid "Compañía"
+msgstr "Compañía"
+
+#. module: pos_bulk_catalog
+#: model:ir.model.fields,field_description:pos_bulk_catalog.field_pos_bulk_catalog_settings__reference_pos_config_id
+msgid "Punto de venta de referencia"
+msgstr "Punto de venta de referencia"
+
+#. module: pos_bulk_catalog
+#: model:ir.model.fields,field_description:pos_bulk_catalog.field_pos_bulk_catalog_settings__batch_size
+msgid "Tamaño de lote"
+msgstr "Tamaño de lote"
+
+#. module: pos_bulk_catalog
+#: model:ir.model.fields,field_description:pos_bulk_catalog.field_pos_bulk_catalog_settings__max_batches_per_cron
+msgid "Lotes máx. por ejecución de cron"
+msgstr "Lotes máx. por ejecución de cron"
+
+#. module: pos_bulk_catalog
+#: model:ir.model.fields,field_description:pos_bulk_catalog.field_pos_bulk_catalog_settings__max_cron_wallclock_seconds
+msgid "Máx. segundos de trabajo por ejecución de cron"
+msgstr "Máx. segundos de trabajo por ejecución de cron"
+
+#. module: pos_bulk_catalog
+#: model:ir.model.fields,field_description:pos_bulk_catalog.field_pos_bulk_catalog_settings__cron_commit_each_batch
+msgid "Commit tras cada lote (solo cron)"
+msgstr "Commit tras cada lote (solo cron)"
+
+#. module: pos_bulk_catalog
+#: model:ir.model.fields,field_description:pos_bulk_catalog.field_pos_bulk_catalog_settings__include_product_images
+msgid "Incluir image_128 en productos"
+msgstr "Incluir image_128 en productos"
+
+#. module: pos_bulk_catalog
+#: model:ir.model.fields,field_description:pos_bulk_catalog.field_pos_bulk_catalog_settings__build_cursor_product_id
+msgid "Último id de producto procesado"
+msgstr "Último id de producto procesado"
+
+#. module: pos_bulk_catalog
+#: model:ir.model.fields,field_description:pos_bulk_catalog.field_pos_bulk_catalog_settings__build_cursor_partner_id
+msgid "Último id de partner procesado"
+msgstr "Último id de partner procesado"
+
+#. module: pos_bulk_catalog
+#: model:ir.model.fields,field_description:pos_bulk_catalog.field_pos_bulk_catalog_settings__chunk_ids
+msgid "Fragmentos"
+msgstr "Fragmentos"
+
+#. module: pos_bulk_catalog
+#: model:ir.model.fields,field_description:pos_bulk_catalog.field_pos_bulk_catalog_settings__chunk_count
+msgid "Nº fragmentos"
+msgstr "N.º de fragmentos"
+
+#. module: pos_bulk_catalog
+#: model:ir.model.fields,field_description:pos_bulk_catalog.field_pos_bulk_catalog_chunk__settings_id
+msgid "Configuración"
+msgstr "Configuración"
+
+#. module: pos_bulk_catalog
+#: model:ir.model.fields,field_description:pos_bulk_catalog.field_pos_bulk_catalog_chunk__payload
+msgid "Datos (gzip)"
+msgstr "Datos (gzip)"
+
+#. module: pos_bulk_catalog
+#: model:ir.model.fields,field_description:pos_bulk_catalog.field_pos_config__bulk_catalog_settings_id
+msgid "Caché catálogo masivo"
+msgstr "Caché de catálogo masivo"
+
+#. module: pos_bulk_catalog
+#: code:addons/pos_bulk_catalog/models/pos_bulk_catalog_settings.py:739
+#, python-format
+msgid "Indique un punto de venta de referencia."
+msgstr "Indique un punto de venta de referencia."
+
+#. module: pos_bulk_catalog
+#: code:addons/pos_bulk_catalog/models/pos_bulk_catalog_settings.py:763
+#, python-format
+msgid "Borrador"
+msgstr "Borrador"
+
+#. module: pos_bulk_catalog
+#: code:addons/pos_bulk_catalog/models/pos_bulk_catalog_settings.py:764
+#, python-format
+msgid "Construyendo"
+msgstr "Construyendo"
+
+#. module: pos_bulk_catalog
+#: code:addons/pos_bulk_catalog/models/pos_bulk_catalog_settings.py:765
+#, python-format
+msgid "Listo"
+msgstr "Listo"
+
+#. module: pos_bulk_catalog
+#: code:addons/pos_bulk_catalog/models/pos_bulk_catalog_settings.py:766
+#, python-format
+msgid "Error"
+msgstr "Error"
+
+#. module: pos_bulk_catalog
+#: code:addons/pos_bulk_catalog/models/pos_bulk_catalog_settings.py:769
+#, python-format
+msgid "Productos"
+msgstr "Productos"
+
+#. module: pos_bulk_catalog
+#: code:addons/pos_bulk_catalog/models/pos_bulk_catalog_settings.py:770
+#, python-format
+msgid "Clientes"
+msgstr "Clientes"
+
+#. module: pos_bulk_catalog
+#: code:addons/pos_bulk_catalog/models/pos_bulk_catalog_settings.py:771
+#, python-format
+msgid "Tarifas"
+msgstr "Tarifas"
+
+#. module: pos_bulk_catalog
+#: code:addons/pos_bulk_catalog/models/pos_bulk_catalog_settings.py:772
+#, python-format
+msgid "Finalizado"
+msgstr "Finalizado"
+
+#. module: pos_bulk_catalog
+#: code:addons/pos_bulk_catalog/models/pos_bulk_catalog_settings.py:774
+#, python-format
+msgid "Primera pasada hecha: estado «%(state)s», fase «%(stage)s», %(n)s fragmento(s). Si no termina solo, active el cron planificado (Ajustes técnicos → Automatización)."
+msgstr "Primera pasada hecha: estado «%(state)s», fase «%(stage)s», %(n)s fragmento(s). Si no termina solo, active el cron planificado (Ajustes técnicos → Automatización)."
+
+#. module: pos_bulk_catalog
+#: code:addons/pos_bulk_catalog/models/pos_bulk_catalog_settings.py:783
+#, python-format
+msgid "Caché POS"
+msgstr "Caché POS"
+
+#. module: pos_bulk_catalog
+#: code:addons/pos_bulk_catalog/models/pos_bulk_catalog_settings.py:824
+#, python-format
+msgid "El TPV de referencia debe ser de la misma compañía que la configuración."
+msgstr "El TPV de referencia debe ser de la misma compañía que la configuración."
+
+#. module: pos_bulk_catalog
+#: code:addons/pos_bulk_catalog/models/pos_bulk_catalog_settings.py:832
+#, python-format
+msgid "El tamaño de lote debe ser al menos 1."
+msgstr "El tamaño de lote debe ser al menos 1."
+
+#. module: pos_bulk_catalog
+#: code:addons/pos_bulk_catalog/models/pos_bulk_catalog_settings.py:834
+#, python-format
+msgid "Los lotes por cron deben ser al menos 1."
+msgstr "Los lotes por cron deben ser al menos 1."
+
+#. module: pos_bulk_catalog
+#: code:addons/pos_bulk_catalog/models/pos_bulk_catalog_settings.py:837
+#, python-format
+msgid "El tope de segundos del cron debe ser al menos 5 (evita bucles inútiles)."
+msgstr "El tope de segundos del cron debe ser al menos 5 (evita bucles inútiles)."
+
+#. module: pos_bulk_catalog
+#: model_terms:ir.ui.view,arch_db:pos_bulk_catalog.view_pos_bulk_catalog_settings_form
+msgid "Iniciar / reiniciar construcción"
+msgstr "Iniciar / reiniciar construcción"
+
+#. module: pos_bulk_catalog
+#: model_terms:ir.ui.view,arch_db:pos_bulk_catalog.view_pos_bulk_catalog_settings_form
+msgid "Volver a borrador"
+msgstr "Volver a borrador"
+
+#. module: pos_bulk_catalog
+#: model_terms:ir.ui.view,arch_db:pos_bulk_catalog.view_pos_bulk_catalog_settings_form
+msgid "Alcance"
+msgstr "Alcance"
+
+#. module: pos_bulk_catalog
+#: model_terms:ir.ui.view,arch_db:pos_bulk_catalog.view_pos_bulk_catalog_settings_form
+msgid "Rendimiento"
+msgstr "Rendimiento"
+
+#. module: pos_bulk_catalog
+#: model_terms:ir.ui.view,arch_db:pos_bulk_catalog.view_pos_bulk_catalog_settings_form
+msgid "Cron y servidor"
+msgstr "Cron y servidor"
+
+#. module: pos_bulk_catalog
+#: model_terms:ir.ui.view,arch_db:pos_bulk_catalog.view_pos_bulk_catalog_settings_form
+msgid "Diagnóstico"
+msgstr "Diagnóstico"
+
+#. module: pos_bulk_catalog
+#: model_terms:ir.ui.view,arch_db:pos_bulk_catalog.view_pos_bulk_catalog_settings_form
+msgid "Progreso interno"
+msgstr "Progreso interno"
+
+#. module: pos_bulk_catalog
+#: model_terms:ir.ui.view,arch_db:pos_bulk_catalog.pos_config_view_form_bulk_catalog
+msgid "Catálogo masivo (precarga)"
+msgstr "Catálogo masivo (precarga)"

@@ -1,0 +1,83 @@
+# Translation of Odoo Server.
+# This file contains the translation of the following modules:
+# 	* odoo_pos_oca_multiple
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: Odoo Server 17.0+e-20250203\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-04-08 12:31+0000\n"
+"PO-Revision-Date: 2026-04-08 12:31+0000\n"
+"Last-Translator: \n"
+"Language-Team: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: \n"
+"Plural-Forms: \n"
+
+#. module: odoo_pos_oca_multiple
+#: model:ir.model,name:odoo_pos_oca_multiple.model_multiple_pos_config
+msgid "Multiple POS Config"
+msgstr "Configuración múltiple POS"
+
+#. module: odoo_pos_oca_multiple
+#: model:ir.model.fields,field_description:odoo_pos_oca_multiple.field_multiple_pos_config__name
+msgid "Alias"
+msgstr "Alias"
+
+#. module: odoo_pos_oca_multiple
+#: model:ir.model.fields,field_description:odoo_pos_oca_multiple.field_multiple_pos_config__codigo_terminal
+msgid "Código Terminal (PosID)"
+msgstr "Código de terminal (PosID)"
+
+#. module: odoo_pos_oca_multiple
+#: model:ir.model.fields,field_description:odoo_pos_oca_multiple.field_multiple_pos_config__payment_provider_id
+#: model:ir.model.fields,field_description:odoo_pos_oca_multiple.field_payment_provider__multiple_pos_ids
+msgid "Configurar multiples POS"
+msgstr "Configurar múltiples POS"
+
+#. module: odoo_pos_oca_multiple
+#: model:ir.model.fields,field_description:odoo_pos_oca_multiple.field_payment_provider__url_webservice
+msgid "URL servicio web"
+msgstr "URL servicio web"
+
+#. module: odoo_pos_oca_multiple
+#: model:ir.model.fields,field_description:odoo_pos_oca_multiple.field_payment_provider__codigo_sistema
+msgid "Código Sistema (SystemId)"
+msgstr "Código de sistema (SystemId)"
+
+#. module: odoo_pos_oca_multiple
+#: model:ir.model.fields,field_description:odoo_pos_oca_multiple.field_payment_provider__client_app_id
+msgid "Client APP ID"
+msgstr "Client APP ID"
+
+#. module: odoo_pos_oca_multiple
+#: model:ir.model.fields,field_description:odoo_pos_oca_multiple.field_payment_provider__codigo_sucursal
+msgid "Código Sucursal"
+msgstr "Código de sucursal"
+
+#. module: odoo_pos_oca_multiple
+#: model:ir.model.fields,field_description:odoo_pos_oca_multiple.field_payment_provider__is_multiple
+#: model:ir.model.fields,field_description:odoo_pos_oca_multiple.field_pos_payment_method__is_multiple
+msgid "Tiene multiples POS"
+msgstr "Tiene múltiples POS"
+
+#. module: odoo_pos_oca_multiple
+#: model:ir.model.fields,field_description:odoo_pos_oca_multiple.field_pos_payment_method__payment_provider
+msgid "Proveedor de Pago Asociado"
+msgstr "Proveedor de pago asociado"
+
+#. module: odoo_pos_oca_multiple
+#: model:ir.model.fields,field_description:odoo_pos_oca_multiple.field_pos_payment_method__pos_id
+msgid "POS Asociado"
+msgstr "POS asociado"
+
+#. module: odoo_pos_oca_multiple
+#: model:ir.model,name:odoo_pos_oca_multiple.model_payment_provider
+msgid "Payment Provider"
+msgstr "Proveedor de pago"
+
+#. module: odoo_pos_oca_multiple
+#: model:ir.model,name:odoo_pos_oca_multiple.model_pos_payment_method
+msgid "POS Payment Method"
+msgstr "Método de pago POS"
