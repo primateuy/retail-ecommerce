@@ -202,12 +202,14 @@ class PosOrder(models.Model):
                 
                 oca_transaction = None
                 if oca_payments:
-                    # Primero intentar buscar por TransactionId si está disponible en el pago
+                    # Primero intentar buscar por TransactionId si está disponible en el pago.
+                    # Se usa el helper que siempre retorna en contexto sudo para no requerir
+                    # permisos de administrador al cajero que opera el POS.
                     for payment in oca_payments:
-                        # Si el pago tiene una transacción asociada, usarla
-                        if payment.payment_transaction_id and payment.payment_transaction_id.is_promotion:
-                            oca_transaction = payment.payment_transaction_id
-                            _logger.info('Transacción OCA encontrada por payment_transaction_id: %s (Monto: %s)', 
+                        tx_candidate = order._oca_promo_get_oca_transaction_for_pos_payment(payment)
+                        if tx_candidate and tx_candidate.is_promotion:
+                            oca_transaction = tx_candidate
+                            _logger.info('Transacción OCA encontrada por payment_transaction_id: %s (Monto: %s)',
                                        oca_transaction.oca_transaction_id, oca_transaction.amount)
                             break
                     
