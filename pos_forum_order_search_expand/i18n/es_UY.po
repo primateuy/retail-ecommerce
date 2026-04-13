@@ -16,25 +16,50 @@ msgstr ""
 "Plural-Forms: \n"
 
 #. module: pos_forum_order_search_expand
+#. odoo-javascript
+#: code:addons/pos_forum_order_search_expand/static/src/components/reprint_change_ticket_button.js:0
+#, python-format
 msgid "Change Ticket"
 msgstr "Ticket de cambio"
 
 #. module: pos_forum_order_search_expand
+#. odoo-javascript
+#: code:addons/pos_forum_order_search_expand/static/src/components/reprint_change_ticket_button.js:0
+#, python-format
 msgid "Could not resolve the report identifier."
 msgstr "No se pudo resolver el identificador del informe."
 
 #. module: pos_forum_order_search_expand
+#. odoo-javascript
+#: code:addons/pos_forum_order_search_expand/static/src/overrides/payment_model.js:0
+#, python-format
 msgid "External payment"
 msgstr "Pago externo"
 
 #. module: pos_forum_order_search_expand
+#. odoo-javascript
+#: code:addons/pos_forum_order_search_expand/static/src/components/reprint_change_ticket_button.js:0
+#, python-format
 msgid "No change ticket report is configured for this POS."
 msgstr "No hay informe de ticket de cambio configurado para este TPV."
 
 #. module: pos_forum_order_search_expand
+#. odoo-javascript
+#: code:addons/pos_forum_order_search_expand/static/src/overrides/payment_model.js:0
+#, python-format
 msgid "Payment"
 msgstr "Pago"
 
 #. module: pos_forum_order_search_expand
+#. odoo-javascript
+#: code:addons/pos_forum_order_search_expand/static/src/components/reprint_change_ticket_button.js:0
+#, python-format
 msgid "The order is not available for reprinting."
 msgstr "El pedido no está disponible para reimprimir."
+
+#. module: pos_forum_order_search_expand
+#. odoo-javascript
+#: code:addons/pos_forum_order_search_expand/static/src/xml/reprint_change_ticket_button.xml:0
+#, python-format
+msgid "Ticket de cambio"
+msgstr "Ticket de cambio"

@@ -16,113 +16,346 @@ msgstr ""
 "Plural-Forms: \n"
 
 #. module: pos_forum_customer_ui
-msgid "%s format does not match the required pattern."
-msgstr "El formato de %s no coincide con el patrón requerido."
+#: model:ir.model,name:pos_forum_customer_ui.model_pos_config
+msgid "Point of Sale Configuration"
+msgstr "Configuración del punto de venta"
 
 #. module: pos_forum_customer_ui
-msgid "%s must be %s digits."
-msgstr "%s debe tener %s dígitos."
+#: model:ir.model,name:pos_forum_customer_ui.model_pos_session
+msgid "Point of Sale Session"
+msgstr "Sesión del punto de venta"
 
 #. module: pos_forum_customer_ui
-msgid "%s must have at least 8 digits after the country code."
-msgstr "%s debe tener al menos 8 dígitos después del código de país."
+#: model:ir.model,name:pos_forum_customer_ui.model_res_country
+msgid "Country"
+msgstr "País"
 
 #. module: pos_forum_customer_ui
-msgid "Celular"
-msgstr "Celular"
+#: model:ir.model,name:pos_forum_customer_ui.model_res_partner
+msgid "Contact"
+msgstr "Contacto"
 
 #. module: pos_forum_customer_ui
-msgid "Date of Birth"
-msgstr "Fecha de nacimiento"
-
-#. module: pos_forum_customer_ui
-msgid "Date of birth cannot be in the future."
-msgstr "La fecha de nacimiento no puede ser futura."
-
-#. module: pos_forum_customer_ui
-msgid "Default Partner City"
-msgstr "Ciudad predeterminada"
-
-#. module: pos_forum_customer_ui
+#: model:ir.model.fields,field_description:pos_forum_customer_ui.field_pos_config__default_partner_street
 msgid "Default Partner Street"
 msgstr "Calle predeterminada"
 
 #. module: pos_forum_customer_ui
-msgid "Document Number"
-msgstr "Número de documento"
+#: model:ir.model.fields,field_description:pos_forum_customer_ui.field_pos_config__default_partner_city
+msgid "Default Partner City"
+msgstr "Ciudad predeterminada"
 
 #. module: pos_forum_customer_ui
-msgid "Document Type"
-msgstr "Tipo de documento"
+#: model:ir.model.fields,field_description:pos_forum_customer_ui.field_res_country__pos_phone_length
+msgid "POS Phone Length"
+msgstr "Largo de teléfono POS"
 
 #. module: pos_forum_customer_ui
-msgid "Document number is required to consult RUT."
-msgstr "Se requiere número de documento para consultar el RUT."
+#: model:ir.model.fields,field_description:pos_forum_customer_ui.field_res_country__pos_phone_format
+msgid "POS Phone Format"
+msgstr "Formato de teléfono POS"
 
 #. module: pos_forum_customer_ui
-msgid "Document number is required."
-msgstr "Se requiere número de documento."
-
-#. module: pos_forum_customer_ui
-msgid "Email"
-msgstr "Correo electrónico"
-
-#. module: pos_forum_customer_ui
-msgid "Email format is invalid."
-msgstr "El formato del correo electrónico no es válido."
-
-#. module: pos_forum_customer_ui
-msgid "Invalid Date"
-msgstr "Fecha inválida"
-
-#. module: pos_forum_customer_ui
-msgid "Invalid Document"
-msgstr "Documento inválido"
-
-#. module: pos_forum_customer_ui
-msgid "Invalid Phone"
-msgstr "Número inválido"
-
-#. module: pos_forum_customer_ui
-msgid "Missing information"
-msgstr "Información incompleta"
-
-#. module: pos_forum_customer_ui
-msgid "Mobile"
-msgstr "Celular"
-
-#. module: pos_forum_customer_ui
+#: model_terms:ir.ui.view,arch_db:pos_forum_customer_ui.pos_config_view_form_partner_defaults
 msgid "POS Partner Defaults"
 msgstr "Predeterminados del POS"
 
 #. module: pos_forum_customer_ui
-msgid "Partner not found for RUT query."
-msgstr "No se encontró el contacto para la consulta de RUT."
+#: model_terms:ir.ui.view,arch_db:pos_forum_customer_ui.res_country_view_form_pos_phone
+msgid "POS Phone Validation"
+msgstr "Validación de teléfono POS"
 
 #. module: pos_forum_customer_ui
-msgid "Phone format does not match the required pattern."
-msgstr "El formato del teléfono no coincide con el patrón requerido."
-
-#. module: pos_forum_customer_ui
+#: code:addons/pos_forum_customer_ui/models/res_partner.py:58
+#, python-format
 msgid "Phone length must be %s digits for this country."
 msgstr "El teléfono debe tener %s dígitos para este país."
 
 #. module: pos_forum_customer_ui
-msgid "Please fill: %s"
-msgstr "Por favor complete: %s"
+#: code:addons/pos_forum_customer_ui/models/res_partner.py:70
+#, python-format
+msgid "Phone format does not match the required pattern."
+msgstr "El formato del teléfono no coincide con el patrón requerido."
 
 #. module: pos_forum_customer_ui
-msgid "RUT Query"
-msgstr "Consulta RUT"
+#: code:addons/pos_forum_customer_ui/models/res_partner.py:83
+#, python-format
+msgid "Email format is invalid."
+msgstr "El formato del correo electrónico no es válido."
 
 #. module: pos_forum_customer_ui
+#: code:addons/pos_forum_customer_ui/models/res_partner.py:128
+#, python-format
+msgid "Partner not found for RUT query."
+msgstr "No se encontró el contacto para la consulta de RUT."
+
+#. module: pos_forum_customer_ui
+#: code:addons/pos_forum_customer_ui/models/res_partner.py:132
+#, python-format
 msgid "RUT query is not available on this system."
 msgstr "La consulta de RUT no está disponible en este sistema."
 
 #. module: pos_forum_customer_ui
+#: code:addons/pos_forum_customer_ui/models/res_partner.py:136
+#, python-format
+msgid "Document number is required to query RUT."
+msgstr "Se requiere número de documento para consultar el RUT."
+
+#. module: pos_forum_customer_ui
+#. odoo-javascript
+#: code:addons/pos_forum_customer_ui/static/src/overrides/partner_editor.js:0
+#, python-format
+msgid "%s format does not match the required pattern."
+msgstr "El formato de %s no coincide con el patrón requerido."
+
+#. module: pos_forum_customer_ui
+#. odoo-javascript
+#: code:addons/pos_forum_customer_ui/static/src/overrides/partner_editor.js:0
+#, python-format
+msgid "%s must be %s digits."
+msgstr "%s debe tener %s dígitos."
+
+#. module: pos_forum_customer_ui
+#. odoo-javascript
+#: code:addons/pos_forum_customer_ui/static/src/overrides/partner_editor.js:0
+#, python-format
+msgid "%s must have at least 8 digits after the country code."
+msgstr "%s debe tener al menos 8 dígitos después del código de país."
+
+#. module: pos_forum_customer_ui
+#. odoo-javascript
+#: code:addons/pos_forum_customer_ui/static/src/overrides/partner_editor.js:0
+#, python-format
+msgid "Celular"
+msgstr "Celular"
+
+#. module: pos_forum_customer_ui
+#. odoo-javascript
+#: code:addons/pos_forum_customer_ui/static/src/overrides/partner_editor.js:0
+#, python-format
 msgid "Telefono"
 msgstr "Teléfono"
 
 #. module: pos_forum_customer_ui
+#. odoo-javascript
+#: code:addons/pos_forum_customer_ui/static/src/overrides/partner_editor.js:0
+#, python-format
+msgid "Date of Birth"
+msgstr "Fecha de nacimiento"
+
+#. module: pos_forum_customer_ui
+#. odoo-javascript
+#: code:addons/pos_forum_customer_ui/static/src/overrides/partner_editor.js:0
+#, python-format
+msgid "Date of birth cannot be in the future."
+msgstr "La fecha de nacimiento no puede ser futura."
+
+#. module: pos_forum_customer_ui
+#. odoo-javascript
+#: code:addons/pos_forum_customer_ui/static/src/overrides/partner_editor.js:0
+#, python-format
+msgid "Document Number"
+msgstr "Número de documento"
+
+#. module: pos_forum_customer_ui
+#. odoo-javascript
+#: code:addons/pos_forum_customer_ui/static/src/overrides/partner_editor.js:0
+#, python-format
+msgid "Document Type"
+msgstr "Tipo de documento"
+
+#. module: pos_forum_customer_ui
+#. odoo-javascript
+#: code:addons/pos_forum_customer_ui/static/src/overrides/partner_editor.js:0
+#, python-format
+msgid "Document number is required."
+msgstr "Se requiere número de documento."
+
+#. module: pos_forum_customer_ui
+#. odoo-javascript
+#: code:addons/pos_forum_customer_ui/static/src/overrides/partner_editor.js:0
+#, python-format
+msgid "Document number is required to consult RUT."
+msgstr "Se requiere número de documento para consultar el RUT."
+
+#. module: pos_forum_customer_ui
+#. odoo-javascript
+#: code:addons/pos_forum_customer_ui/static/src/overrides/partner_editor.js:0
+#, python-format
+msgid "Email"
+msgstr "Correo electrónico"
+
+#. module: pos_forum_customer_ui
+#. odoo-javascript
+#: code:addons/pos_forum_customer_ui/static/src/overrides/partner_editor.js:0
+#, python-format
+msgid "Email vacío"
+msgstr "Email vacío"
+
+#. module: pos_forum_customer_ui
+#. odoo-javascript
+#: code:addons/pos_forum_customer_ui/static/src/overrides/partner_editor.js:0
+#, python-format
+msgid "¿Desea continuar sin ingresar un correo electrónico?"
+msgstr "¿Desea continuar sin ingresar un correo electrónico?"
+
+#. module: pos_forum_customer_ui
+#. odoo-javascript
+#: code:addons/pos_forum_customer_ui/static/src/overrides/partner_editor.js:0
+#, python-format
+msgid "Invalid Date"
+msgstr "Fecha inválida"
+
+#. module: pos_forum_customer_ui
+#. odoo-javascript
+#: code:addons/pos_forum_customer_ui/static/src/overrides/partner_editor.js:0
+#, python-format
+msgid "Invalid Document"
+msgstr "Documento inválido"
+
+#. module: pos_forum_customer_ui
+#. odoo-javascript
+#: code:addons/pos_forum_customer_ui/static/src/overrides/partner_editor.js:0
+#, python-format
+msgid "Invalid Phone"
+msgstr "Número inválido"
+
+#. module: pos_forum_customer_ui
+#. odoo-javascript
+#: code:addons/pos_forum_customer_ui/static/src/overrides/partner_editor.js:0
+#, python-format
+msgid "Missing information"
+msgstr "Información incompleta"
+
+#. module: pos_forum_customer_ui
+#. odoo-javascript
+#: code:addons/pos_forum_customer_ui/static/src/overrides/partner_editor.js:0
+#, python-format
+msgid "Mobile"
+msgstr "Celular"
+
+#. module: pos_forum_customer_ui
+#. odoo-javascript
+#: code:addons/pos_forum_customer_ui/static/src/overrides/partner_editor.js:0
+#, python-format
+msgid "Please fill: %s"
+msgstr "Por favor complete: %s"
+
+#. module: pos_forum_customer_ui
+#. odoo-javascript
+#: code:addons/pos_forum_customer_ui/static/src/overrides/partner_editor.js:0
+#, python-format
+msgid "RUT Query"
+msgstr "Consulta RUT"
+
+#. module: pos_forum_customer_ui
+#. odoo-javascript
+#: code:addons/pos_forum_customer_ui/static/src/overrides/partner_editor.js:0
+#, python-format
 msgid "The document number is invalid for this type."
 msgstr "El número de documento no es válido para este tipo."
+
+#. module: pos_forum_customer_ui
+#. odoo-javascript
+#: code:addons/pos_forum_customer_ui/static/src/overrides/partner_editor.xml:0
+#, python-format
+msgid "Tipo de documento"
+msgstr "Tipo de documento"
+
+#. module: pos_forum_customer_ui
+#. odoo-javascript
+#: code:addons/pos_forum_customer_ui/static/src/overrides/partner_editor.xml:0
+#, python-format
+msgid "Seleccione"
+msgstr "Seleccione"
+
+#. module: pos_forum_customer_ui
+#. odoo-javascript
+#: code:addons/pos_forum_customer_ui/static/src/overrides/partner_editor.xml:0
+#, python-format
+msgid "Numero de documento"
+msgstr "Número de documento"
+
+#. module: pos_forum_customer_ui
+#. odoo-javascript
+#: code:addons/pos_forum_customer_ui/static/src/overrides/partner_editor.xml:0
+#, python-format
+msgid "Consultar RUT"
+msgstr "Consultar RUT"
+
+#. module: pos_forum_customer_ui
+#. odoo-javascript
+#: code:addons/pos_forum_customer_ui/static/src/overrides/partner_editor.xml:0
+#, python-format
+msgid "Nombre de pila"
+msgstr "Nombre de pila"
+
+#. module: pos_forum_customer_ui
+#. odoo-javascript
+#: code:addons/pos_forum_customer_ui/static/src/overrides/partner_editor.xml:0
+#, python-format
+msgid "Apellido"
+msgstr "Apellido"
+
+#. module: pos_forum_customer_ui
+#. odoo-javascript
+#: code:addons/pos_forum_customer_ui/static/src/overrides/partner_editor.xml:0
+#, python-format
+msgid "Nombre"
+msgstr "Nombre"
+
+#. module: pos_forum_customer_ui
+#. odoo-javascript
+#: code:addons/pos_forum_customer_ui/static/src/overrides/partner_editor.xml:0
+#, python-format
+msgid "Fecha de nacimiento"
+msgstr "Fecha de nacimiento"
+
+#. module: pos_forum_customer_ui
+#. odoo-javascript
+#: code:addons/pos_forum_customer_ui/static/src/overrides/partner_editor.xml:0
+#, python-format
+msgid "Correo electronico"
+msgstr "Correo electrónico"
+
+#. module: pos_forum_customer_ui
+#. odoo-javascript
+#: code:addons/pos_forum_customer_ui/static/src/overrides/partner_editor.xml:0
+#, python-format
+msgid "Teléfono"
+msgstr "Teléfono"
+
+#. module: pos_forum_customer_ui
+#. odoo-javascript
+#: code:addons/pos_forum_customer_ui/static/src/overrides/partner_editor.xml:0
+#, python-format
+msgid "Departamento"
+msgstr "Departamento"
+
+#. module: pos_forum_customer_ui
+#. odoo-javascript
+#: code:addons/pos_forum_customer_ui/static/src/overrides/partner_editor.xml:0
+#, python-format
+msgid "Pais"
+msgstr "País"
+
+#. module: pos_forum_customer_ui
+#. odoo-javascript
+#: code:addons/pos_forum_customer_ui/static/src/overrides/partner_editor.xml:0
+#, python-format
+msgid "Calle"
+msgstr "Calle"
+
+#. module: pos_forum_customer_ui
+#. odoo-javascript
+#: code:addons/pos_forum_customer_ui/static/src/overrides/partner_editor.xml:0
+#, python-format
+msgid "Ciudad"
+msgstr "Ciudad"
+
+#. module: pos_forum_customer_ui
+#. odoo-javascript
+#: code:addons/pos_forum_customer_ui/static/src/overrides/partner_editor.xml:0
+#, python-format
+msgid "Razon social"
+msgstr "Razón social"

@@ -16,5 +16,16 @@ msgstr ""
 "Plural-Forms: \n"
 
 #. module: pos_forum_payment_default_customer
+#: model:ir.model,name:pos_forum_payment_default_customer.model_pos_config
+msgid "Point of Sale Configuration"
+msgstr "Configuración del punto de venta"
+
+#. module: pos_forum_payment_default_customer
+#: model:ir.model,name:pos_forum_payment_default_customer.model_pos_session
+msgid "Point of Sale Session"
+msgstr "Sesión del punto de venta"
+
+#. module: pos_forum_payment_default_customer
+#: model:ir.model.fields,field_description:pos_forum_payment_default_customer.field_pos_config__pos_default_customer_at_payment
 msgid "Default Customer at Payment"
 msgstr "Cliente predeterminado en el pago"

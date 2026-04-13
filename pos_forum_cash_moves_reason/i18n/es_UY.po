@@ -16,49 +16,96 @@ msgstr ""
 "Plural-Forms: \n"
 
 #. module: pos_forum_cash_moves_reason
+#. odoo-javascript
+#: code:addons/pos_forum_cash_moves_reason/static/src/overrides/cash_move_popup.js:0
+#, python-format
 msgid "Amount"
 msgstr "Importe"
 
 #. module: pos_forum_cash_moves_reason
+#. odoo-javascript
+#: code:addons/pos_forum_cash_moves_reason/static/src/overrides/cash_move_popup.js:0
+#, python-format
 msgid "Cash"
 msgstr "Efectivo"
 
 #. module: pos_forum_cash_moves_reason
+#: model:ir.model.fields,field_description:pos_forum_cash_moves_reason.field_pos_config__pos_cash_move_reason_ids
 msgid "Cash Move Reasons"
 msgstr "Razones de movimiento de efectivo"
 
 #. module: pos_forum_cash_moves_reason
+#. odoo-javascript
+#: code:addons/pos_forum_cash_moves_reason/static/src/overrides/cash_move_popup.js:0
+#, python-format
 msgid "Cash in/out of %s is ignored."
 msgstr "Entrada/salida de efectivo de %s ignorada."
 
 #. module: pos_forum_cash_moves_reason
+#: code:addons/pos_forum_cash_moves_reason/models/pos_session.py:107
+#, python-format
 msgid "Invalid cash move reason for this company."
 msgstr "Razón de movimiento de efectivo no válida para esta compañía."
 
 #. module: pos_forum_cash_moves_reason
+#. odoo-javascript
+#: code:addons/pos_forum_cash_moves_reason/static/src/overrides/cash_move_popup.js:0
+#, python-format
 msgid "Select a cash move reason before confirming."
 msgstr "Seleccione una razón de movimiento de efectivo antes de confirmar."
 
 #. module: pos_forum_cash_moves_reason
+#. odoo-javascript
+#: code:addons/pos_forum_cash_moves_reason/static/src/overrides/cash_move_popup.js:0
+#, python-format
 msgid "Successfully made a cash %s of %s."
 msgstr "Movimiento de efectivo (%s) por %s registrado correctamente."
 
 #. module: pos_forum_cash_moves_reason
+#: code:addons/pos_forum_cash_moves_reason/models/pos_session.py:125
+#, python-format
 msgid "The selected reason has no account configured."
 msgstr "La razón seleccionada no tiene cuenta contable configurada."
 
 #. module: pos_forum_cash_moves_reason
+#: code:addons/pos_forum_cash_moves_reason/models/pos_session.py:134
+#, python-format
 msgid "The selected reason is not allowed for the cash journal in this POS."
 msgstr "La razón seleccionada no está permitida para el diario de caja de este TPV."
 
 #. module: pos_forum_cash_moves_reason
+#: code:addons/pos_forum_cash_moves_reason/models/pos_session.py:111
+#, python-format
 msgid "The selected reason is not valid for cash in."
 msgstr "La razón seleccionada no es válida para entrada de efectivo."
 
 #. module: pos_forum_cash_moves_reason
+#: code:addons/pos_forum_cash_moves_reason/models/pos_session.py:113
+#, python-format
 msgid "The selected reason is not valid for cash out."
 msgstr "La razón seleccionada no es válida para salida de efectivo."
 
 #. module: pos_forum_cash_moves_reason
+#: code:addons/pos_forum_cash_moves_reason/models/pos_session.py:102
+#, python-format
 msgid "There is no cash payment method for this PoS Session"
 msgstr "No hay método de pago en efectivo para esta sesión de TPV."
+
+#. module: pos_forum_cash_moves_reason
+#. odoo-javascript
+#: code:addons/pos_forum_cash_moves_reason/static/src/overrides/cash_move_popup.xml:0
+#, python-format
+msgid "Seleccione un motivo"
+msgstr "Seleccione un motivo"
+
+#. module: pos_forum_cash_moves_reason
+#. odoo-javascript
+#: code:addons/pos_forum_cash_moves_reason/static/src/overrides/cash_move_popup.xml:0
+#, python-format
+msgid "Motivo"
+msgstr "Motivo"
+
+#. module: pos_forum_cash_moves_reason
+#: model_terms:ir.ui.view,arch_db:pos_forum_cash_moves_reason.pos_config_view_form_cash_moves_reason
+msgid "Razones de movimiento de efectivo"
+msgstr "Razones de movimiento de efectivo"

@@ -16,21 +16,47 @@ msgstr ""
 "Plural-Forms: \n"
 
 #. module: pos_forum_salesperson_required
-msgid "All order lines must have a salesperson before paying."
-msgstr "Todas las líneas del pedido deben tener un vendedor antes de pagar."
+#: model:ir.model,name:pos_forum_salesperson_required.model_pos_order
+msgid "POS Order"
+msgstr "Pedido POS"
 
 #. module: pos_forum_salesperson_required
-msgid "Missing Salesperson"
-msgstr "Vendedor ausente"
+#: model:ir.model,name:pos_forum_salesperson_required.model_pos_order_line
+msgid "POS Order Line"
+msgstr "Línea de pedido POS"
 
 #. module: pos_forum_salesperson_required
+#: model:ir.model.fields,field_description:pos_forum_salesperson_required.field_pos_order__pos_order_salesperson_id
 msgid "Order Salesperson"
 msgstr "Vendedor de la orden"
 
 #. module: pos_forum_salesperson_required
+#. odoo-javascript
+#: code:addons/pos_forum_salesperson_required/static/src/overrides/order.js:0
+#: code:addons/pos_forum_salesperson_required/static/src/overrides/payment_screen.js:0
+#, python-format
+msgid "All order lines must have a salesperson before paying."
+msgstr "Todas las líneas del pedido deben tener un vendedor antes de pagar."
+
+#. module: pos_forum_salesperson_required
+#. odoo-javascript
+#: code:addons/pos_forum_salesperson_required/static/src/overrides/order.js:0
+#: code:addons/pos_forum_salesperson_required/static/src/overrides/payment_screen.js:0
+#, python-format
+msgid "Missing Salesperson"
+msgstr "Vendedor ausente"
+
+#. module: pos_forum_salesperson_required
+#. odoo-javascript
+#: code:addons/pos_forum_salesperson_required/static/src/overrides/order.js:0
+#: code:addons/pos_forum_salesperson_required/static/src/overrides/payment_screen.js:0
+#, python-format
 msgid "Please select a salesperson for the order before paying."
 msgstr "Por favor seleccione un vendedor antes de pagar."
 
 #. module: pos_forum_salesperson_required
+#. odoo-javascript
+#: code:addons/pos_forum_salesperson_required/static/src/overrides/salesperson_button.js:0
+#, python-format
 msgid "Select Salesperson"
 msgstr "Seleccionar vendedor"

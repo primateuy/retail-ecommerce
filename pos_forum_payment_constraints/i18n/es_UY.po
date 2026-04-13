@@ -16,17 +16,59 @@ msgstr ""
 "Plural-Forms: \n"
 
 #. module: pos_forum_payment_constraints
+#. odoo-javascript
+#: code:addons/pos_forum_payment_constraints/static/src/overrides/payment_screen.js:0
+#, python-format
 msgid "Amount limited"
 msgstr "Importe limitado"
 
 #. module: pos_forum_payment_constraints
+#. odoo-javascript
+#: code:addons/pos_forum_payment_constraints/static/src/overrides/closing_popup.js:0
+#, python-format
 msgid "Counted cash cannot exceed the expected balance."
 msgstr "El efectivo contado no puede superar el saldo esperado."
 
 #. module: pos_forum_payment_constraints
+#. odoo-javascript
+#: code:addons/pos_forum_payment_constraints/static/src/overrides/closing_popup.js:0
+#, python-format
 msgid "Invalid Closing Amount"
 msgstr "Importe de cierre inválido"
 
 #. module: pos_forum_payment_constraints
+#. odoo-javascript
+#: code:addons/pos_forum_payment_constraints/static/src/overrides/payment_screen.js:0
+#, python-format
 msgid "This payment method cannot exceed the order balance. Amount set to %s."
 msgstr "Este método de pago no puede superar el saldo del pedido. Importe fijado en %s."
+
+#. module: pos_forum_payment_constraints
+#: model:ir.model,name:pos_forum_payment_constraints.model_pos_payment_method
+msgid "POS Payment Method"
+msgstr "Método de pago POS"
+
+#. module: pos_forum_payment_constraints
+#: model:ir.model,name:pos_forum_payment_constraints.model_pos_session
+msgid "Point of Sale Session"
+msgstr "Sesión del punto de venta"
+
+#. module: pos_forum_payment_constraints
+#: model:ir.model.fields,field_description:pos_forum_payment_constraints.field_pos_payment_method__pos_opening_cash_readonly
+msgid "Opening Cash Readonly"
+msgstr "Apertura de caja solo lectura"
+
+#. module: pos_forum_payment_constraints
+#: model:ir.model.fields,field_description:pos_forum_payment_constraints.field_pos_payment_method__pos_closing_noncash_readonly
+msgid "Closing Non-Cash Readonly"
+msgstr "Cierre no efectivo solo lectura"
+
+#. module: pos_forum_payment_constraints
+#: model:ir.model.fields,field_description:pos_forum_payment_constraints.field_pos_payment_method__pos_limit_closing_cash
+msgid "Limit Closing Cash to Balance"
+msgstr "Limitar efectivo de cierre al saldo"
+
+#. module: pos_forum_payment_constraints
+#: model_terms:ir.ui.view,arch_db:pos_forum_payment_constraints.pos_payment_method_view_form_constraints
+msgid "POS Controls"
+msgstr "Controles POS"
