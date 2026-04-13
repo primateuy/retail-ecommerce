@@ -237,10 +237,12 @@ class PaymentTransaction(models.Model):
     @api.model
     def _forum_transaction_target_for_config_line(self, config_line):
         """
-        Resuelve el destino lógico (ticket, batch, …) para una línea de configuración.
+        Resuelve el destino lógico para una línea de configuración.
 
         Prioriza el campo explícito «Dato en payment.transaction»; si es «none»,
         usa sinónimos según el código técnico del campo a solicitar.
+        Soporta tanto alias heredados (ticket, batch, …) como nombres de campo
+        directos de payment.transaction (manual_ticket_number, etc.).
         """
         selected = config_line.transaction_field_mapping
         if selected and selected != "none":
@@ -251,34 +253,31 @@ class PaymentTransaction(models.Model):
     @api.model
     def _forum_transaction_vals_from_mapped_popup(self, provider, manual_vals):
         """
-        Arma los valores de columnas OCA + manual_* en payment.transaction.
+        Arma los valores de payment.transaction desde los datos del popup POS.
 
         Recorre las líneas de configuración del proveedor, toma el valor del JSON
         del POS usando el código del campo a solicitar y lo escribe en los
-        destinos definidos (mapeo explícito o sinónimos).
+        destinos definidos. Soporta:
+        - Alias heredados (ticket, batch, etc.) via FORUM_TX_FIELD_TARGETS
+        - Nombres de campo directos de payment.transaction (cualquier Char/Text)
         """
-        base = {
-            "ticket_number": "",
-            "batch_number": "",
-            "authorization_code": "",
-            "card_bin": "",
-            "card_last_four": "",
-            "acquirer": "",
-            "manual_ticket_number": "",
-            "manual_batch_number": "",
-            "manual_auth_code": "",
-            "manual_card_bin": "",
-            "manual_last_four": "",
-            "manual_holder_name": "",
-            "manual_stamp": "",
-        }
+        base = {}
+        # Inicializar campos conocidos del diccionario heredado con cadena vacía
+        for _alias, (oca_f, manual_f) in FORUM_TX_FIELD_TARGETS.items():
+            if oca_f:
+                base[oca_f] = ""
+            if manual_f:
+                base[manual_f] = ""
+
+        tx_fields = self._fields
+
         for line in provider.manual_field_config_ids.sorted("sequence"):
             request_field = line.request_field_id
             if not request_field or not request_field.code:
                 continue
             code = request_field.code
             target = self._forum_transaction_target_for_config_line(line)
-            if not target or target not in FORUM_TX_FIELD_TARGETS:
+            if not target:
                 _logger.debug(
                     "FORUM manual POS: config línea id=%s código JSON «%s» sin destino; "
                     "defina «Dato en payment.transaction» en el proveedor manual.",
@@ -286,7 +285,10 @@ class PaymentTransaction(models.Model):
                     code,
                 )
                 continue
+
             raw = manual_vals.get(code)
+
+            # Resolver valor según tipo de campo
             if request_field.field_type == "many2one" and target == "stamp":
                 value = self._forum_resolve_stamp_label(raw)
             else:
@@ -294,11 +296,24 @@ class PaymentTransaction(models.Model):
                     value = ""
                 else:
                     value = str(raw).strip()
-            oca_f, manual_f = FORUM_TX_FIELD_TARGETS[target]
-            if oca_f:
-                base[oca_f] = value
-            if manual_f:
-                base[manual_f] = value
+
+            if target in FORUM_TX_FIELD_TARGETS:
+                # Alias heredado: escribir en ambos campos (OCA + manual_*)
+                oca_f, manual_f = FORUM_TX_FIELD_TARGETS[target]
+                if oca_f:
+                    base[oca_f] = value
+                if manual_f:
+                    base[manual_f] = value
+            elif target in tx_fields:
+                # Campo directo de payment.transaction
+                base[target] = value
+            else:
+                _logger.warning(
+                    "FORUM manual POS: config línea id=%s mapeo «%s» no es un campo "
+                    "válido de payment.transaction; se omite.",
+                    line.id,
+                    target,
+                )
         return base
 
     @api.model

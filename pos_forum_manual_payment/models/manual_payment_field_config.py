@@ -66,26 +66,56 @@ class ManualPaymentFieldConfig(models.Model):
         readonly=True,
     )
     transaction_field_mapping = fields.Selection(
-        selection=[
-            ("none", "Sin mapeo explícito (usa sinónimos por código de campo)"),
-            ("ticket", "Número de ticket"),
-            ("batch", "Número de lote"),
-            ("authorization", "Código de autorización"),
-            ("card_bin", "BIN de la tarjeta"),
-            ("last_four", "Últimos 4 dígitos"),
-            ("holder", "Nombre del titular"),
-            ("stamp", "Sello / marca (many2one → nombre)"),
-        ],
+        selection="_selection_transaction_fields",
         string="Dato en payment.transaction",
         default="none",
         required=True,
         help=(
-            "Define en qué columnas de payment.transaction se guarda el valor "
-            "capturado en el POS. La clave del JSON es el «código técnico» del "
-            "campo a solicitar. Si elige «Sin mapeo explícito», se intenta "
-            "deducir el destino por sinónimos del código (ej. nro_ticket → ticket)."
+            "Define en qué campo de payment.transaction se guarda el valor "
+            "capturado en el POS. La lista se genera dinámicamente con los "
+            "campos disponibles en el modelo. Si elige «Sin mapeo explícito», "
+            "se intenta deducir el destino por sinónimos del código técnico."
         ),
     )
+
+    @api.model
+    def _selection_transaction_fields(self):
+        """
+        Genera dinámicamente las opciones del campo transaction_field_mapping
+        a partir de los campos Char/Text escriturables de payment.transaction.
+
+        Incluye «none» para el mapeo por sinónimos y los alias heredados
+        (ticket, batch, etc.) para retrocompatibilidad con registros existentes.
+        """
+        result = [("none", "Sin mapeo explícito (usa sinónimos por código de campo)")]
+        # Alias heredados: permiten que registros existentes sigan funcionando
+        _legacy_aliases = {
+            "ticket": "Número de ticket (alias heredado)",
+            "batch": "Número de lote (alias heredado)",
+            "authorization": "Código de autorización (alias heredado)",
+            "card_bin": "BIN de la tarjeta (alias heredado)",
+            "last_four": "Últimos 4 dígitos (alias heredado)",
+            "holder": "Nombre del titular (alias heredado)",
+            "stamp": "Sello / marca (alias heredado)",
+        }
+        for key, label in _legacy_aliases.items():
+            result.append((key, label))
+        # Campos reales de payment.transaction (Char/Text, no readonly, no computed)
+        tx_model = self.env["payment.transaction"]
+        skip_fields = {
+            "id", "display_name", "create_uid", "create_date",
+            "write_uid", "write_date", "__last_update",
+        }
+        for fname, field_obj in sorted(tx_model._fields.items()):
+            if fname in skip_fields:
+                continue
+            if field_obj.type not in ("char", "text"):
+                continue
+            if field_obj.readonly or field_obj.compute:
+                continue
+            label = field_obj.string or fname
+            result.append((fname, "%s (%s)" % (label, fname)))
+        return result
 
     @api.model
     def _selection_reference_models(self):
