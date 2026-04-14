@@ -54,9 +54,13 @@ class AccountPayment(models.Model):
             return super(AccountPayment, self.sudo()).write(vals)
         return super().write(vals)
 
+    # Redefinir para evitar que al duplicar un pago se copie la transacción original
+    payment_transaction_id = fields.Many2one(copy=False)
+
     fiserv_charge_on_pos = fields.Boolean(
         string='Cobrar en terminal Fiserv (ITD)',
         default=False,
+        copy=False,
         help='Si está marcado, al confirmar se envía la operación al pinpad vía ITD, '
         'sin usar el punto de venta ni la sesión de caja.',
     )
@@ -73,6 +77,7 @@ class AccountPayment(models.Model):
         comodel_name='fiserv.pos.terminal',
         string='Terminal Fiserv (PosID)',
         domain="[('id', 'in', fiserv_selectable_terminal_ids)]",
+        copy=False,
         help='Terminales PosID del proveedor Fiserv de la línea de método de pago del diario.',
     )
     fiserv_original_transaction_id = fields.Many2one(
@@ -82,6 +87,7 @@ class AccountPayment(models.Model):
             "[('provider_id.code', '=', 'fiserv'), ('ticket_number', '!=', False), "
             "('company_id', '=', company_id), ('state', '=', 'done')]"
         ),
+        copy=False,
         help='Cobro Fiserv a anular por ticket; el importe se fija al 100%% del cobro.',
     )
     fiserv_async_terminal_pending = fields.Boolean(
@@ -90,12 +96,32 @@ class AccountPayment(models.Model):
         copy=False,
         help='Evita doble confirmación mientras el hilo ITD termina el Query al pinpad.',
     )
+    fiserv_source_invoice_ids = fields.Many2many(
+        comodel_name='account.move',
+        string='Facturas origen (técnico)',
+        copy=False,
+        help='Facturas asociadas al pago para calcular TaxRefund ITD. '
+        'Se llena automáticamente desde el wizard de registro de pago.',
+    )
     fiserv_payment_tx_provider_code = fields.Char(
         string='Código proveedor (transacción)',
         compute='_compute_fiserv_payment_tx_provider_code',
         help='Copia en Char del código del proveedor de payment.transaction (provider_id.code '
         'es Selection en Odoo; no puede ser related a Char). Sirve para modifiers en vista.',
     )
+    fiserv_is_fiserv_payment_line = fields.Boolean(
+        string='Línea de pago Fiserv (técnico)',
+        compute='_compute_fiserv_is_fiserv_payment_line',
+        help='True cuando el proveedor de la línea de método de pago es Fiserv ITD. '
+        'Se usa para condicionar la visibilidad de campos Fiserv en la vista.',
+    )
+
+    @api.depends('payment_method_line_id', 'payment_method_line_id.payment_provider_id')
+    def _compute_fiserv_is_fiserv_payment_line(self):
+        """Detecta si la línea de método de pago seleccionada pertenece a Fiserv."""
+        for pay in self:
+            provider = pay.payment_method_line_id.payment_provider_id
+            pay.fiserv_is_fiserv_payment_line = bool(provider and provider.code == 'fiserv')
 
     @api.depends('payment_transaction_id', 'payment_transaction_id.provider_id')
     def _compute_fiserv_payment_tx_provider_code(self):
@@ -178,6 +204,36 @@ class AccountPayment(models.Model):
                 )
             )
         return prov
+
+    def _fiserv_compute_tax_refund_cents(self):
+        """
+        Calcula el TaxRefund en centavos para el payload ITD.
+
+        Reglas:
+        - Sin facturas asociadas o más de 1 factura → 0 (exento).
+        - Exactamente 1 factura → (monto_pago / total_factura) × impuesto_factura.
+
+        Las facturas se buscan en orden de prioridad:
+        1. fiserv_source_invoice_ids (llenado por el wizard de registro de pago)
+        2. reconciled_invoice_ids (si el pago ya está reconciliado)
+
+        Returns:
+            int: TaxRefund en centavos (monto × 100).
+        """
+        self.ensure_one()
+        # Buscar facturas asociadas en orden de prioridad
+        invoices = self.fiserv_source_invoice_ids or self.reconciled_invoice_ids
+        if len(invoices) != 1:
+            return 0
+        invoice = invoices[0]
+        # Monto total de impuestos de la factura
+        tax_amount = invoice.amount_tax
+        if not tax_amount or invoice.amount_total == 0:
+            return 0
+        # Proporción: (monto del pago / total de la factura) × impuesto de la factura
+        ratio = self.amount / invoice.amount_total
+        tax_refund = ratio * tax_amount
+        return int(round(tax_refund * 100))
 
     def _fiserv_must_run_terminal_before_post(self):
         """

@@ -40,6 +40,7 @@ campos y vistas; no lo instale si ya tiene odoo_pos_oca (campos duplicados).
         "views/payment_transaction_views.xml",
         "views/account_payment_views.xml",
         "views/pos_config_views.xml",
+        "wizard/account_payment_register_views.xml",
     ],
     "assets": {
         "web.assets_backend": [

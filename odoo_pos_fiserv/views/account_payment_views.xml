@@ -12,6 +12,19 @@
             <field name="inherit_id" ref="account.view_account_payment_form"/>
             <field name="priority" eval="50"/>
             <field name="arch" type="xml">
+                <!-- Deshabilitar botón Confirmar mientras ITD está procesando -->
+                <xpath expr="//button[@name='action_post']" position="attributes">
+                    <attribute name="invisible">state != 'draft' or fiserv_async_terminal_pending</attribute>
+                </xpath>
+                <!-- Banner de procesamiento Fiserv: visible mientras el hilo ITD está activo -->
+                <xpath expr="//group[@name='main_group']" position="before">
+                    <field name="fiserv_async_terminal_pending" invisible="1"/>
+                    <div role="alert" class="alert alert-warning text-center"
+                         invisible="not fiserv_async_terminal_pending">
+                        <i class="fa fa-spinner fa-spin me-2"/>
+                        <strong>Procesando cobro en terminal Fiserv... Espere por favor.</strong>
+                    </div>
+                </xpath>
                 <xpath expr="//group[@name='main_group']" position="after">
                     <!--
                         Visible también en Registrado: el usuario debe ver que el cobro fue por Fiserv
@@ -21,8 +34,9 @@
                         string="Cobro con terminal Fiserv (contabilidad)"
                         name="fiserv_terminal_account_group"
                         colspan="2"
-                        invisible="is_internal_transfer or payment_type not in ('inbound', 'outbound') or (state != 'draft' and not fiserv_charge_on_pos and not fiserv_terminal_id and (not payment_transaction_id or fiserv_payment_tx_provider_code != 'fiserv'))">
+                        invisible="is_internal_transfer or payment_type not in ('inbound', 'outbound') or (not fiserv_is_fiserv_payment_line and (not payment_transaction_id or fiserv_payment_tx_provider_code != 'fiserv'))">
                         <field name="fiserv_payment_tx_provider_code" invisible="1"/>
+                        <field name="fiserv_is_fiserv_payment_line" invisible="1"/>
                         <field name="fiserv_selectable_terminal_ids" invisible="1"/>
                         <field name="fiserv_need_terminal_choice" invisible="1"/>
                         <field name="fiserv_charge_on_pos" readonly="state != 'draft'"/>

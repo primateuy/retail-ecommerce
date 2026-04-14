@@ -138,7 +138,7 @@ export class PaymentFiserv extends PaymentInterface {
             currency_code = "840";
         }
 
-        let numCuotas = 1;
+        let numCuotas = 99;
         if (line.installments !== undefined && line.installments !== null) {
             const parsed = parseInt(line.installments, 10);
             if (!isNaN(parsed) && parsed >= 1) {
@@ -150,7 +150,7 @@ export class PaymentFiserv extends PaymentInterface {
         // Cuerpo alineado con ITD (ej. testitd.firstdata.com processFinancialPurchase).
         data.Amount = `${amount_to_send_by_100}`;
         data.Quotas = numCuotas;
-        data.Plan = 0;
+        data.Plan = 99;
         data.Currency = currency_code;
         data.TaxRefund = 0;
         data.TaxableAmount = `${total_order_amount_without_tax}`;
