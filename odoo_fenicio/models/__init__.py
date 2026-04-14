@@ -18,7 +18,6 @@ from . import product_public_category
 from . import payment_provider
 from . import payment_transaction
 from . import res_company
-from . import res_config
 from . import website
 from . import product_pricelist
 from . import fenicio_log

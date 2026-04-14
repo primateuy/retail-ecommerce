@@ -21,7 +21,6 @@
         'views/product_pricelist_view.xml',
         'data/payments_diaries.xml',
         'views/res_partner_view.xml',
-        'views/res_config.xml',
         'views/delivery_carrier_views.xml',
         'views/website_views.xml',
         'views/payment_transaction_views.xml',
