@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="l10n_latam_identification_type_form_inherit" model="ir.ui.view">
+        <field name="name">l10n.latam.identification.type.form.fenicio</field>
+        <field name="model">l10n_latam.identification.type</field>
+        <field name="inherit_id" ref="l10n_uy_einvoice_base.view_dgi_document_type_form"/>
+        <field name="arch" type="xml">
+            <field name="name" position="after">
+                <field name="codigo_fenicio"/>
+            </field>
+        </field>
+    </record>
+</odoo>

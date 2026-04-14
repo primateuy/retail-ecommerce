@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_website_form_inherit_fenicio" model="ir.ui.view">
+        <field name="name">website.form.inherit.fenicio</field>
+        <field name="model">website</field>
+        <field name="inherit_id" ref="website.view_website_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//notebook" position="inside">
+                <page string="Fenicio" name="fenicio">
+                    <group string="Configuración de Fenicio">
+                        <field name="fenicio_token" password="True"/>
+                        <field name="fenicio_pricelist_venta_id"/>
+                        <field name="fenicio_pricelist_lista_id"/>
+                        <field name="fenicio_pricelist_alternativo_id"/>
+                        <field name="fenicio_sale_order_type_id"/>
+                        <field name="fenicio_cantidad_stock_bydefault"/>
+                        <field name="fenicio_stock_location_ids" widget="many2many_tags"/>
+                    </group>
+                </page>
+            </xpath>
+        </field>
+    </record>
+</odoo>

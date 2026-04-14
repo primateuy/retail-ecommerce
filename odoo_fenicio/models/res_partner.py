@@ -62,10 +62,13 @@ class SaleOrder(models.Model):
                 # _logger.info("Tipo de documento mapeado: %s", tipo_doc);
 
                 try:
-                    tipoDocumento = self.env['l10n_latam.identification.type'].search([('code', '=', tipo_doc_fenicio), ('active', '=', True)], limit=1)
+                    tipoDocumento = self.env['l10n_latam.identification.type'].search([('codigo_fenicio', '=', tipo_doc_fenicio), ('active', '=', True)], limit=1)
+                    if not tipoDocumento:
+                        tipoDocumento = self.env['l10n_latam.identification.type'].search([('code', '=', '4'), ('active', '=', True)], limit=1)
+                        _logger.info("Tipo de documento Fenicio '%s' no encontrado, usando OTROS (código 4)", tipo_doc_fenicio)
                     if tipoDocumento:
                         vals['l10n_latam_identification_type_id'] = tipoDocumento.id
-                        
+
                 except Exception as e:
                     _logger.warning("No se pudo asignar tipo de documento latam: %s", str(e))
 

@@ -22,12 +22,11 @@ class ApiInternal(models.Model):
     def verificar_token(self, token):
         if not token:
             raise UserError('No se proporcionó un token de autenticación.')
-        company = self.env['res.company'].sudo().search([('fenicio_token', '=', token)], limit=1)
-
-        _logger.info("La compañia que tiene el token es: %s", company.name)
-        if not company:
-            raise UserError('El token de autenticación efenicio es incorrecto o no está asociado a ninguna compañía.')
-        return company
+        website = self.env['website'].sudo().search([('fenicio_token', '=', token)], limit=1)
+        if not website:
+            raise UserError('El token de autenticación efenicio es incorrecto o no está asociado a ningún sitio web.')
+        _logger.info("El sitio web que tiene el token es: %s", website.name)
+        return website
 
     
 
@@ -63,13 +62,7 @@ class ApiInternal(models.Model):
                 
             
 
-            impuesto = product_template_id.taxes_id and product_template_id.taxes_id[0].amount or 0;
-
-            if impuesto % 1 != 0:
-                _logger.info("El impuesto para el producto %s no es un número entero: %s. Se redondeará al entero más cercano.", product_template_id.name, impuesto)
-                impuesto = round(impuesto, 2)
-
-                _logger.info(f"IMPUESTO REDONDEADO => {impuesto}")
+            impuesto = product_template_id.taxes_id and product_template_id.taxes_id[0].amount or 0
 
             vals = {
                 'codigo': str(product_template_id.code_e_fenicio or product_template_id.id),
@@ -77,8 +70,8 @@ class ApiInternal(models.Model):
                 'fechaCreacion': product_template_id.create_date.strftime('%Y-%m-%dT%H:%M:%S%z'),
                 'prioridad': product_template_id.priority_fenicio or 1,
                 'guiaTalles': product_template_id.guia_talle_code or '',
-                'monedaPredeterminada': self.env.company.currency_id.name,
-                'impuesto': int(impuesto) if isinstance(impuesto, (int, float)) else '0',
+                'monedaPredeterminada': empresa.company_id.currency_id.name,
+                'impuesto': impuesto,
                 'atributos': {
                     'categoria': listaCategoria,
                     'marca': product_template_id.product_brand_id.fenicio_brand_id if product_template_id.product_brand_id and product_template_id.product_brand_id.fenicio_brand_id else '0',
@@ -157,10 +150,10 @@ class ApiInternal(models.Model):
                             'presentaciones': [],
                         }
 
-                    listaVenta = self.env.company.fenicio_pricelist_venta_id
-                    listaPrecios = self.env.company.fenicio_pricelist_lista_id
-                    listaAlternativo = self.env.company.fenicio_pricelist_alternativo_id
-                    
+                    listaVenta = empresa.fenicio_pricelist_venta_id
+                    listaPrecios = empresa.fenicio_pricelist_lista_id
+                    listaAlternativo = empresa.fenicio_pricelist_alternativo_id
+
 
                     if not presentacion_attrs:
                         codigo = variante.default_code or ''
@@ -304,39 +297,25 @@ class ApiInternal(models.Model):
 
 
     def _get_fenicio_stock(self, product_id, token):
-    # Obtener ubicaciones configuradas para la compañía
-        fenicio_locations = self.env.company.fenicio_stock_location_ids
-        
+        website = self.verificar_token(token)
+        fenicio_locations = website.fenicio_stock_location_ids
+
         if not fenicio_locations:
-            _logger.warning("Producto %s: No hay ubicaciones Fenicio configuradas para la compañía %s", product_id.default_code, self.env.company.id)
+            _logger.warning("Producto %s: No hay ubicaciones Fenicio configuradas para el sitio web %s", product_id.default_code, website.name)
             return 0.0
-        
-        
-        # Obtener el tope máximo de stock a mostrar
-        variante = self.env['product.product'].browse(product_id.id);
-        
-        empresa = self.verificar_token(token);
 
-        if not empresa or not empresa.cantidad_stock_bydefault:
-            cantidad_bydefault = 0
-        else:
-            cantidad_bydefault = empresa.cantidad_stock_bydefault
-
+        variante = self.env['product.product'].browse(product_id.id)
+        cantidad_bydefault = website.fenicio_cantidad_stock_bydefault or 0
         tope_maximo = variante.available_threshold if variante.show_availability and variante.available_threshold > 0 else cantidad_bydefault
 
-
-
-        
         stock_atp = 0.0
         for location in fenicio_locations:
             qty_atp = self.env['stock.quant']._get_available_quantity(product_id, location)
             stock_atp += qty_atp
-        
-        _logger.info(f"Stock por defecto {cantidad_bydefault}, stock ATP {stock_atp}, tope máximo {tope_maximo} para el producto {product_id.default_code} en la compañía {self.env.company.name}")
-        
-        stock_final = min(stock_atp, tope_maximo)
-        
-        return stock_final
+
+        _logger.info(f"Stock por defecto {cantidad_bydefault}, stock ATP {stock_atp}, tope máximo {tope_maximo} para el producto {product_id.default_code} en el sitio web {website.name}")
+
+        return min(stock_atp, tope_maximo)
 
 
     @api.model
@@ -372,10 +351,11 @@ class ApiInternal(models.Model):
         # Obtener stock usando la ubicación configurada en la empresa
         stock = self._get_fenicio_stock(product_id, token)
 
-        # Obtener listas de precio de la compañía
-        listaVenta = self.env.company.fenicio_pricelist_venta_id
-        listaPrecios = self.env.company.fenicio_pricelist_lista_id
-        listaAlternativo = self.env.company.fenicio_pricelist_alternativo_id
+        # Obtener listas de precio del sitio web
+        website = self.verificar_token(token)
+        listaVenta = website.fenicio_pricelist_venta_id
+        listaPrecios = website.fenicio_pricelist_lista_id
+        listaAlternativo = website.fenicio_pricelist_alternativo_id
 
         # Obtener precio de lista
         precio_lista = 0.0
@@ -432,7 +412,7 @@ class ApiInternal(models.Model):
             codigo = product_id.default_code or str(product_id.id)
 
         # Obtener código de moneda
-        currency_code = self.env.company.currency_id.name
+        currency_code = website.company_id.currency_id.name
         
         return {
             'codigo': codigo,
@@ -616,8 +596,9 @@ class ApiInternal(models.Model):
         estados = ['EN_CURSO', 'APROBADA', 'ABANDONADA', 'PAGO_PENDIENTE', 'REQUIERE_APROBACION', 'CANCELADA']
         
 
-        fenicio_compania = self.env.company
-        
+        fenicio_website = self.verificar_token(token)
+        fenicio_compania = fenicio_website.company_id
+
         # verificar que sea un estado valido
         if 'estado' not in json_data or json_data['estado'] not in estados:
             return {'error': 'Estado de la orden no válido'}
@@ -702,8 +683,9 @@ class ApiInternal(models.Model):
             if picking_error:
                 raise UserError(picking_error)
 
-            if estado in ['PAGO_PENDIENTE', 'REQUIERE_APROBACION', 'APROBADA']:
-                
+            auto_invoice = self.env['ir.config_parameter'].sudo().get_param('sale.automatic_invoice')
+            if auto_invoice and estado in ['PAGO_PENDIENTE', 'REQUIERE_APROBACION', 'APROBADA']:
+
                 if len(sale_order_id.invoice_ids) == 0:
                     if not sale_order_id.create_invoice_fenicio():
                         raise UserError("No se pudo crear la factura para la orden")
@@ -731,12 +713,12 @@ class ApiInternal(models.Model):
 
                         invoice_id.create_payment_fenicio(json_data_pago, mode_update=(len(payment_ids) > 0), payment_ids=payment_ids)
 
-
-                if estado == 'APROBADA' and sale_order_id.invoice_ids:
-                    transaction_result = sale_order_id.create_payment_transaction(json_data)
-                    # Si hay error en la transacción, lanzar error para rollback total
-                    if 'error' in transaction_result:
-                        raise UserError(transaction_result['error'])
+            # La transacción de pago se crea siempre que el estado sea APROBADA,
+            # independientemente de si se generó factura automática o no
+            if estado == 'APROBADA' and 'pago' in json_data and json_data['pago']:
+                transaction_result = sale_order_id.create_payment_transaction(json_data)
+                if 'error' in transaction_result:
+                    raise UserError(transaction_result['error'])
             
             return {
                 'referencia': sale_order_id.display_name,
