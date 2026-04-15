@@ -101,11 +101,12 @@ class ManualPaymentFieldConfig(models.Model):
         for key, label in _legacy_aliases.items():
             result.append((key, label))
         # Campos reales de payment.transaction (Char/Text, no readonly, no computed)
+        # Se excluyen los alias heredados para evitar claves duplicadas en el Selection
         tx_model = self.env["payment.transaction"]
         skip_fields = {
             "id", "display_name", "create_uid", "create_date",
             "write_uid", "write_date", "__last_update",
-        }
+        } | set(_legacy_aliases)
         for fname, field_obj in sorted(tx_model._fields.items()):
             if fname in skip_fields:
                 continue
