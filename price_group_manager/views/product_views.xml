@@ -44,7 +44,7 @@
                                     type="object" 
                                     string="Forzar Sincronización en Variantes" 
                                     class="btn-warning"
-                                    confirm="¿Está seguro de que desea forzar la sincronización? Esto eliminará todas las líneas de agrupador de las variantes y las reemplazará con las del template."/>
+                                    confirm="¿Está seguro de que desea forzar la sincronización? Esto eliminará todas las líneas de agrupador y las reemplazará con las del template."/>
                         </group>
                     </page>
                 </xpath>

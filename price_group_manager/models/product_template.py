@@ -35,8 +35,7 @@ class ProductTemplate(models.Model):
         help='Cantidad total de agrupadores de precio asignados'
     )
 
-    @api.depends('x_price_group_line_ids', 'x_price_group_line_ids.activo',
-                'x_price_group_line_ids.date_start', 'x_price_group_line_ids.date_end')
+    @api.depends('x_price_group_line_ids', 'x_price_group_line_ids.activo', 'x_price_group_line_ids.date_start', 'x_price_group_line_ids.date_end')
     def _compute_price_groups(self):
         """
         Calcula los agrupadores de precio vigentes para este producto template.
@@ -102,19 +101,16 @@ class ProductTemplate(models.Model):
         
         # Verificar que haya líneas en el template
         if not self.x_price_group_line_ids:
-            raise ValidationError(_(
-                'No hay agrupadores de precio configurados en este producto template.'
-            ))
+            raise ValidationError(_('No hay agrupadores de precio configurados en este producto template.'))
         
-        # Obtener la última línea activa del template
+        # Obtener la última línea de tipo template (no tiene pq estar activa)
         last_line = self.x_price_group_line_ids.filtered(
-            lambda l: l.activo and l.origin == 'template'
+            lambda l: l.origin == 'template'
+            # lambda l: l.activo and l.origin == 'template'
         ).sorted(lambda l: l.date_start or date.min, reverse=True)[:1]
         
         if not last_line:
-            raise ValidationError(_(
-                'No hay agrupadores de precio de origen template activos en este producto template.'
-            ))
+            raise ValidationError(_('No hay agrupadores de precio de origen template en este producto template.'))
         
         # Eliminar todas las líneas existentes de las variantes
         variant_lines = self.env['x_price_group_line'].search([
@@ -135,18 +131,10 @@ class ProductTemplate(models.Model):
                 'origin': 'variant',
                 'parent_line_id': last_line.id,
             })
-        
-        # return {
-        #     'type': 'ir.actions.client',
-        #     'tag': 'display_notification',
-        #     'params': {
-        #         'title': _('Sincronización Completada'),
-        #         'message': _('Se sincronizaron %d variantes con el agrupador "%s".') % (
-        #             len(self.product_variant_ids), last_line.price_group_id.name
-        #         ),
-        #         'type': 'success',
-        #     }
-        # }
+
+        self.x_price_group_line_ids.filtered(lambda l: l.origin == 'template').write({
+            'activo': False
+        })
 
     def action_add_price_group(self):
         """
