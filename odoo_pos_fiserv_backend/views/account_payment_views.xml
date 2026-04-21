@@ -1,0 +1,122 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <!--
+            Los campos Fiserv deben ir FUERA de group2 (Diario / método de pago).
+            Insertarlos tras payment_method_line_id rompía el layout de dos columnas y
+            las etiquetas de Diario, Método de pago y campos siguientes del formulario estándar.
+        -->
+        <record id="account_payment_form_fiserv_terminal" model="ir.ui.view">
+            <field name="name">account.payment.form.fiserv.terminal</field>
+            <field name="model">account.payment</field>
+            <field name="inherit_id" ref="account.view_account_payment_form"/>
+            <field name="priority" eval="50"/>
+            <field name="arch" type="xml">
+                <!--
+                    Botón «Confirmar» estándar: oculto mientras el pago use terminal
+                    Fiserv y la transacción no esté aprobada. También oculto durante
+                    el hilo ITD activo. Fuera del flujo Fiserv, se comporta como siempre.
+                -->
+                <xpath expr="//button[@name='action_post']" position="attributes">
+                    <attribute name="invisible">state != 'draft' or pos_integrated_post_blocked</attribute>
+                </xpath>
+                <!--
+                    Ocultar el ``payment_transaction_id`` nativo (heredado de ``account_payment``)
+                    cuando la transacción es Fiserv: lo reemplazamos por uno propio con label
+                    amigable dentro del grupo "Cobro con terminal Fiserv".
+                -->
+                <xpath expr="//field[@name='payment_transaction_id'][@groups='base.group_no_one']" position="attributes">
+                    <attribute name="invisible">1</attribute>
+                </xpath>
+                <!--
+                    Botón «Cancelar» estándar: oculto cuando la transacción Fiserv
+                    fue aprobada o hay una operación en curso.
+                -->
+                <xpath expr="//button[@name='action_cancel']" position="attributes">
+                    <attribute name="invisible">state != 'draft' or pos_integrated_cancel_blocked</attribute>
+                </xpath>
+                <!-- Ocultar botones "Facturar"/"Obtener PDF" de
+                     ``l10n_uy_einvoice_uruware`` cuando se usa terminal Fiserv;
+                     el CFE se genera desde la factura, no desde este pago. -->
+                <xpath expr="//button[@name='facturar']" position="attributes">
+                    <attribute name="invisible">
+                        move_type in ('entry', 'in_invoice', 'in_refund', 'in_receipt') or fiserv_charge_on_pos
+                    </attribute>
+                </xpath>
+                <xpath expr="//button[@name='obtener_pdf'][not(@icon)]" position="attributes">
+                    <attribute name="invisible">
+                        move_type in ('entry', 'in_invoice', 'in_refund', 'in_receipt') or fiserv_charge_on_pos
+                    </attribute>
+                </xpath>
+                <!--
+                    Nuevo botón «Crear transacción»: visible solo cuando el pago usa
+                    terminal Fiserv, está en borrador, no hay transacción previa aprobada
+                    y el hilo ITD no está en curso. Al pulsarlo se envía al pinpad y se
+                    espera la aprobación; el botón «Confirmar» aparece luego.
+                -->
+                <xpath expr="//button[@name='action_post']" position="before">
+                    <field name="fiserv_is_integrated_journal" invisible="1"/>
+                    <field name="fiserv_tx_is_done" invisible="1"/>
+                    <field name="fiserv_tx_state" invisible="1"/>
+                    <field name="fiserv_source_invoice_ids" invisible="1" widget="many2many_tags"/>
+                    <field name="pos_integrated_post_blocked" invisible="1"/>
+                    <field name="pos_integrated_cancel_blocked" invisible="1"/>
+                    <button name="action_fiserv_create_transaction"
+                            type="object"
+                            string="Crear transacción"
+                            class="oe_highlight"
+                            invisible="state != 'draft' or fiserv_async_terminal_pending or not fiserv_charge_on_pos or fiserv_tx_is_done"/>
+                </xpath>
+                <!-- Banner de procesamiento Fiserv: visible mientras el hilo ITD está activo -->
+                <xpath expr="//group[@name='main_group']" position="before">
+                    <field name="fiserv_async_terminal_pending" invisible="1"/>
+                    <div role="alert" class="alert alert-warning text-center"
+                         invisible="not fiserv_async_terminal_pending">
+                        <i class="fa fa-spinner fa-spin me-2"/>
+                        <strong>Procesando cobro en terminal Fiserv... Espere por favor.</strong>
+                    </div>
+                    <div role="alert" class="alert alert-success text-center"
+                         invisible="not fiserv_tx_is_done or state != 'draft'">
+                        <i class="fa fa-check-circle me-2"/>
+                        <strong>Transacción Fiserv aprobada. Pulse «Confirmar» para registrar el pago.</strong>
+                    </div>
+                </xpath>
+                <xpath expr="//group[@name='main_group']" position="after">
+                    <!--
+                        Visible también en Registrado: el usuario debe ver que el cobro fue por Fiserv
+                        y qué PosID se usó. En borrador se edita; confirmado solo lectura.
+                    -->
+                    <group
+                        string="Cobro con terminal Fiserv (contabilidad)"
+                        name="fiserv_terminal_account_group"
+                        colspan="2"
+                        invisible="is_internal_transfer or payment_type not in ('inbound', 'outbound') or (not fiserv_is_fiserv_payment_line and (not payment_transaction_id or fiserv_payment_tx_provider_code != 'fiserv'))">
+                        <field name="fiserv_payment_tx_provider_code" invisible="1"/>
+                        <field name="fiserv_is_fiserv_payment_line" invisible="1"/>
+                        <field name="fiserv_selectable_terminal_ids" invisible="1"/>
+                        <field name="fiserv_need_terminal_choice" invisible="1"/>
+                        <field name="fiserv_charge_on_pos" readonly="state != 'draft'"/>
+                        <field name="fiserv_terminal_id"
+                               options="{'no_create': True}"
+                               readonly="state != 'draft'"
+                               invisible="not fiserv_charge_on_pos or (state != 'draft' and not fiserv_terminal_id)"/>
+                        <field name="payment_transaction_id"
+                               string="Transacción Fiserv (payment.transaction)"
+                               options="{'no_create': True}"
+                               readonly="1"
+                               invisible="not payment_transaction_id or fiserv_payment_tx_provider_code != 'fiserv'"/>
+                    </group>
+                    <group
+                        string="Devolución con terminal Fiserv"
+                        name="fiserv_refund_account_group"
+                        colspan="2"
+                        invisible="payment_type != 'outbound' or is_internal_transfer or (state == 'draft' and not fiserv_charge_on_pos) or (state != 'draft' and not fiserv_original_transaction_id)">
+                        <field name="fiserv_original_transaction_id"
+                               options="{'no_create': True}"
+                               readonly="state != 'draft'"/>
+                    </group>
+                </xpath>
+            </field>
+        </record>
+    </data>
+</odoo>

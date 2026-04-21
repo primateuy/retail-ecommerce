@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <!--
+            Form de factura: oculta el botón «Registrar pago» estándar (lanza el
+            wizard account.payment.register) y agrega uno nuevo que abre el form
+            de account.payment directamente con la factura precargada.
+        -->
+        <record id="account_move_form_fiserv_register_payment" model="ir.ui.view">
+            <field name="name">account.move.form.fiserv.register.payment</field>
+            <field name="model">account.move</field>
+            <field name="inherit_id" ref="account.view_move_form"/>
+            <field name="priority" eval="50"/>
+            <field name="arch" type="xml">
+                <!-- Ocultar el botón estándar de registrar pago. -->
+                <xpath expr="//button[@name='action_register_payment']" position="attributes">
+                    <attribute name="invisible">1</attribute>
+                </xpath>
+                <!-- Nuevo botón (mismas condiciones de visibilidad que el estándar).
+                     Se oculta también cuando OCA backend coexiste (pos_register_hide_fiserv=True). -->
+                <xpath expr="//button[@name='action_register_payment']" position="before">
+                    <field name="pos_register_hide_fiserv" invisible="1"/>
+                    <button name="action_fiserv_register_payment"
+                            string="Registrar pago"
+                            type="object"
+                            class="oe_highlight"
+                            invisible="state != 'posted' or payment_state not in ('not_paid', 'partial', 'in_payment') or move_type not in ('out_invoice', 'out_refund', 'in_invoice', 'in_refund') or pos_register_hide_fiserv"/>
+                </xpath>
+            </field>
+        </record>
+
+    </data>
+
+    <!--
+        Server action para la grilla de facturas: «Registrar pago Fiserv»
+        (agrupado). Aparece en el menú Acción de la vista tree.
+        noupdate=1 en el wrapper <data>: si OCA backend quita el binding tras
+        coexistir, un -u posterior del Fiserv backend no debe reactivarlo.
+    -->
+    <data noupdate="1">
+        <record id="action_server_fiserv_register_payment" model="ir.actions.server">
+            <field name="name">Registrar pago</field>
+            <field name="model_id" ref="account.model_account_move"/>
+            <field name="binding_model_id" ref="account.model_account_move"/>
+            <field name="binding_view_types">list</field>
+            <field name="state">code</field>
+            <field name="code">moves = records or env['account.move'].browse(env.context.get('active_ids') or [])
+action = moves.action_fiserv_register_payment() if moves else {'type': 'ir.actions.act_window_close'}</field>
+        </record>
+    </data>
+</odoo>

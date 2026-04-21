@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <record id="view_account_payment_register_form_fiserv" model="ir.ui.view">
+            <field name="name">account.payment.register.form.fiserv</field>
+            <field name="model">account.payment.register</field>
+            <field name="inherit_id" ref="account.view_account_payment_register_form"/>
+            <field name="priority" eval="50"/>
+            <field name="arch" type="xml">
+                <xpath expr="//group[@name='group1']" position="after">
+                    <group
+                        string="Terminal Fiserv (ITD)"
+                        name="fiserv_register_group"
+                        colspan="2"
+                        invisible="not fiserv_is_fiserv_journal">
+                        <field name="fiserv_is_fiserv_journal" invisible="1"/>
+                        <field name="fiserv_selectable_terminal_ids" invisible="1"/>
+                        <field name="fiserv_need_terminal_choice" invisible="1"/>
+                        <field name="fiserv_charge_on_pos"/>
+                        <field name="fiserv_terminal_id"
+                               options="{'no_create': True}"
+                               invisible="not fiserv_charge_on_pos or not fiserv_need_terminal_choice"/>
+                    </group>
+                </xpath>
+            </field>
+        </record>
+    </data>
+</odoo>

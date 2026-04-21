@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo noupdate="1">
+    <data>
+        <!--
+            Nota: payment_provider_fiserv y account_journal_fiserv no se declaran
+            aquí como <record>. Son creados (si faltan) por el post_init_hook, que
+            además asegura el ir.model.data correspondiente. Así se evita que la
+            carga del XML intente reescribir campos sobre registros pre-existentes
+            de instalaciones con el módulo viejo.
+        -->
+
+        <!-- Método de pago Fiserv (payment.method) -->
+        <record id="payment_method_fiserv" model="payment.method">
+            <field name="name">Fiserv ITD</field>
+            <field name="code">fiserv</field>
+            <field name="sequence">1001</field>
+            <field name="active">True</field>
+            <field name="image" type="base64" file="payment/static/img/card.png"/>
+            <field name="support_tokenization">False</field>
+            <field name="support_express_checkout">False</field>
+            <field name="supported_country_ids" eval="[(6, 0, [ref('base.uy')])]"/>
+            <field name="supported_currency_ids"
+                   eval="[(6, 0, [ref('base.UYU'), ref('base.USD')])]"/>
+        </record>
+
+        <!-- Método inbound en contabilidad (cobros) -->
+        <record id="account_payment_method_fiserv" model="account.payment.method">
+            <field name="name">Fiserv ITD</field>
+            <field name="code">fiserv</field>
+            <field name="payment_type">inbound</field>
+        </record>
+
+        <!-- Método outbound en contabilidad (devoluciones / envío de dinero).
+             Necesario para que en el form de account.payment tipo 'outbound'
+             aparezca la línea de método de pago Fiserv y se pueda marcar
+             «Cobrar en terminal Fiserv» para devolver al cliente. -->
+        <record id="account_payment_method_fiserv_outbound" model="account.payment.method">
+            <field name="name">Fiserv ITD</field>
+            <field name="code">fiserv</field>
+            <field name="payment_type">outbound</field>
+        </record>
+
+        <record id="fiserv_default_config_url" model="ir.config_parameter">
+            <field name="key">fiserv.default_url</field>
+            <field name="value">https://testitd.firstdata.com/v2/ITDService</field>
+        </record>
+
+        <record id="fiserv_default_config_timeout" model="ir.config_parameter">
+            <field name="key">fiserv.default_timeout</field>
+            <field name="value">30</field>
+        </record>
+
+        <record id="fiserv_default_config_retry_attempts" model="ir.config_parameter">
+            <field name="key">fiserv.retry_attempts</field>
+            <field name="value">3</field>
+        </record>
+    </data>
+</odoo>

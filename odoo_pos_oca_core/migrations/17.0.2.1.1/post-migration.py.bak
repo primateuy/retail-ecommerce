@@ -1,0 +1,35 @@
+# -*- coding: utf-8 -*-
+"""
+Migración 17.0.2.1.0: corrige ``payment.transaction`` con provider OCA cuyo
+``payment_method_id`` apunta al fallback histórico (id=1 → 7Eleven) o al
+``payment.method`` code='oca' viejo en vez del nuevo vinculado al provider.
+"""
+
+import logging
+
+_logger = logging.getLogger(__name__)
+
+
+def migrate(cr, version):
+    if not version:
+        return
+    from odoo.api import Environment, SUPERUSER_ID
+    env = Environment(cr, SUPERUSER_ID, {})
+    provider = env['payment.provider'].sudo().search([('code', '=', 'oca')], limit=1)
+    if not provider or not provider.payment_method_ids:
+        _logger.info("OCA 17.0.2.1.0: sin provider o methods, skip.")
+        return
+    preferred = provider.payment_method_ids.filtered(lambda m: m.code == 'oca')
+    target = (preferred[:1] or provider.payment_method_ids[:1])
+    if not target:
+        return
+    bad = env['payment.transaction'].sudo().search([
+        ('provider_id', '=', provider.id),
+        ('payment_method_id', '!=', target.id),
+    ])
+    if bad:
+        bad.write({'payment_method_id': target.id})
+        _logger.info(
+            "OCA 17.0.2.1.0: %s payment.transaction corregidas a method_id=%s (%s)",
+            len(bad), target.id, target.code,
+        )

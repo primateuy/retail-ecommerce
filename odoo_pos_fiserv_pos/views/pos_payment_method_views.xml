@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <record id="pos_payment_method_form_fiserv" model="ir.ui.view">
+            <field name="name">pos.payment.method.form.fiserv</field>
+            <field name="model">pos.payment.method</field>
+            <field name="inherit_id" ref="point_of_sale.pos_payment_method_view_form"/>
+            <field name="arch" type="xml">
+                <xpath expr="//field[@name='use_payment_terminal']" position="after">
+                    <field name="company_id" invisible="1"/>
+                    <field name="fiserv_provider_id"
+                           invisible="use_payment_terminal != 'fiserv'"
+                           required="use_payment_terminal == 'fiserv'"/>
+                    <field name="fiserv_provider_is_multiple" invisible="1"/>
+                    <field name="fiserv_terminal_id"
+                           invisible="use_payment_terminal != 'fiserv' or not fiserv_provider_is_multiple"
+                           required="use_payment_terminal == 'fiserv' and fiserv_provider_is_multiple"/>
+                    <field name="url_webservice"
+                           invisible="use_payment_terminal != 'fiserv'"
+                           required="use_payment_terminal == 'fiserv'"/>
+                    <field name="codigo_sistema"
+                           invisible="use_payment_terminal != 'fiserv'"
+                           required="use_payment_terminal == 'fiserv'"/>
+                    <field name="codigo_terminal"
+                           invisible="use_payment_terminal != 'fiserv'"
+                           required="use_payment_terminal == 'fiserv'"/>
+                    <field name="client_app_id"
+                           invisible="use_payment_terminal != 'fiserv'"
+                           required="use_payment_terminal == 'fiserv'"/>
+                    <field name="codigo_sucursal"
+                           invisible="use_payment_terminal != 'fiserv'"
+                           required="use_payment_terminal == 'fiserv'"/>
+                    <field name="fiserv_branch" invisible="use_payment_terminal != 'fiserv'"/>
+                </xpath>
+            </field>
+        </record>
+    </data>
+</odoo>

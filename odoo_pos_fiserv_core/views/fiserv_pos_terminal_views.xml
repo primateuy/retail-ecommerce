@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <record id="fiserv_pos_terminal_view_tree" model="ir.ui.view">
+            <field name="name">fiserv.pos.terminal.tree</field>
+            <field name="model">fiserv.pos.terminal</field>
+            <field name="arch" type="xml">
+                <tree>
+                    <field name="name"/>
+                    <field name="pos_id"/>
+                    <field name="payment_provider_id"/>
+                </tree>
+            </field>
+        </record>
+
+        <record id="fiserv_pos_terminal_view_form" model="ir.ui.view">
+            <field name="name">fiserv.pos.terminal.form</field>
+            <field name="model">fiserv.pos.terminal</field>
+            <field name="arch" type="xml">
+                <form>
+                    <sheet>
+                        <group>
+                            <field name="name"/>
+                            <field name="pos_id"/>
+                            <field name="payment_provider_id"/>
+                        </group>
+                    </sheet>
+                </form>
+            </field>
+        </record>
+
+        <record id="fiserv_pos_terminal_action" model="ir.actions.act_window">
+            <field name="name">Terminales Fiserv</field>
+            <field name="res_model">fiserv.pos.terminal</field>
+            <field name="view_mode">tree,form</field>
+        </record>
+
+        <menuitem id="menu_fiserv_pos_terminal"
+                  name="Terminales Fiserv"
+                  parent="account.menu_finance_configuration"
+                  action="fiserv_pos_terminal_action"
+                  sequence="80"/>
+    </data>
+</odoo>

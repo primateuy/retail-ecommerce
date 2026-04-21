@@ -15,7 +15,7 @@
     'author': 'PRIMATE',
     'website': 'https://www.primate.com',
     'category': 'POS OCA',
-    'version': '17.0.2.0.0',
+    'version': '17.0.2.0.1',
     'depends': ['odoo_pos_oca', 'point_of_sale', 'payment', 'sale', 'loyalty'],
     'data': [
         'security/ir.model.access.csv',

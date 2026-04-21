@@ -1,2 +1,3 @@
 id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
-multiple_pos_config,multiple_pos_config,model_multiple_pos_config,base.group_user,1,1,1,1
+access_multiple_pos_config_user,multiple.pos.config user,model_multiple_pos_config,base.group_user,1,1,1,0
+access_multiple_pos_config_manager,multiple.pos.config manager,model_multiple_pos_config,account.group_account_manager,1,1,1,1
