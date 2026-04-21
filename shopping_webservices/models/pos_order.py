@@ -27,7 +27,6 @@ class PosOrder(models.Model):
 
     def _build_shopping_payment_distribution(self, journal):
         distribution = []
-        shopping_code = journal.codigoShopping
 
         contado_method = journal.shopping_payment_method_ids.filtered(
             lambda m: m.payment_type == 'contado'
@@ -40,17 +39,22 @@ class PosOrder(models.Model):
             pos_method = payment.payment_method_id
             shopping_method = None
 
-            if pos_method.is_pos_shopping and pos_method.shopping_payment_method_id:
-                shopping_method = pos_method.shopping_payment_method_id
-
-            if not shopping_method and payment.payment_transaction_id:
+            # Primero: buscar por el código de la transacción (resuelve marca/emisor)
+            # dentro de los métodos asignados al diario
+            if payment.payment_transaction_id:
                 tx_code = payment.payment_transaction_id.shopping_payment_code
-                if tx_code and shopping_code:
-                    shopping_method = self.env['shopping.payment.method'].search([
-                        ('payment_code', '=', tx_code),
-                        ('shopping_code', '=', shopping_code),
-                    ], limit=1)
+                if tx_code:
+                    shopping_method = journal.shopping_payment_method_ids.filtered(
+                        lambda m: m.payment_code == tx_code
+                    )[:1]
 
+            # Segundo: si no hay transacción, usar el mapeo estático del método POS
+            if not shopping_method and pos_method.is_pos_shopping and pos_method.shopping_payment_method_id:
+                candidate = pos_method.shopping_payment_method_id
+                if candidate in journal.shopping_payment_method_ids:
+                    shopping_method = candidate
+
+            # Fallback: contado
             if not shopping_method:
                 if contado_method:
                     _logger.warning(
@@ -60,8 +64,8 @@ class PosOrder(models.Model):
                     shopping_method = contado_method
                 else:
                     _logger.warning(
-                        'Shopping: sin método para pago PDV %s (%s) y sin Contado en diario %s. Se omite.',
-                        payment.id, pos_method.name, shopping_code
+                        'Shopping: sin método para pago PDV %s (%s) y sin Contado en diario. Se omite.',
+                        payment.id, pos_method.name
                     )
                     continue
 

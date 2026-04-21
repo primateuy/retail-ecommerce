@@ -15,7 +15,7 @@
     'version': '0.2',
 
     
-    'depends': ['base', 'web', 'l10n_uy', 'l10n_uy_einvoice_uruware', 'account', 'account_accountant', 'sale_management', 'loyalty', 'odoo_pos_oca', 'payment'],
+    'depends': ['base', 'web', 'l10n_uy', 'account', 'account_accountant', 'sale_management', 'loyalty', 'payment', 'point_of_sale'],
 
     'data': [
         'security/ir.model.access.csv',
