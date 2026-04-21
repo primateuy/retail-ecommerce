@@ -285,10 +285,9 @@ class AccountMove(models.Model):
         Convierte formatos como: 2026-02-06T15:14:16.0000000-03:00 → 2026-02-06 15:14
         """
         try:
-            cfe_firma = getattr(self, 'cfe_fecha_hora_firma', False)
-            if cfe_firma:
+            if self.cfe_fecha_hora_firma:
                 # Parsear el formato ISO 8601 con timezone
-                dt = datetime.fromisoformat(cfe_firma)
+                dt = datetime.fromisoformat(self.cfe_fecha_hora_firma)
                 return dt.strftime('%Y-%m-%d %H:%M')
         except (ValueError, AttributeError):
             pass
@@ -598,18 +597,16 @@ class AccountMove(models.Model):
                 raise UserError("Debe definir la distribución de pagos cuando hay múltiples métodos de pago")
 
         
-        codigoCFE, serieCFE, numeroCFE = '', '', ''
+        codigoCFE, serieCFE, numeroCFE = '', '', '';
 
-        edi_doc = getattr(self, 'l10n_uy_edi_document_id', False)
-        if self.l10n_latam_document_type_id and edi_doc:
-            codigoCFE = str(self.l10n_latam_document_type_id.code)
-            serieCFE, numeroCFE = edi_doc._get_doc_parts(self)
+        if self.cfe_serie_num:
+            codigoCFE, serieCFE, numeroCFE = self.cfe_serie_num.split('-');
 
         if self.journal_id.homologacion:
-            _logger.info("Modo homologación activo")
+            _logger.info("Modo homologación activo");
             codigoCFE = "101"
             serieCFE = "PRU"
-            numeroCFE = str(random.randint(1, 1000))
+            numeroCFE = str(random.randint(1, 1000))  # Usar el número de factura de prueba
 
         
         _logger.info(f"{codigoCFE} - {serieCFE} - {numeroCFE}");
@@ -822,10 +819,8 @@ class AccountMove(models.Model):
 
         # Datos CFE
         codigoCFE, serieCFE, numeroCFE = '', '', ''
-        edi_doc = getattr(self, 'l10n_uy_edi_document_id', False)
-        if self.l10n_latam_document_type_id and edi_doc:
-            codigoCFE = str(self.l10n_latam_document_type_id.code)
-            serieCFE, numeroCFE = edi_doc._get_doc_parts(self)
+        if self.cfe_serie_num:
+            codigoCFE, serieCFE, numeroCFE = self.cfe_serie_num.split('-')
 
         if self.journal_id.homologacion:
             codigoCFE = "101"
@@ -840,10 +835,9 @@ class AccountMove(models.Model):
             fecha_emision = self._format_fecha_emision_cfe()
             fecha_transferencia = fields.Date.today().isoformat() 
             
-            cfe_firma = getattr(self, 'cfe_fecha_hora_firma', False)
-            if cfe_firma:
+            if self.cfe_fecha_hora_firma:
                 try:
-                    dt = datetime.fromisoformat(cfe_firma)
+                    dt = datetime.fromisoformat(self.cfe_fecha_hora_firma)
                     hora_transferencia = dt.strftime('%H:%M')
                 except (ValueError, AttributeError):
                     hora_transferencia = self._now_uruguay().strftime('%H:%M')
@@ -1057,17 +1051,15 @@ class AccountMove(models.Model):
         monto_credito = str(pagoTotalSinIva) if esCredito else '0'
         monto_debito = str(pagoTotalSinIva) if esDebito else '0'
         
-        codigoCFE, serieCFE, numeroCFE = '', '', ''
+        codigoCFE, serieCFE, numeroCFE = '', '', '';
 
-        edi_doc = getattr(self, 'l10n_uy_edi_document_id', False)
-        if self.l10n_latam_document_type_id and edi_doc:
-            codigoCFE = str(self.l10n_latam_document_type_id.code)
-            serieCFE, numeroCFE = edi_doc._get_doc_parts(self)
+        if self.cfe_serie_num:
+            codigoCFE, serieCFE, numeroCFE = self.cfe_serie_num.split('-');
 
         if self.journal_id.homologacion:
             codigoCFE = "101"
             serieCFE = "PRU"
-            numeroCFE = str(random.randint(1, 1000))
+            numeroCFE = str(random.randint(1, 1000))  # Usar el número de factura de prueba
             
         
         try:
@@ -1451,10 +1443,8 @@ class AccountMove(models.Model):
 
         # Datos CFE
         codigoCFE, serieCFE, numeroCFE = '', '', ''
-        edi_doc = getattr(self, 'l10n_uy_edi_document_id', False)
-        if self.l10n_latam_document_type_id and edi_doc:
-            codigoCFE = str(self.l10n_latam_document_type_id.code)
-            serieCFE, numeroCFE = edi_doc._get_doc_parts(self)
+        if self.cfe_serie_num:
+            codigoCFE, serieCFE, numeroCFE = self.cfe_serie_num.split('-')
 
         if self.journal_id.homologacion:
             _logger.info("Modo homologación activo - Costa Urbana")
@@ -1472,10 +1462,9 @@ class AccountMove(models.Model):
             fecha_transferencia = fields.Date.today().isoformat()  # Formato: 2026-01-30
             
             # Extraer hora para el campo Horatransferencia
-            cfe_firma = getattr(self, 'cfe_fecha_hora_firma', False)
-            if cfe_firma:
+            if self.cfe_fecha_hora_firma:
                 try:
-                    dt = datetime.fromisoformat(cfe_firma)
+                    dt = datetime.fromisoformat(self.cfe_fecha_hora_firma)
                     hora_transferencia = dt.strftime('%H:%M')
                 except (ValueError, AttributeError):
                     hora_transferencia = self._now_uruguay().strftime('%H:%M')
