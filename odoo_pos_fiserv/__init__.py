@@ -1,6 +1,2 @@
 # -*- coding: utf-8 -*-
-
-from . import models
-from . import wizard
-from . import hooks
-from .hooks import post_init_hook
+# Meta-módulo: consolida odoo_pos_fiserv_core + _pos + _backend.

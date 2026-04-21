@@ -319,6 +319,51 @@ class PosOrder(models.Model):
         pos_order._associate_oca_transactions()
         return result
 
+    def _generate_pos_order_invoice(self):
+        """
+        Si el pago ya fue capturado por el pinpad OCA (``payment.transaction`` en
+        ``done``), atrapar cualquier excepción del flujo de facturación para que
+        la orden quede persistida como ``paid`` y el POS no se freeze.
+
+        Motivo: el dinero ya se cobró en el pinpad; si la factura UY falla por
+        datos faltantes (p.ej. receptor sin RUT), la orden debe quedar guardada
+        con ``to_invoice=False`` y el problema se resuelve a posteriori desde el
+        backoffice. Reventar aquí hace que Odoo revierta la orden a draft y el
+        POS pierda sync con la pinpad.
+        """
+        self.ensure_one()
+        has_oca_tx = bool(self.env['payment.transaction'].sudo().search_count([
+            ('pos_order_id', '=', self.id),
+            ('provider_id.code', '=', 'oca'),
+            ('state', '=', 'done'),
+        ]))
+        if not has_oca_tx:
+            return super()._generate_pos_order_invoice()
+        try:
+            return super()._generate_pos_order_invoice()
+        except Exception as exc:
+            _logger.error(
+                "POS OCA: fallo generando factura orden %s; orden queda paid "
+                "con to_invoice=False. Error: %s",
+                self.name, exc, exc_info=True,
+            )
+            # No se usa savepoint: UserError no aborta la tx PG. Posibles
+            # ``account.move`` en draft parciales quedan para corrección manual.
+            try:
+                self.sudo().write({'to_invoice': False})
+            except Exception:
+                _logger.debug("POS OCA: no se pudo setear to_invoice=False", exc_info=True)
+            try:
+                self.message_post(body=_(
+                    "No se pudo generar la factura automáticamente tras cobrar en "
+                    "terminal OCA: %s.\n\nLa transacción fue aprobada; la orden "
+                    "queda pagada. Corrija los datos y regenere la factura desde "
+                    "el backend."
+                ) % (str(exc) or exc.__class__.__name__))
+            except Exception:
+                _logger.debug("POS OCA: no se pudo postear mensaje en chatter", exc_info=True)
+            return False
+
     def _associate_oca_transactions(self):
         """
         Asocia transacciones OCA con esta orden usando la referencia de transacción

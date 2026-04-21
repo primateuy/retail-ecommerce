@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo noupdate="1">
+    <data>
+        <!--
+            Nota: payment_provider_oca y account_journal_oca se crean (si faltan)
+            en el post_init_hook, que también registra el ir.model.data. Se evita
+            declararlos en XML para no chocar con registros pre-existentes.
+        -->
+
+        <!-- Método de pago OCA (payment.method) -->
+        <record id="payment_method_oca" model="payment.method">
+            <field name="name">OCA POSLink</field>
+            <field name="code">oca</field>
+            <field name="sequence">1002</field>
+            <field name="active">True</field>
+            <field name="image" type="base64" file="payment/static/img/card.png"/>
+            <field name="support_tokenization">False</field>
+            <field name="support_express_checkout">False</field>
+            <field name="supported_country_ids" eval="[(6, 0, [ref('base.uy')])]"/>
+            <field name="supported_currency_ids"
+                   eval="[(6, 0, [ref('base.UYU'), ref('base.USD')])]"/>
+        </record>
+
+        <!-- Método inbound en contabilidad (cobros) -->
+        <record id="account_payment_method_oca" model="account.payment.method">
+            <field name="name">OCA POSLink</field>
+            <field name="code">oca</field>
+            <field name="payment_type">inbound</field>
+        </record>
+
+        <!-- Método outbound en contabilidad (devoluciones / envío de dinero).
+             Necesario para que en el form de account.payment tipo 'outbound'
+             aparezca la línea de método de pago OCA y se pueda marcar
+             «Cobrar en terminal OCA» para devolver al cliente. -->
+        <record id="account_payment_method_oca_outbound" model="account.payment.method">
+            <field name="name">OCA POSLink</field>
+            <field name="code">oca</field>
+            <field name="payment_type">outbound</field>
+        </record>
+
+        <record id="oca_default_config_url" model="ir.config_parameter">
+            <field name="key">oca.default_url</field>
+            <field name="value">https://amipci.oca.com.uy/POSInterface.AppWCF/PosConnection.svc/rest</field>
+        </record>
+
+        <record id="oca_default_config_timeout" model="ir.config_parameter">
+            <field name="key">oca.default_timeout</field>
+            <field name="value">30</field>
+        </record>
+
+        <record id="oca_default_config_retry_attempts" model="ir.config_parameter">
+            <field name="key">oca.retry_attempts</field>
+            <field name="value">3</field>
+        </record>
+    </data>
+</odoo>

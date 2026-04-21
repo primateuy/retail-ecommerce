@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <record id="pos_payment_method_form_multiple" model="ir.ui.view">
+            <field name="name">pos_payment_method_form_multiple</field>
+            <field name="model">pos.payment.method</field>
+            <field name="inherit_id" ref="odoo_pos_oca.pos_payment_method_form"/>
+            <field name="arch" type="xml">
+                <xpath expr="//field[@name='url_webservice']" position="replace">
+                    <field name="is_multiple" invisible="1"/>
+                    <field name="payment_provider"
+                           required="use_payment_terminal == 'oca'" invisible="use_payment_terminal != 'oca'"/>
+                    <field name="pos_id" invisible="use_payment_terminal != 'oca' or is_multiple != True"
+                           required="use_payment_terminal == 'oca'"/>
+                    <field name="url_webservice" invisible="is_multiple != False  or use_payment_terminal != 'oca'"
+                           required="use_payment_terminal == 'oca'"/>
+                </xpath>
+                <xpath expr="//field[@name='codigo_sistema']" position="replace">
+                    <field name="codigo_sistema" invisible="is_multiple != False or use_payment_terminal != 'oca'"
+                           required="use_payment_terminal == 'oca'"/>
+                </xpath>
+                <xpath expr="//field[@name='codigo_terminal']" position="replace">
+                    <field name="codigo_terminal" invisible="is_multiple != False or use_payment_terminal != 'oca'"
+                           required="use_payment_terminal == 'oca'"/>
+                </xpath>
+                <xpath expr="//field[@name='client_app_id']" position="replace">
+                    <field name="client_app_id" invisible="is_multiple != False  or use_payment_terminal != 'oca'"
+                           required="use_payment_terminal == 'oca'"/>
+                </xpath>
+                <xpath expr="//field[@name='codigo_sucursal']" position="replace">
+                    <field name="codigo_sucursal" invisible="is_multiple != False  or use_payment_terminal != 'oca'"
+                           required="use_payment_terminal == 'oca'"/>
+                </xpath>
+            </field>
+        </record>
+    </data>
+</odoo>

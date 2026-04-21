@@ -61,13 +61,29 @@ class PaymentTransaction(models.Model):
             _logger.info('Información de promoción actualizada en transacción OCA: %s', self.oca_transaction_id)
 
     @api.model
-    def create_oca_transaction_with_complete_data(self, oca_response, pos_order=None, pos_payment=None, transaction_id=None):
+    def create_oca_transaction_with_complete_data(
+        self,
+        oca_response,
+        pos_order=None,
+        pos_payment=None,
+        transaction_id=None,
+        account_payment_id=False,
+        **kwargs,
+    ):
         """
-        Extiende el método base para incluir información de promoción al crear transacciones
+        Extiende el método base para incluir información de promoción al crear transacciones.
+
+        ``account_payment_id`` se agrega para soportar el flujo backend contable
+        que introduce ``odoo_pos_oca_core`` (2026-04-19). Se propaga al super
+        sin alterar la lógica de promociones (que es puramente POS).
         """
-        # Llamar al método base primero
         transaction = super().create_oca_transaction_with_complete_data(
-            oca_response, pos_order, pos_payment, transaction_id
+            oca_response,
+            pos_order=pos_order,
+            pos_payment=pos_payment,
+            transaction_id=transaction_id,
+            account_payment_id=account_payment_id,
+            **kwargs,
         )
         
         # Procesar información de promoción si está presente

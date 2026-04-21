@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo noupdate="1">
+    <data>
+        <!--
+            Nota: pos_payment_method_fiserv se crea programáticamente en el
+            post_init_hook del módulo para evitar que la carga del XML intente
+            reescribir campos sobre un registro pre-existente (instalaciones
+            que vienen del módulo viejo ``odoo_pos_fiserv``). El hook también
+            registra el ir.model.data con xml_id ``pos_payment_method_fiserv``.
+        -->
+    </data>
+</odoo>

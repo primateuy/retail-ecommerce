@@ -1,107 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo noupdate="1">
     <data>
-        <!-- ========================================
-             CONFIGURACIÓN DEL PROVEEDOR DE PAGO OCA
-             ======================================== -->
-        
-        <!-- Método de pago OCA para payment.method -->
-        <record id="payment_method_oca" model="payment.method">
-            <field name="name">OCA</field>
-            <field name="code">oca</field>
-            <field name="sequence">1000</field>
-            <field name="active">True</field>
-            <field name="image" type="base64" file="payment/static/img/card.png"/>
-            <field name="support_tokenization">False</field>
-            <field name="support_express_checkout">False</field>
-            <field name="supported_country_ids"
-                   eval="[Command.set([
-                         ref('base.uy'),
-                     ])]"
-            />
-            <field name="supported_currency_ids"
-                   eval="[Command.set([
-                         ref('base.UYU'),
-                         ref('base.USD'),
-                     ])]"
-            />
-        </record>
+        <!--
+            Nota: pos_payment_method_oca se crea/detecta programáticamente en el
+            post_init_hook para evitar que la carga del XML intente reescribir
+            campos sobre un registro pre-existente (instalaciones con el módulo
+            viejo ``odoo_pos_oca`` monolítico). El hook también registra el
+            ir.model.data con xml_id ``pos_payment_method_oca``.
 
-        <!-- Proveedor de pago OCA -->
-        <record id="payment_provider_oca" model="payment.provider">
-            <field name="name">OCA</field>
-            <field name="code">oca</field>
-            <field name="state">test</field>
-            <field name="allow_tokenization">True</field>
-            <field name="payment_method_ids"
-                   eval="[(6, 0, [
-                       ref('odoo_pos_oca.payment_method_oca'),
-                       ref('payment.payment_method_card'),
-                   ])]"/>
-            <field name="company_id" eval="ref('base.main_company')"/>
-        </record>
-
-        <!-- Método de pago de cuenta OCA -->
-        <record id="account_payment_method_oca" model="account.payment.method">
-            <field name="name">OCA</field>
-            <field name="code">oca</field>
-            <field name="payment_type">inbound</field>
-        </record>
-
-        <!-- ========================================
-             CONFIGURACIÓN DEL DIARIO DE PAGO OCA
-             ======================================== -->
-        
-        <!-- Diario de pago OCA -->
-        <record id="account_journal_oca" model="account.journal">
-            <field name="name">OCA</field>
-            <field name="code">OCA</field>
-            <field name="type">bank</field>
-            <field name="company_id" eval="ref('base.main_company')"/>
-        </record>
-
-        <!-- ========================================
-             CONFIGURACIÓN DE MÉTODO DE PAGO POS
-             ======================================== -->
-        
-        <!-- Método de pago POS OCA -->
-        <record id="pos_payment_method_oca" model="pos.payment.method">
-            <field name="name">OCA</field>
-            <field name="use_payment_terminal">oca</field>
-            <field name="is_cash_count" eval="False"/>
-            <field name="active">True</field>
-            <!-- Configuraciones específicas de OCA -->
-            <field name="url_webservice">https://api.oca.com</field>
-            <field name="codigo_sistema">1</field>
-            <field name="codigo_terminal">001</field>
-            <field name="client_app_id">1</field>
-            <field name="codigo_sucursal">1</field>
-        </record>
-
-        <!-- ========================================
-             CONFIGURACIONES DEL SISTEMA
-             ======================================== -->
-        
-        <!-- Configuración por defecto para OCA -->
-        <record id="oca_default_config_url" model="ir.config_parameter">
-            <field name="key">oca.default_url</field>
-            <field name="value">https://api.oca.com</field>
-        </record>
-
-        <record id="oca_default_config_timeout" model="ir.config_parameter">
-            <field name="key">oca.default_timeout</field>
-            <field name="value">30</field>
-        </record>
-
-        <record id="oca_default_config_retry_attempts" model="ir.config_parameter">
-            <field name="key">oca.retry_attempts</field>
-            <field name="value">3</field>
-        </record>
-
-        <record id="oca_default_config_merchant_number" model="ir.config_parameter">
-            <field name="key">oca.default_merchant_number</field>
-            <field name="value">000000000</field>
-        </record>
-
+            Los demás registros base (payment.method, payment.provider, journal,
+            account.payment.method, ir.config_parameter) los aporta
+            ``odoo_pos_oca_core``.
+        -->
     </data>
-</odoo> 
+</odoo>

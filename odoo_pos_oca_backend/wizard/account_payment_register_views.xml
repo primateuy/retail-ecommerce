@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <record id="view_account_payment_register_form_oca" model="ir.ui.view">
+            <field name="name">account.payment.register.form.oca</field>
+            <field name="model">account.payment.register</field>
+            <field name="inherit_id" ref="account.view_account_payment_register_form"/>
+            <field name="priority" eval="50"/>
+            <field name="arch" type="xml">
+                <xpath expr="//group[@name='group1']" position="after">
+                    <group
+                        string="Terminal OCA (ITD)"
+                        name="oca_register_group"
+                        colspan="2"
+                        invisible="not oca_is_oca_journal">
+                        <field name="oca_is_oca_journal" invisible="1"/>
+                        <field name="oca_selectable_pos_ids" invisible="1"/>
+                        <field name="oca_need_pos_choice" invisible="1"/>
+                        <field name="oca_charge_on_pos"/>
+                        <field name="oca_multiple_pos_id"
+                               options="{'no_create': True}"
+                               invisible="not oca_charge_on_pos or not oca_need_pos_choice"/>
+                    </group>
+                </xpath>
+            </field>
+        </record>
+    </data>
+</odoo>
