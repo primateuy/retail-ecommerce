@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <!-- Reporte ticket de cambio pos.order (equivalente a odoo_pos_oca.change_ticket_report). -->
+        <record id="action_report_pos_order_fiserv_change_ticket" model="ir.actions.report">
+            <field name="name">Ticket de Cambio POS (Fiserv)</field>
+            <field name="model">pos.order</field>
+            <field name="report_type">qweb-pdf</field>
+            <field name="report_name">odoo_pos_fiserv.fiserv_change_ticket_report</field>
+            <field name="report_file">odoo_pos_fiserv.fiserv_change_ticket_report</field>
+            <field name="print_report_name">'Ticket de Cambio - %s' % (object.name)</field>
+            <field name="binding_model_id" ref="point_of_sale.model_pos_order"/>
+            <field name="binding_type">report</field>
+        </record>
+
+        <record id="fiserv_change_ticket_report" model="ir.ui.view">
+            <field name="name">odoo_pos_fiserv.fiserv_change_ticket_report</field>
+            <field name="model">pos.order</field>
+            <field name="type">qweb</field>
+            <field name="arch" type="xml">
+                <t t-call="web.html_container">
+                    <t t-foreach="docs" t-as="o">
+                        <t t-set="ticket_number" t-value="o.pos_reference or o.name"/>
+                        <t t-set="order_number" t-value="o.pos_reference or o.name"/>
+                        <t t-set="barcode_data_uri" t-value="o.get_change_ticket_barcode_data_uri()"/>
+                        <t t-set="branch_partner"
+                           t-value="(o.config_id.picking_type_id.warehouse_id.partner_id if o.config_id and o.config_id.picking_type_id and o.config_id.picking_type_id.warehouse_id and o.config_id.picking_type_id.warehouse_id.partner_id else (o.config_id.company_id.partner_id if o.config_id and o.config_id.company_id else o.company_id.partner_id))"/>
+                        <t t-set="cfe_serie_num" t-value="o.account_move and o.account_move.cfe_serie_num or ''"/>
+                        <t t-set="cfe_type_code" t-value="cfe_serie_num.split('-')[0] if cfe_serie_num and '-' in cfe_serie_num else (o.account_move.cfe_type if o.account_move and o.account_move.cfe_type else '')"/>
+                        <t t-set="cfe_type_name" t-value="('eTicket' if cfe_type_code in ['101', '111'] else ('eFactura' if cfe_type_code in ['112'] else cfe_type_code))"/>
+                        <t t-set="cfe_parts" t-value="cfe_serie_num.split('-') if cfe_serie_num and '-' in cfe_serie_num else []"/>
+                        <t t-set="cfe_joined" t-value="' '.join(cfe_parts) if cfe_parts else (cfe_serie_num or cfe_type_code or '')"/>
+
+                        <div class="page" style="max-width: 80mm; margin: 0 auto; padding: 8px 6px; font-family: Arial, Helvetica, sans-serif; font-size: 10px; color: #000; text-transform: uppercase;">
+
+                            <div style="border: 1px solid #000; padding: 8px 6px; text-align: center; margin-bottom: 10px; line-height: 1.35;">
+                                <div style="font-weight: bold; font-size: 11px;">
+                                    <span t-field="o.company_id.name"/>
+                                </div>
+                                <div t-if="branch_partner and branch_partner.vat">
+                                    RUT: <span t-field="branch_partner.vat"/>
+                                </div>
+                                <div t-if="branch_partner and branch_partner.phone">
+                                    Teléfono: <span t-field="branch_partner.phone"/>
+                                </div>
+                                <div t-if="branch_partner and (branch_partner.street or branch_partner.city)">
+                                    <span t-if="branch_partner.street" t-field="branch_partner.street"/>
+                                    <t t-if="branch_partner.street and branch_partner.city"> - </t>
+                                    <span t-if="branch_partner.city" t-field="branch_partner.city"/>
+                                </div>
+                            </div>
+
+                            <div style="width: 100%; margin-bottom: 8px; font-size: 9px; overflow: hidden;">
+                                <div style="float: left; max-width: 55%;">
+                                    <span t-if="cfe_joined" t-esc="cfe_joined"/>
+                                </div>
+                                <div style="float: right; text-align: right; max-width: 45%;">
+                                    <div t-if="o.account_move and o.account_move.name">
+                                        <span t-field="o.account_move.name"/>
+                                    </div>
+                                    <div t-if="o.date_order">
+                                        <span t-field="o.date_order" t-options='{"widget": "date"}'/>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div style="margin-bottom: 8px; font-size: 10px;">
+                                <strong>TICKET DE CAMBIO</strong> — <span t-esc="ticket_number"/>
+                            </div>
+                            <div style="margin-bottom: 10px; font-size: 9px;">
+                                <span t-if="cfe_type_name">Tipo CFE: <span t-esc="cfe_type_name"/></span>
+                                <span t-if="cfe_serie_num"> | CFE: <span t-esc="cfe_serie_num"/></span>
+                            </div>
+
+                            <div style="margin-bottom: 8px; font-size: 10px;">
+                                VENDEDOR: <span t-if="o.user_id" t-field="o.user_id.name"/>
+                            </div>
+
+                            <div t-if="barcode_data_uri" style="text-align: center; margin: 10px 0 12px 0;">
+                                <img t-att-src="barcode_data_uri" alt="Orden"
+                                     style="max-width: 100%; height: auto;"/>
+                                <div style="font-size: 9px; margin-top: 4px; text-transform: none;">
+                                    <span t-esc="order_number"/>
+                                </div>
+                            </div>
+
+                            <div style="margin-bottom: 12px; font-size: 10px; text-align: center; line-height: 1.35;">
+                                <div t-if="o.config_id">
+                                    <span>PDV — </span><span t-field="o.config_id.name"/>
+                                </div>
+                                <div t-if="o.config_id and o.config_id.picking_type_id and o.config_id.picking_type_id.warehouse_id"
+                                     style="margin-top: 4px;">
+                                    <span>SUCURSAL: </span>
+                                    <span t-field="o.config_id.picking_type_id.warehouse_id.name"/>
+                                    <span t-if="o.config_id.picking_type_id.warehouse_id.code">
+                                        (<span t-field="o.config_id.picking_type_id.warehouse_id.code"/>)
+                                    </span>
+                                </div>
+                            </div>
+
+                            <div style="text-align: center; font-weight: bold; font-size: 13px; margin: 14px 0 8px 0; line-height: 1.25;">
+                                LOS CAMBIOS SE PODRAN REALIZAR DENTRO DE UN PLAZO DE 30 DIAS
+                            </div>
+
+                            <div t-if="o.config_id and o.config_id.fiserv_change_ticket_note" style="text-align: center; font-size: 9px; margin-top: 8px; text-transform: none;">
+                                <div t-field="o.config_id.fiserv_change_ticket_note"/>
+                            </div>
+
+                            <div style="text-align: center; font-size: 9px; margin-top: 12px; color: #555;">
+                                <span t-if="o.session_id">Sesión: <span t-field="o.session_id.name"/></span>
+                            </div>
+                        </div>
+                    </t>
+                </t>
+            </field>
+        </record>
+    </data>
+</odoo>

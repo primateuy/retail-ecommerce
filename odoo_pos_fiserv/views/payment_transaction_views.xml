@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <record id="view_payment_transaction_fiserv_form" model="ir.ui.view">
+            <field name="name">payment.transaction.fiserv.form</field>
+            <field name="model">payment.transaction</field>
+            <field name="inherit_id" ref="payment.payment_transaction_form"/>
+            <field name="arch" type="xml">
+                <xpath expr="//group[@name='transaction_details']" position="after">
+                    <group string="Información Fiserv ITD" name="fiserv_info" invisible="provider_code != 'fiserv'">
+                        <group string="POS / Ticket">
+                            <field name="pos_id"/>
+                            <field name="ticket_number"/>
+                            <field name="batch_number"/>
+                            <field name="authorization_code"/>
+                            <field name="merchant_number"/>
+                            <field name="invoice_number"/>
+                        </group>
+                        <group string="Tarjeta">
+                            <field name="card_bin"/>
+                            <field name="card_last_four"/>
+                            <field name="issuer_code"/>
+                            <field name="issuer_name"/>
+                            <field name="acquirer"/>
+                            <field name="installments"/>
+                        </group>
+                    </group>
+                    <group string="Relaciones" name="fiserv_relations" invisible="provider_code != 'fiserv'">
+                        <group>
+                            <field name="transaction_origin"/>
+                            <field name="pos_order_id"/>
+                            <field name="pos_payment_id"/>
+                            <field name="account_payment_id" invisible="transaction_origin != 'account_payment'"/>
+                            <field name="is_promotion"/>
+                        </group>
+                        <group string="Auditoría ITD">
+                            <field name="fiserv_transaction_id"/>
+                            <field name="fiserv_response_code"/>
+                            <field name="fiserv_response_message"/>
+                        </group>
+                    </group>
+                    <notebook string="Detalle Fiserv" name="fiserv_detailed" invisible="provider_code != 'fiserv'">
+                        <page string="Respuesta JSON" name="fiserv_complete_response">
+                            <field name="fiserv_complete_response" readonly="1" widget="ace" options="{'mode': 'js'}"/>
+                        </page>
+                    </notebook>
+                </xpath>
+            </field>
+        </record>
+
+        <record id="view_payment_transaction_fiserv_tree" model="ir.ui.view">
+            <field name="name">payment.transaction.fiserv.tree</field>
+            <field name="model">payment.transaction</field>
+            <field name="inherit_id" ref="payment.payment_transaction_list"/>
+            <field name="arch" type="xml">
+                <xpath expr="//field[@name='amount']" position="after">
+                    <field name="pos_id" optional="show"/>
+                    <field name="ticket_number" optional="show"/>
+                    <field name="card_last_four" optional="show"/>
+                    <field name="acquirer" optional="show"/>
+                    <field name="fiserv_transaction_id" optional="show"/>
+                </xpath>
+            </field>
+        </record>
+
+        <record id="view_payment_transaction_fiserv_search" model="ir.ui.view">
+            <field name="name">payment.transaction.fiserv.search</field>
+            <field name="model">payment.transaction</field>
+            <field name="inherit_id" ref="payment.payment_transaction_search"/>
+            <field name="arch" type="xml">
+                <xpath expr="//field[@name='reference']" position="after">
+                    <field name="pos_id"/>
+                    <field name="ticket_number"/>
+                    <field name="fiserv_transaction_id"/>
+                    <field name="acquirer"/>
+                </xpath>
+                <xpath expr="//filter[@name='provider_id']" position="after">
+                    <filter string="Fiserv ITD" name="fiserv_provider" domain="[('provider_code', '=', 'fiserv')]"/>
+                </xpath>
+            </field>
+        </record>
+
+        <record id="action_payment_transaction_fiserv" model="ir.actions.act_window">
+            <field name="name">Transacciones Fiserv ITD</field>
+            <field name="res_model">payment.transaction</field>
+            <field name="view_mode">tree,form</field>
+            <field name="domain">[('provider_code', '=', 'fiserv')]</field>
+            <field name="context">{'search_default_fiserv_provider': 1}</field>
+        </record>
+
+        <menuitem id="menu_payment_transaction_fiserv"
+                  name="Transacciones Fiserv"
+                  parent="account_payment.payment_transaction_menu"
+                  action="action_payment_transaction_fiserv"
+                  sequence="11"/>
+    </data>
+</odoo>
