@@ -90,7 +90,7 @@
 
         <menuitem id="menu_payment_transaction_fiserv"
                   name="Transacciones Fiserv"
-                  parent="account_payment.payment_transaction_menu"
+                  parent="account.root_payment_menu"
                   action="action_payment_transaction_fiserv"
                   sequence="11"/>
     </data>

@@ -107,7 +107,7 @@
         <!-- Menú para transacciones OCA -->
         <menuitem id="menu_payment_transaction_oca"
                   name="Transacciones OCA"
-                  parent="account_payment.payment_transaction_menu"
+                  parent="account.root_payment_menu"
                   action="action_payment_transaction_oca"
                   sequence="10"/>
     </data>
