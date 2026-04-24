@@ -48,12 +48,12 @@ class PriceGroupLine(models.Model):
     price_list_item_id = fields.Many2one('product.pricelist.item', 'Item lista de precio')
 
     # Campos de vigencia
-    date_start = fields.Date(
+    date_start = fields.Datetime(
         string='Fecha de Inicio',
         help='Fecha desde la cual el agrupador está vigente (vacío = sin límite)'
     )
     
-    date_end = fields.Date(
+    date_end = fields.Datetime(
         string='Fecha de Fin',
         help='Fecha hasta la cual el agrupador está vigente (vacío = sin límite)'
     )
