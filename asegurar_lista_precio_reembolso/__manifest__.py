@@ -8,7 +8,7 @@
     'depends': ['point_of_sale'],
     'assets': {
         'point_of_sale._assets_pos': [
-            'asgurar_lista_precio_reembolso/static/src/overrides/ticket_screen_patch.js',
+            'asegurar_lista_precio_reembolso/static/src/overrides/ticket_screen_patch.js',
         ],
     },
     'installable': True,
