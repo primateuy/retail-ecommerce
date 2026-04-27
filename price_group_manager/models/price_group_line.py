@@ -100,6 +100,12 @@ class PriceGroupLine(models.Model):
          'No puede haber líneas duplicadas para el mismo template, agrupador y fechas.')
     ]
 
+    @api.onchange('activo')
+    def change_activo(self):
+        for rec in self:
+            if not rec.activo:
+                rec.date_end = fields.Datetime().now()
+
     @api.depends('force_product_tmpl_id', 'origin')
     def compute_product_id_domain(self):
         for rec in self:
@@ -336,16 +342,15 @@ class PriceGroupLine(models.Model):
         usar_template = True if not self.product_id else False
         applied_on = '1_product' if usar_template else '0_product_variant'
 
-        date_end = self.date_end
-        now = fields.Datetime().now()
-        if not self.activo and self.date_end > now:
-            date_end = now
-            self.with_context(write_direct=True).write({'date_end': date_end})
+        # now = fields.Datetime().now()
+        # if not self.activo:
+        #     date_end = now
+        #     self.with_context(write_direct=True).write({'date_end': date_end})
 
         vals = {
             'pricelist_id': self.price_group_id.lista_precio_id.id,
             'date_start': self.date_start,
-            'date_end': date_end,
+            'date_end': self.date_end,
             'applied_on': applied_on,
             'compute_price': 'fixed',
             'fixed_price': self.valor_fijo,

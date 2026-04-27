@@ -85,7 +85,7 @@ class ProductTemplate(models.Model):
             'type': 'ir.actions.act_window',
             'res_model': 'x_price_group_line',
             'view_mode': 'tree,form',
-            'domain': [('product_tmpl_id', '=', self.id)],
+            'domain': [('product_tmpl_relacion_id', '=', self.id)],
             'context': {
                 'default_product_tmpl_id': self.id,
                 'default_origin': 'template'
@@ -133,7 +133,8 @@ class ProductTemplate(models.Model):
             })
 
         self.x_price_group_line_ids.filtered(lambda l: l.origin == 'template').write({
-            'activo': False
+            'activo': False,
+            'date_end': fields.Datetime().now(),
         })
 
     def action_add_price_group(self):
