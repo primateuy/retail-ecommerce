@@ -48,12 +48,12 @@ class PriceGroupLine(models.Model):
     price_list_item_id = fields.Many2one('product.pricelist.item', 'Item lista de precio')
 
     # Campos de vigencia
-    date_start = fields.Date(
+    date_start = fields.Datetime(
         string='Fecha de Inicio',
         help='Fecha desde la cual el agrupador está vigente (vacío = sin límite)'
     )
     
-    date_end = fields.Date(
+    date_end = fields.Datetime(
         string='Fecha de Fin',
         help='Fecha hasta la cual el agrupador está vigente (vacío = sin límite)'
     )
@@ -187,7 +187,7 @@ class PriceGroupLine(models.Model):
         """
         Determina si el agrupador está vigente en la fecha actual.
         """
-        today = date.today()
+        today = fields.Datetime().now()
         for record in self:
             if not record.activo:
                 record.is_current = False
@@ -336,14 +336,19 @@ class PriceGroupLine(models.Model):
         usar_template = True if not self.product_id else False
         applied_on = '1_product' if usar_template else '0_product_variant'
 
+        date_end = self.date_end
+        now = fields.Datetime().now()
+        if not self.activo and self.date_end > now:
+            date_end = now
+            self.with_context(write_direct=True).write({'date_end': date_end})
+
         vals = {
             'pricelist_id': self.price_group_id.lista_precio_id.id,
             'date_start': self.date_start,
-            'date_end': self.date_end,
+            'date_end': date_end,
             'applied_on': applied_on,
             'compute_price': 'fixed',
             'fixed_price': self.valor_fijo,
-            'min_quantity': 0 if self.activo else 9999999999,
         }
 
         if usar_template:
@@ -374,8 +379,13 @@ class PriceGroupLine(models.Model):
 
     def write(self, vals):
         res = super(PriceGroupLine, self).write(vals)
+
+        if self._context.get('write_direct', False):
+            return res
+
         for rec in self:
             rec.actualizar_lista_precio_item()
+
         return res
 
     def unlink(self):
