@@ -336,9 +336,9 @@ class PriceGroupLine(models.Model):
         usar_template = True if not self.product_id else False
         applied_on = '1_product' if usar_template else '0_product_variant'
 
-        date_end = self.date_end
+        date_end = self.date_end or fields.Datetime().now()
         now = fields.Datetime().now()
-        if not self.activo and self.date_end > now:
+        if not self.activo and date_end > now:
             date_end = now
             self.with_context(write_direct=True).write({'date_end': date_end})
 
