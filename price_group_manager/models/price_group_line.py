@@ -338,7 +338,7 @@ class PriceGroupLine(models.Model):
 
         date_end = self.date_end or fields.Datetime().now()
         now = fields.Datetime().now()
-        if not self.activo and date_end > now:
+        if (not self.activo and date_end > now) or not self.date_end:
             date_end = now
             self.with_context(write_direct=True).write({'date_end': date_end})
 
