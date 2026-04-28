@@ -15,6 +15,22 @@ class SaleOrder(models.Model):
     _inherit = "sale.order"
 
     id_order_fenicio = fields.Char('ID Orden')
+
+    def _allow_nominative_programs(self):
+        # website_sale_loyalty blocks nominative programs for public-user sessions.
+        # Fenicio API calls arrive unauthenticated (auth='none'), so bypass that check
+        # when the confirmation is triggered internally by the Fenicio integration.
+        if self.env.context.get('fenicio_confirm'):
+            return True
+        return super()._allow_nominative_programs()
+
+    def _get_program_domain(self):
+        # website_sale_loyalty adds ecommerce_ok/website_id filters when order.website_id is set,
+        # which can exclude loyalty programs that have sale_ok=False or ecommerce_ok=False.
+        # For Fenicio orders, accept any program available for Sales OR Website.
+        if self.env.context.get('fenicio_confirm'):
+            return [('active', '=', True), '|', ('sale_ok', '=', True), ('ecommerce_ok', '=', True)]
+        return super()._get_program_domain()
     motivo_cancelacion = fields.Char('Motivo Cancelación')
     origen = fields.Char('Origen')
     fecha_abandono = fields.Datetime('Fecha Abandono')

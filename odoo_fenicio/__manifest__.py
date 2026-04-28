@@ -26,6 +26,9 @@
         'views/payment_transaction_views.xml',
         'views/fenicio_log_views.xml',
         'views/l10n_latam_identification_type_views.xml',
+        'views/fenicio_order_views.xml',
+        'data/config_params.xml',
+        'data/ir_cron.xml',
     ],
     'license': 'LGPL-3',
 }

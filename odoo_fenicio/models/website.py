@@ -14,6 +14,12 @@ class Website(models.Model):
     fenicio_cantidad_stock_bydefault = fields.Integer(string='Cantidad de Stock a mostrar por defecto')
     fenicio_sale_order_type_id = fields.Many2one('sale.order.type', string='Tipo de Orden de Venta Fenicio')
 
+    fenicio_loyalty_program_id = fields.Many2one(
+        'loyalty.program',
+        string='Programa de Lealtad Fenicio',
+        domain=[('program_type', '=', 'loyalty'), ('active', '=', True)],
+    )
+
     fenicio_stock_location_ids = fields.Many2many(
         'stock.location',
         relation='fenicio_website_stock_location_rel',

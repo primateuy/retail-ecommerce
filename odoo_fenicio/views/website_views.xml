@@ -13,6 +13,7 @@
                         <field name="fenicio_pricelist_lista_id"/>
                         <field name="fenicio_pricelist_alternativo_id"/>
                         <field name="fenicio_sale_order_type_id"/>
+                        <field name="fenicio_loyalty_program_id"/>
                         <field name="fenicio_cantidad_stock_bydefault"/>
                         <field name="fenicio_stock_location_ids" widget="many2many_tags"/>
                     </group>

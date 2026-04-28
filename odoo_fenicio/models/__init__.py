@@ -23,3 +23,7 @@ from . import product_pricelist
 from . import fenicio_log
 from . import delivery_carrier
 from . import l10n_latam_identification_type
+from . import fenicio_client
+from . import fenicio_order
+from . import fenicio_delivery_wizard
+from . import fenicio_sync

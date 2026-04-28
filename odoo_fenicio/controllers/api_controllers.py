@@ -49,7 +49,7 @@ class ApiController(http.Controller):
                 _logger.error("Error al crear log en Fenicio: %s", str(e))
 
         return request.make_response(
-            json.dumps(response_data).replace('false', 'null'), 
+            json.dumps(response_data),
             headers=[('Content-Type', 'application/json')]
         )
 
@@ -86,11 +86,12 @@ class ApiController(http.Controller):
     def consultar_puntos(self):
         id_solicitud = ''
         json_data = {}
+        token = request.httprequest.headers.get('Token-Autenticacion-Efenicio')
         try:
             self._authenticate_and_setup_env()
             json_data = self.get_json_data()
             id_solicitud = json_data['_idSolicitud']
-            response_data = request.env['api.internal'].consultar_puntos(json_data)
+            response_data = request.env['api.internal'].consultar_puntos(json_data, token)
             return self.build_response(id_solicitud, response_data, endpoint='/consultapuntos', request_data=json_data)
         except Exception as e:
             return self.build_response(id_solicitud, None, status='ERROR', mensaje=str(e), endpoint='/consultapuntos', request_data=json_data)
@@ -130,11 +131,12 @@ class ApiController(http.Controller):
     def canjear_puntos(self):
         id_solicitud = ''
         json_data = {}
+        token = request.httprequest.headers.get('Token-Autenticacion-Efenicio')
         try:
             self._authenticate_and_setup_env()
             json_data = self.get_json_data()
             id_solicitud = json_data['_idSolicitud']
-            response_data = request.env['api.internal'].canjear_puntos(json_data)
+            response_data = request.env['api.internal'].canjear_puntos(json_data, token)
             return self.build_response(id_solicitud, response_data, endpoint='/canjepuntos', request_data=json_data)
         except Exception as e:
             return self.build_response(id_solicitud, None, status='ERROR', mensaje=str(e), endpoint='/canjepuntos', request_data=json_data)

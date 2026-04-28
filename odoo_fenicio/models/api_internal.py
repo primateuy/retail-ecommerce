@@ -427,62 +427,74 @@ class ApiInternal(models.Model):
     
 
     @api.model
-    def canjear_puntos(self, json_data): 
-        try:
+    def canjear_puntos(self, json_data, token=None):
+        if 'numeroDocumento' not in json_data or 'puntos' not in json_data:
+            raise Exception("Los campos 'numeroDocumento' y 'puntos' son obligatorios.")
 
-            if 'numeroDocumento' not in json_data or 'puntos' not in json_data:
-                message = "El campo 'numeroDocumento' y 'puntos' es obligatorio."
-                return False, message;
+        user = self.env['res.partner'].search([('vat', '=', json_data['numeroDocumento'])], limit=1)
+        if not user:
+            raise Exception("El usuario no existe.")
 
-            user = self.env['res.partner'].search([('vat', '=', json_data['numeroDocumento'])], limit=1);
-        
-            if not user:
-                message = "El usuario no existe."
-                return False, message;
-    
-            loyaltyCard = self.env['loyalty.card'].search([('partner_id', '=', user.id)], limit=1);
-            if not loyaltyCard:
-                message = "El usuario no tiene una tarjeta de lealtad."
-                return False, message;
-    
-            if loyaltyCard.points < float(json_data['puntos']):
-                message = "El usuario no tiene suficientes puntos para canjear."
-                return False, message;
-    
-            if loyaltyCard.points >= float(json_data['puntos']):
-                loyaltyCard.points -= float(json_data['puntos'])
+        website = self.verificar_token(token) if token else False
+        loyalty_program = website.fenicio_loyalty_program_id if website else False
 
-            return {
-                'puntosRestantes': loyaltyCard.points
-            }
+        if loyalty_program:
+            loyalty_cards = self.env['loyalty.card'].search([
+                ('partner_id', '=', user.id),
+                ('program_id', '=', loyalty_program.id),
+            ])
+        else:
+            loyalty_cards = self.env['loyalty.card'].search([('partner_id', '=', user.id)])
 
-        except Exception as e:
-            return False
+        if not loyalty_cards:
+            raise Exception("El usuario no tiene una tarjeta de lealtad.")
+
+        puntos_totales = sum(loyalty_cards.mapped('points'))
+        puntos_a_canjear = float(json_data['puntos'])
+
+        if puntos_totales < puntos_a_canjear:
+            raise Exception("El usuario no tiene suficientes puntos para canjear.")
+
+        # Descontar de la primera tarjeta que tenga saldo suficiente
+        restante = puntos_a_canjear
+        for card in loyalty_cards:
+            if restante <= 0:
+                break
+            descuento = min(card.points, restante)
+            card.sudo().points -= descuento
+            restante -= descuento
+
+        puntos_restantes = sum(loyalty_cards.mapped('points'))
+        return {'puntosRestantes': puntos_restantes}
 
 
     @api.model
-    def consultar_puntos(self, json_data):
+    def consultar_puntos(self, json_data, token=None):
         try:
             if 'numeroDocumento' not in json_data:
-                message = "El campo 'numeroDocumento' es obligatorio."
-                return False, message;
+                raise Exception("El campo 'numeroDocumento' es obligatorio.")
 
-            user = self.env['res.partner'].search([('vat', '=', json_data['numeroDocumento'])], limit=1);
-
+            user = self.env['res.partner'].search([('vat', '=', json_data['numeroDocumento'])], limit=1)
             if not user:
-                message = "El usuario no existe."
-                return False, message;
+                raise Exception("El usuario no existe.")
 
-            
-            loyaltyCard = self.env['loyalty.card'].search([('partner_id', '=', user.id)], limit=1);
-            puntos = loyaltyCard.points if loyaltyCard else 0
+            website = self.verificar_token(token) if token else False
+            loyalty_program = website.fenicio_loyalty_program_id if website else False
 
-            return {
-                "puntos": puntos
-            };
+            if loyalty_program:
+                loyalty_cards = self.env['loyalty.card'].search([
+                    ('partner_id', '=', user.id),
+                    ('program_id', '=', loyalty_program.id),
+                ])
+            else:
+                loyalty_cards = self.env['loyalty.card'].search([('partner_id', '=', user.id)])
+
+            puntos = round(sum(loyalty_cards.mapped('points')),2)
+
+            return {"puntos": puntos}
 
         except Exception as e:
-            return False
+            raise
 
     @api.model
     def crear_usuario(self, json_data):
@@ -592,6 +604,47 @@ class ApiInternal(models.Model):
         return response, msg
 
     @api.model
+    def _apply_fenicio_loyalty_points(self, order, website):
+        loyalty_program = website.fenicio_loyalty_program_id
+        if not loyalty_program or not order.partner_id:
+            return
+
+        partner = order.partner_id
+        card = self.env['loyalty.card'].search([
+            ('partner_id', '=', partner.id),
+            ('program_id', '=', loyalty_program.id),
+        ], limit=1)
+
+        order_lines = order.order_line.filtered(lambda l: not l.reward_id and l.product_id)
+        points = 0
+        for rule in loyalty_program.rule_ids:
+            if rule.mode == 'with_code':
+                continue
+            min_amount = rule._compute_amount(order.currency_id)
+            order_amount = sum(order_lines.mapped('price_total'))
+            if order_amount < min_amount:
+                continue
+            if rule.reward_point_mode == 'order':
+                points += rule.reward_point_amount
+            elif rule.reward_point_mode == 'money':
+                points += rule.reward_point_amount * order_amount
+            elif rule.reward_point_mode == 'unit':
+                qty = sum(order_lines.mapped('product_uom_qty'))
+                points += rule.reward_point_amount * qty
+
+        if not points:
+            return
+
+        if not card:
+            card = self.env['loyalty.card'].sudo().create({
+                'program_id': loyalty_program.id,
+                'partner_id': partner.id,
+                'points': 0,
+            })
+
+        card.sudo().points += points
+
+    @api.model
     def crear_orden_venta(self, json_data, token):
         estados = ['EN_CURSO', 'APROBADA', 'ABANDONADA', 'PAGO_PENDIENTE', 'REQUIERE_APROBACION', 'CANCELADA']
         
@@ -616,6 +669,8 @@ class ApiInternal(models.Model):
             error = ''
             if sale_order_id and sale_order_id.state == 'draft' and estado == 'EN_CURSO':
                 sale_order_id, error = sale_order_id.create_or_update_order(json_data, token)
+                if not sale_order_id:
+                    return {'error': error or "No se pudo actualizar la orden de venta"}
             elif not sale_order_id:
                 sale_order_id, error = SALE_ORDER_ENV.create_or_update_order(json_data, token)
                 is_new_order = True
@@ -626,7 +681,8 @@ class ApiInternal(models.Model):
 
             if estado in ['PAGO_PENDIENTE', 'REQUIERE_APROBACION', 'APROBADA']:
                 if sale_order_id.state in ['draft', 'sent']:
-                    sale_order_id.action_confirm()
+                    sale_order_id.with_context(fenicio_confirm=True).action_confirm()
+                    self._apply_fenicio_loyalty_points(sale_order_id, fenicio_website)
 
                 # si no es recien creada la orden: actualizar los datos de fenicio
                 if not is_new_order:
@@ -731,10 +787,11 @@ class ApiInternal(models.Model):
 
     @api.model
     def puede_cancelar(self, json_data):
-        SALE_ORDER_ENV = self.env['sale.order']
-        cancelable, error = SALE_ORDER_ENV.is_cancelable(json_data['idOrden'])
+        # SALE_ORDER_ENV = self.env['sale.order']
+        # cancelable, error = SALE_ORDER_ENV.is_cancelable(json_data['idOrden'])
 
+        # VAMOS A MANDAR SIEMPRE FALSE HASTA QUE SE IMPLEMENTE BIEN ESTE FLUJO DE CANCELACION
         return {
-            'permiteCancelar': cancelable,
-            'motivoRechazo': error
+            'permiteCancelar': 'false',
+            'motivoRechazo': 'no se puede cancelar la orden'
         }
