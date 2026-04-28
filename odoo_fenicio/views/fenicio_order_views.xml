@@ -1,0 +1,136 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+
+        <!-- ── Vista lista ────────────────────────────────────────────── -->
+        <record id="fenicio_order_view_list" model="ir.ui.view">
+            <field name="name">fenicio.order.list</field>
+            <field name="model">fenicio.order</field>
+            <field name="arch" type="xml">
+                <tree string="Órdenes Fenicio" default_order="fecha_inicio desc">
+                    <field name="id_fenicio" string="ID"/>
+                    <field name="numero_orden"/>
+                    <field name="fecha_inicio"/>
+                    <field name="comprador_nombre"/>
+                    <field name="comprador_email"/>
+                    <field name="estado"/>
+                    <field name="estado_entrega"/>
+                    <field name="moneda"/>
+                    <field name="importe_total"/>
+                    <field name="last_sync"/>
+                </tree>
+            </field>
+        </record>
+
+        <!-- ── Vista formulario ──────────────────────────────────────── -->
+        <record id="fenicio_order_view_form" model="ir.ui.view">
+            <field name="name">fenicio.order.form</field>
+            <field name="model">fenicio.order</field>
+            <field name="arch" type="xml">
+                <form string="Orden Fenicio">
+                    <header>
+                        <button
+                            name="action_update_delivery_status"
+                            string="Cambiar estado de entrega"
+                            type="object"
+                            class="btn-primary"/>
+                        <button
+                            name="action_refresh"
+                            string="Actualizar desde Fenicio"
+                            type="object"/>
+                    </header>
+                    <sheet>
+                        <group string="Identificación">
+                            <field name="id_fenicio"/>
+                            <field name="numero_orden"/>
+                            <field name="referencia"/>
+                            <field name="origen"/>
+                            <field name="estado"/>
+                            <field name="estado_entrega"/>
+                        </group>
+                        <group string="Fechas">
+                            <field name="fecha_inicio"/>
+                            <field name="fecha_fin"/>
+                            <field name="fecha_pago"/>
+                        </group>
+                        <group string="Comprador">
+                            <field name="comprador_nombre"/>
+                            <field name="comprador_email"/>
+                            <field name="comprador_telefono"/>
+                        </group>
+                        <group string="Importe">
+                            <field name="moneda"/>
+                            <field name="importe_total"/>
+                        </group>
+                        <group string="Auditoría">
+                            <field name="last_sync"/>
+                        </group>
+                        <notebook>
+                            <page string="Datos raw (JSON)">
+                                <field name="raw_data" widget="text" readonly="1"
+                                       style="font-family: monospace; font-size: 12px; background: #f8f9fa; padding: 12px; border-radius: 6px; white-space: pre;"/>
+                            </page>
+                        </notebook>
+                    </sheet>
+                </form>
+            </field>
+        </record>
+
+        <!-- ── Vista búsqueda ─────────────────────────────────────────── -->
+        <record id="fenicio_order_view_search" model="ir.ui.view">
+            <field name="name">fenicio.order.search</field>
+            <field name="model">fenicio.order</field>
+            <field name="arch" type="xml">
+                <search string="Buscar órdenes">
+                    <field name="numero_orden"/>
+                    <field name="comprador_email"/>
+                    <field name="comprador_nombre"/>
+                    <separator/>
+                    <filter string="Hoy" name="hoy"
+                            domain="[('fecha_inicio','&gt;=', (datetime.date.today()).strftime('%Y-%m-%d 00:00:00'))]"/>
+                    <group expand="0" string="Agrupar por">
+                        <filter string="Estado" name="group_estado" context="{'group_by': 'estado'}"/>
+                        <filter string="Estado entrega" name="group_estado_entrega" context="{'group_by': 'estado_entrega'}"/>
+                    </group>
+                </search>
+            </field>
+        </record>
+
+        <!-- ── Vista formulario del wizard ───────────────────────────── -->
+        <record id="fenicio_delivery_wizard_view_form" model="ir.ui.view">
+            <field name="name">fenicio.delivery.status.wizard.form</field>
+            <field name="model">fenicio.delivery.status.wizard</field>
+            <field name="arch" type="xml">
+                <form string="Cambiar estado de entrega">
+                    <group>
+                        <field name="order_id" readonly="1"/>
+                        <field name="estado_entrega"/>
+                        <field name="codigo_tracking"/>
+                        <field name="info"/>
+                    </group>
+                    <footer>
+                        <button name="action_confirm" string="Confirmar" type="object" class="btn-primary"/>
+                        <button string="Cancelar" class="btn-secondary" special="cancel"/>
+                    </footer>
+                </form>
+            </field>
+        </record>
+
+        <!-- ── Acción de ventana ──────────────────────────────────────── -->
+        <record id="fenicio_order_action" model="ir.actions.act_window">
+            <field name="name">Órdenes Fenicio</field>
+            <field name="res_model">fenicio.order</field>
+            <field name="view_mode">tree,form</field>
+            <field name="search_view_id" ref="fenicio_order_view_search"/>
+        </record>
+
+        <!-- ── Menú bajo el root existente de Fenicio ────────────────── -->
+        <menuitem
+            id="fenicio_menu_orders"
+            name="Órdenes"
+            parent="fenicio_menu_root"
+            action="fenicio_order_action"
+            sequence="5"/>
+
+    </data>
+</odoo>

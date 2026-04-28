@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- URL base de la API v1, ej: https://mitienda.com/API_V1 -->
+    <record id="param_fenicio_base_url" model="ir.config_parameter">
+        <field name="key">fenicio_integration.base_url</field>
+        <field name="value">https://REEMPLAZAR-DOMINIO/API_V1</field>
+    </record>
+
+    <!-- Timeout en segundos para los requests HTTP outbound -->
+    <record id="param_fenicio_timeout" model="ir.config_parameter">
+        <field name="key">fenicio_integration.timeout_seconds</field>
+        <field name="value">30</field>
+    </record>
+</odoo>
