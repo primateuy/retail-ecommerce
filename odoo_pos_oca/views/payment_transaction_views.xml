@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <!--
+            Inyecta los campos POS (pos_order_id, pos_payment_id) en la vista
+            OCA del form de payment.transaction. Estos campos solo existen
+            cuando odoo_pos_oca está instalado, así que la vista del core no
+            puede declararlos directamente.
+        -->
+        <record id="view_payment_transaction_oca_form_pos" model="ir.ui.view">
+            <field name="name">payment.transaction.oca.form.pos</field>
+            <field name="model">payment.transaction</field>
+            <field name="inherit_id" ref="odoo_pos_oca_core.view_payment_transaction_oca_form"/>
+            <field name="arch" type="xml">
+                <xpath expr="//group[@name='oca_relations_left']/field[@name='transaction_origin']" position="after">
+                    <field name="pos_order_id"/>
+                    <field name="pos_payment_id"/>
+                </xpath>
+            </field>
+        </record>
+    </data>
+</odoo>
