@@ -97,6 +97,156 @@ class PaymentProvider(models.Model):
         _fiserv_normalize_itd_http_response(response_json)
         return response_json
 
+    def processCurrentTransactionsBatchQuery(self, data, base_url_endpoint):
+        """
+        Consulta las transacciones del lote actual del pinpad (sin afectar nada).
+
+        Endpoint ``/processCurrentTransactionsBatchQuery`` (Especificación ITD v3.5
+        pág. 66): devuelve la lista de transacciones del lote en curso para una
+        terminal dada. Lo usamos para decidir, antes de iniciar una devolución,
+        si la transacción original sigue en el lote actual (→ anulación) o si el
+        lote ya se cerró tras la venta (→ devolución directa).
+
+        Args:
+            data (dict): Payload (PosID, SystemId, Branch, ClientAppId, UserId,
+                TransactionDateTimeyyyyMMddHHmmssSSS).
+            base_url_endpoint (str): URL base ITD.
+
+        Returns:
+            dict: JSON normalizado (ResponseCode, Transactions, …).
+        """
+        self.ensure_one()
+        from .fiserv_utils import _fiserv_normalize_itd_http_response
+
+        endpoint = (base_url_endpoint or '').rstrip('/') + '/processCurrentTransactionsBatchQuery'
+        headers = {'Content-Type': 'application/json'}
+        req = requests.post(endpoint, json=data, headers=headers, timeout=30)
+        response_json = req.json()
+        _fiserv_normalize_itd_http_response(response_json)
+        return response_json
+
+    def _fiserv_check_original_in_current_batch(self, base_url_endpoint, pos_id, original_tx):
+        """
+        Determina si la transacción Fiserv original sigue en el lote actual del pinpad.
+
+        Llama a ``processCurrentTransactionsBatchQuery`` y compara el ``Batch``
+        que reporta el pinpad con el ``batch_number`` de la transacción
+        original. Es el chequeo proactivo que decide anulación vs devolución
+        según las reglas de Fiserv (Especificación ITD v3.5, preguntas
+        frecuentes #1 y #2): la anulación solo es válida dentro del mismo
+        lote, en cuanto se cierra el lote la operación tiene que ser refund.
+
+        Returns:
+            bool|None:
+              - ``True``: el pinpad está en el mismo lote que la tx original →
+                se puede anular.
+              - ``False``: el lote del pinpad cambió (cierre tras la venta) →
+                hay que ir directo a refund.
+              - ``None``: no se pudo determinar (endpoint no responde OK, falta
+                ``batch_number`` en la tx original, lote sin transacciones
+                comparables, etc.). El llamador debe seguir con el flujo void
+                normal y apoyarse en el fallback reactivo.
+        """
+        self.ensure_one()
+        if not original_tx:
+            _logger.info('Fiserv batch-check: sin tx original; no concluyente')
+            return None
+        original_ticket = (original_tx.ticket_number or '').strip()
+        original_batch = (original_tx.batch_number or '').strip()
+        if not original_ticket and not original_batch:
+            _logger.info(
+                'Fiserv batch-check: tx original sin ticket_number ni batch_number; '
+                'no concluyente'
+            )
+            return None
+
+        payload = {
+            'PosID': str(pos_id or ''),
+            'SystemId': str(self.fiserv_system_id or ''),
+            'Branch': (self.fiserv_branch or '').strip() or '',
+            'ClientAppId': self.fiserv_client_app_id or '1',
+            'UserId': str(self.env.user.id),
+            'TransactionDateTimeyyyyMMddHHmmssSSS': self.get_formatted_timestamp(),
+        }
+        _logger.info(
+            'Fiserv batch-check: consultando processCurrentTransactionsBatchQuery '
+            'PosID=%s ticket_original=%s batch_original=%s',
+            payload['PosID'], original_ticket or '(vacío)', original_batch or '(vacío)',
+        )
+        try:
+            result = self.processCurrentTransactionsBatchQuery(payload, base_url_endpoint)
+        except Exception as exc:
+            _logger.warning(
+                'Fiserv batch-check: processCurrentTransactionsBatchQuery falló (%s); '
+                'no concluyente, sigo con flujo void normal',
+                exc,
+            )
+            return None
+        rc = str(result.get('ResponseCode', '999')).strip()
+        if rc != '0':
+            _logger.info(
+                'Fiserv batch-check: ResponseCode=%s msg=%s; no concluyente',
+                rc, result.get('msg') or '',
+            )
+            return None
+
+        transactions = result.get('Transactions') or []
+        _logger.info(
+            'Fiserv batch-check: el pinpad reporta %d transacciones en el lote actual',
+            len(transactions),
+        )
+        if not transactions:
+            # Lote actual vacío con RC=0: el pinpad cerró su lote y aún no hay
+            # transacciones en el nuevo. La tx original definitivamente no está
+            # en el lote actual (si estuviera, aparecería en la lista). Por
+            # regla Fiserv #1/#2 hay que usar refund.
+            _logger.info(
+                'Fiserv batch-check: lote actual vacío → la tx original no '
+                'puede estar acá, ir directo a refund'
+            )
+            return False
+
+        # Match preferido: ticket de la tx original en la lista del lote actual.
+        # El ticket está siempre presente porque es requisito del void; el
+        # batch_number puede no haberse guardado en tx viejas.
+        if original_ticket:
+            ticket_norm = original_ticket.lstrip('0')
+            for tx in transactions:
+                tx_ticket = str((tx or {}).get('Ticket', '') or '').strip()
+                if tx_ticket and tx_ticket.lstrip('0') == ticket_norm:
+                    _logger.info(
+                        'Fiserv batch-check: ticket %s encontrado en lote actual '
+                        'del pinpad → mismo lote, se puede anular',
+                        original_ticket,
+                    )
+                    return True
+            _logger.info(
+                'Fiserv batch-check: ticket %s NO está en el lote actual del '
+                'pinpad → lote ya cerró, ir directo a refund',
+                original_ticket,
+            )
+            return False
+
+        # Fallback: comparar Batch (cuando no había ticket en la tx original).
+        current_batch = ''
+        for tx in transactions:
+            b = str((tx or {}).get('Batch', '') or '').strip()
+            if b:
+                current_batch = b
+                break
+        if not current_batch:
+            _logger.info(
+                'Fiserv batch-check: las transacciones del lote actual no traen '
+                'Batch poblado; no concluyente'
+            )
+            return None
+        same_batch = current_batch.lstrip('0') == original_batch.lstrip('0')
+        _logger.info(
+            'Fiserv batch-check (por batch): pinpad=%s original=%s mismo_lote=%s',
+            current_batch, original_batch, same_batch,
+        )
+        return same_batch
+
     def processFinancialReverse(self, data, base_url_endpoint):
         """
         Envía processFinancialReverse a ITD cuando el tiempo de la operación en pinpad expira.
@@ -362,10 +512,22 @@ class PaymentProvider(models.Model):
         currency_name = (source_transaction.currency_id.name or 'UYU')
         currency_code = '840' if currency_name == 'USD' else '858'
 
+        # InvoiceNumber: la spec ITD v3.5 (pág. 41) lo limita a 7 caracteres y
+        # los ejemplos son siempre numéricos. Si pasamos algo como "Pago/178"
+        # el pinpad puede freezarse o rechazar la operación. Saneamos: solo
+        # dígitos, máximo 7. Si la tx original no tenía dígitos en su
+        # invoice_number, fallback al id de la tx con zfill.
         inv = invoice_number
         if inv is None:
             inv = getattr(source_transaction, 'invoice_number', False) or ''
-        inv = str(inv).strip()
+        inv_raw = str(inv).strip()
+        digits = ''.join(c for c in inv_raw if c.isdigit())
+        if len(digits) >= 7:
+            inv = digits[-7:]
+        elif digits:
+            inv = digits.zfill(7)
+        else:
+            inv = str(source_transaction.id)[-7:].zfill(7)
 
         try:
             quotas = int(source_transaction.installments or 1)
@@ -499,11 +661,17 @@ class PaymentProvider(models.Model):
         """
         Anulación por ticket desde proveedor (contabilidad sin POS).
 
-        Si ITD rechaza el void con RC 109/110 (ticket fuera del lote actual del
-        pinpad: hubo cierre de lote entre la venta y el intento de anular), se hace
-        fallback automático a ``processFinancialPurchaseRefund`` con el payload
-        construido a partir de la transacción original. El frontend recibe la
-        respuesta final como si el usuario hubiera pedido refund directamente.
+        Antes del HTTP del void se hace un chequeo proactivo del lote actual
+        del pinpad (``processCurrentTransactionsBatchQuery``). Si el lote ya
+        cambió respecto al de la transacción original, se salta el void y se
+        envía directamente ``processFinancialPurchaseRefund``: la anulación
+        solo es válida dentro del mismo lote según la spec ITD (FAQ #1/#2).
+
+        Si el chequeo no es concluyente (endpoint no responde OK, falta
+        ``batch_number`` en la tx original, etc.) se intenta el void normal y
+        quedan dos redes de seguridad reactivas: RC 109/110 al inicio y
+        posResponseCode 21/25 al final del Query loop, ambas re-ejecutan como
+        refund automáticamente.
         """
         from .fiserv_utils import (
             FISERV_ITD_RC_VOID_SHOULD_REFUND,
@@ -512,15 +680,40 @@ class PaymentProvider(models.Model):
         )
 
         self.ensure_one()
-        _logger.info('Fiserv proveedor processFinancialPurchaseVoidByTicket (contable) %s', pprint.pformat(data))
+        base_url_endpoint = (self.sudo().fiserv_url_webservice or '').rstrip('/')
 
-        base_url_endpoint, response_json = fiserv_itd_http_post(
-            (self.sudo().fiserv_url_webservice or '').rstrip('/'),
-            '/processFinancialPurchaseVoidByTicket',
-            data,
-            'processFinancialPurchaseVoidByTicket',
-            extra_999_pos_warning=False,
-        )
+        # --- Chequeo proactivo del lote ---
+        in_current_batch = None
+        if account_payment_id:
+            pay = self.env['account.payment'].sudo().browse(account_payment_id)
+            original_tx = pay.fiserv_original_transaction_id if pay.exists() else False
+            if original_tx:
+                in_current_batch = self._fiserv_check_original_in_current_batch(
+                    base_url_endpoint, data.get('PosID', ''), original_tx,
+                )
+
+        if in_current_batch is False and account_payment_id:
+            _logger.info(
+                'Fiserv void→refund preventivo: el lote de la tx original ya cerró '
+                '(processCurrentTransactionsBatchQuery). Saltando void, voy directo a '
+                'processFinancialPurchaseRefund. account_payment=%s',
+                account_payment_id,
+            )
+            data, response_json = self._fiserv_switch_void_to_refund_contable(
+                account_payment_id, data,
+            )
+        else:
+            _logger.info(
+                'Fiserv proveedor processFinancialPurchaseVoidByTicket (contable) %s',
+                pprint.pformat(data),
+            )
+            base_url_endpoint, response_json = fiserv_itd_http_post(
+                base_url_endpoint,
+                '/processFinancialPurchaseVoidByTicket',
+                data,
+                'processFinancialPurchaseVoidByTicket',
+                extra_999_pos_warning=False,
+            )
 
         rc = str(response_json.get('ResponseCode', '999')).strip()
 
@@ -602,3 +795,77 @@ class PaymentProvider(models.Model):
             extra_999_pos_warning=False,
         )
         return refund_data, response_json
+
+    def _fiserv_run_void_to_refund_swap_in_thread(
+        self, account_payment_id, void_data, base_url_endpoint, pos_session_id,
+    ):
+        """
+        Reejecuta como refund un void que ITD aceptó al inicio pero rechazó al consultarse.
+
+        Pensado para llamarse **desde el worker thread** después del Query loop,
+        cuando ``fiserv_void_response_needs_refund_fallback`` da True
+        (``posResponseCode`` 21/25 = "no existe original" tras cierre de lote).
+
+        Lanza el HTTP inicial del refund y, si ITD lo acepta (RC=0), corre
+        síncronamente otro Query loop sobre la nueva transacción. Reutiliza el
+        mismo worker thread: el usuario espera más, pero todo el flujo termina
+        con un único resultado a persistir.
+
+        Args:
+            account_payment_id (int): Pago contable origen.
+            void_data (dict): Payload del void original (PosID, etc.).
+            base_url_endpoint (str): URL base devuelta por el HTTP del void.
+            pos_session_id: False en flujo contable.
+
+        Returns:
+            tuple|None: (new_transaction_id, refund_data, refund_query_result)
+            si el swap pudo iniciarse y completar el Query del refund. None si
+            no fue posible (refund rechazado al inicio o falló al construirlo).
+        """
+        from .fiserv_utils import fiserv_itd_http_post
+
+        self.ensure_one()
+        try:
+            refund_data, refund_response = self._fiserv_switch_void_to_refund_contable(
+                account_payment_id, void_data,
+            )
+        except Exception as exc:
+            _logger.error(
+                'Fiserv void→refund swap (post-Query): no se pudo construir refund: %s',
+                exc,
+            )
+            return None
+
+        rc = str(refund_response.get('ResponseCode', '999')).strip()
+        if rc != '0':
+            _logger.warning(
+                'Fiserv void→refund swap (post-Query): refund inicial rechazado RC=%s msg=%s',
+                rc, refund_response.get('msg') or '',
+            )
+            return None
+
+        new_transaction_id = refund_response.get('TransactionId')
+        if not new_transaction_id:
+            _logger.warning(
+                'Fiserv void→refund swap (post-Query): refund OK pero sin TransactionId'
+            )
+            return None
+
+        query_data = {
+            'PosID': refund_data['PosID'],
+            'SystemId': refund_data['SystemId'],
+            'Branch': refund_data['Branch'],
+            'ClientAppId': refund_data['ClientAppId'],
+            'UserId': refund_data['UserId'],
+            'TransactionDateTimeyyyyMMddHHmmssSSS': self.get_formatted_timestamp(),
+            'TransactionId': new_transaction_id,
+        }
+        refund_result = self.env['payment.transaction'].fiserv_run_purchase_query_loop(
+            self,
+            query_data,
+            base_url_endpoint,
+            new_transaction_id,
+            pos_session_id,
+            original_purchase_data=refund_data,
+        )
+        return new_transaction_id, refund_data, refund_result

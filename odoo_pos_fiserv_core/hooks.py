@@ -135,26 +135,41 @@ def _ensure_fiserv_journal(env):
             _logger.warning("No existe account.payment.method fiserv inbound")
             return
         if not journal:
-            # No creamos journal automáticamente: puede haber bloqueos por
-            # módulos Enterprise (activos) u otras localizaciones. El usuario
-            # crea el journal manualmente cuando active Fiserv en esa compañía.
-            _logger.info(
-                "Fiserv: no existe journal FSVR en compañía %s; skip (crear manual).",
-                env.company.name,
-            )
-            return
-        _ensure_journal_payment_method_line(env, journal, account_pm, "inbound")
+            # Crear el diario bancario Fiserv FSVR.
+            # Antes se omitía esta creación por temor a colisiones con módulos
+            # Enterprise (activos), pero la versión meta vieja sí lo creaba sin
+            # problemas. Sin journal, las account.payment.method.line nunca se
+            # crean y el form de account.payment no muestra el método saliente
+            # Fiserv → falla "Crear transacción" con UserError de proveedor.
+            uyu = env.ref("base.UYU", raise_if_not_found=False)
+            journal_vals = {
+                "name": "Fiserv ITD",
+                "code": "FSVR",
+                "type": "bank",
+                "company_id": env.company.id,
+            }
+            if uyu:
+                journal_vals["currency_id"] = uyu.id
+            journal = env["account.journal"].create(journal_vals)
+            _logger.info("Diario Fiserv FSVR creado en post_init")
+        provider = env["payment.provider"].search([("code", "=", "fiserv")], limit=1)
+        _ensure_journal_payment_method_line(env, journal, account_pm, "inbound", provider)
         if account_pm_out:
-            _ensure_journal_payment_method_line(env, journal, account_pm_out, "outbound")
+            _ensure_journal_payment_method_line(env, journal, account_pm_out, "outbound", provider)
         _register_irmodel_data(env, "account_journal_fiserv", journal)
     except Exception as exc:
         _logger.error("_ensure_fiserv_journal: %s", exc, exc_info=True)
 
 
-def _ensure_journal_payment_method_line(env, journal, account_pm, direction):
+def _ensure_journal_payment_method_line(env, journal, account_pm, direction, provider=None):
     """
     Crea (si falta) una account.payment.method.line para el diario y el
     account.payment.method indicado. ``direction`` = 'inbound' o 'outbound'.
+
+    Si se pasa ``provider`` (payment.provider Fiserv), se asegura que la línea
+    tenga ``payment_provider_id`` apuntando a él. Sin proveedor en la línea
+    saliente, el form de account.payment outbound no resuelve la integración
+    con Fiserv ITD y «Crear transacción» falla.
     """
     line_model = env["account.payment.method.line"]
     domain = [
@@ -163,12 +178,17 @@ def _ensure_journal_payment_method_line(env, journal, account_pm, direction):
     ]
     existing = line_model.search(domain, limit=1)
     if existing:
+        if provider and not existing.payment_provider_id:
+            existing.payment_provider_id = provider.id
         return existing
-    return line_model.create({
+    vals = {
         "name": account_pm.name,
         "payment_method_id": account_pm.id,
         "journal_id": journal.id,
-    })
+    }
+    if provider:
+        vals["payment_provider_id"] = provider.id
+    return line_model.create(vals)
 
 
 def _link_card_payment_method_to_fiserv(env):

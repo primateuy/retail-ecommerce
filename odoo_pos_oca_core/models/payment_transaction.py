@@ -164,6 +164,38 @@ class PaymentTransaction(models.Model):
         string='Cantidad de Cuotas',
         help='Número de cuotas de la transacción'
     )
+
+    @staticmethod
+    def _oca_extract_installments(response):
+        """
+        Extrae el número de cuotas de una respuesta OCA/POSLink.
+
+        El payload del cobro lleva ``Quotas=0`` para que el pinpad le pida al
+        cliente cuántas cuotas; el valor elegido vuelve en la respuesta. POSLink
+        no es consistente entre versiones: a veces ``Quota`` (singular), a veces
+        ``Quotas`` (plural), y en algunos firmwares ``Installments``. Ceros
+        a la izquierda y enteros se aceptan.
+
+        Args:
+            response (dict): Respuesta cualquiera del pinpad (Query, Confirm).
+
+        Returns:
+            int|None: Número de cuotas si se encontró un valor parseable >= 1,
+            None si no hay dato útil (para que el caller decida el default).
+        """
+        if not isinstance(response, dict):
+            return None
+        for key in ('Quota', 'Quotas', 'Installments', 'installments'):
+            raw = response.get(key)
+            if raw in (None, '', False):
+                continue
+            try:
+                value = int(str(raw).strip())
+            except (TypeError, ValueError):
+                continue
+            if value >= 1:
+                return value
+        return None
     
     acquirer = fields.Char(
         string='Adquirente',
@@ -192,18 +224,12 @@ class PaymentTransaction(models.Model):
         ('other', 'Otro'),
     ], string='Origen de Transacción', default='pos_payment')
     
-    pos_order_id = fields.Many2one(
-        'pos.order',
-        string='Pedido POS',
-        help='Pedido del punto de venta que generó la transacción'
-    )
-    
-    pos_payment_id = fields.Many2one(
-        'pos.payment',
-        string='Pago POS',
-        help='Pago del punto de venta que generó la transacción'
-    )
-    
+    # ``pos_order_id`` y ``pos_payment_id`` se declaran en odoo_pos_oca (flujo
+    # POS), no aquí. El core no debe arrastrar dependencia de point_of_sale: es
+    # el sustrato compartido entre POS y backend contable. Con POS instalado
+    # los campos quedan disponibles vía herencia del mismo modelo
+    # payment.transaction; sin POS, el core sigue funcionando puro.
+
     is_promotion = fields.Boolean(
         string='Es Promoción',
         help='Indica si la transacción es una promoción'
@@ -241,37 +267,9 @@ class PaymentTransaction(models.Model):
         help='Respuesta completa del POS en formato JSON para auditoría'
     )
     
-    def write(self, vals):
-        """
-        Sobrescribe el método write para actualizar el campo payment_transaction_id
-        en el pago cuando se asocie una transacción
-        
-        Args:
-            vals (dict): Valores a escribir
-            
-        Returns:
-            bool: True si se escribió correctamente
-        """
-        # Si se está actualizando pos_payment_id, actualizar el campo correspondiente en el pago
-        if 'pos_payment_id' in vals:
-            # Obtener el pago anterior y nuevo
-            old_payment_id = self.pos_payment_id.id if self.pos_payment_id else False
-            new_payment_id = vals['pos_payment_id']
-            
-            # Si había un pago anterior, limpiar su campo payment_transaction_id
-            if old_payment_id:
-                old_payment = self.env['pos.payment'].browse(old_payment_id)
-                if old_payment.exists():
-                    old_payment.payment_transaction_id = False
-            
-            # Si hay un nuevo pago, actualizar su campo payment_transaction_id
-            if new_payment_id:
-                new_payment = self.env['pos.payment'].browse(new_payment_id)
-                if new_payment.exists():
-                    new_payment.payment_transaction_id = self.id
-        
-        # Llamar al método write original
-        return super(PaymentTransaction, self).write(vals)
+    # El write hook que sincroniza ``pos_payment_id`` con
+    # ``pos.payment.payment_transaction_id`` vive en odoo_pos_oca: toca el
+    # modelo pos.payment y solo tiene sentido cuando POS está instalado.
 
     def _create_payment(self, **extra_create_values):
         """
@@ -296,10 +294,19 @@ class PaymentTransaction(models.Model):
         ):
             return self.account_payment_id
 
-        # Identificar transacciones que provienen del POS OCA (no crear account.payment)
+        # Identificar transacciones que provienen del POS OCA (no crear account.payment).
+        # Los campos pos_order_id/pos_payment_id solo existen cuando odoo_pos_oca
+        # está instalado: usar guards `'X' in self._fields` evita AttributeError
+        # en bases sin POS y mantiene el core desacoplado de point_of_sale.
+        has_pos_payment = (
+            'pos_payment_id' in self._fields and bool(self.pos_payment_id)
+        )
+        has_pos_order = (
+            'pos_order_id' in self._fields and bool(self.pos_order_id)
+        )
         is_pos_oca = (
             self.transaction_origin in ('pos_payment', 'pos_order')
-            or bool(self.pos_payment_id)
+            or has_pos_payment
         )
         if is_pos_oca:
             _logger.info(
@@ -308,8 +315,8 @@ class PaymentTransaction(models.Model):
                 'El cobro ya está registrado en pos.payment.',
                 self.oca_transaction_id or self.reference,
                 self.reference,
-                self.pos_order_id.id if self.pos_order_id else None,
-                self.pos_payment_id.id if self.pos_payment_id else None,
+                self.pos_order_id.id if has_pos_order else None,
+                self.pos_payment_id.id if has_pos_payment else None,
             )
             # Retornar recordset vacío; el flujo estándar no crea pago para esta transacción
             return self.env['account.payment']
@@ -382,22 +389,29 @@ class PaymentTransaction(models.Model):
             'oca_response_code': response_code,
             'oca_response_message': oca_response.get('msg', ''),
             'oca_complete_response': json.dumps(oca_response, indent=2, ensure_ascii=False),
-            
-            # Campos de relación
-            'pos_order_id': pos_order.id if pos_order else False,
-            'pos_payment_id': pos_payment.id if pos_payment else False,
+
             'transaction_origin': 'pos_payment' if pos_payment else 'pos_order' if pos_order else 'other',
         }
-        
+        # Campos de relación POS: solo si odoo_pos_oca los aportó. Sin POS
+        # instalado, pos_order/pos_payment serán siempre None y este bloque no
+        # entra; se mantiene la verificación `'X' in self._fields` por defensa.
+        if pos_order and 'pos_order_id' in self._fields:
+            transaction_vals['pos_order_id'] = pos_order.id
+        if pos_payment and 'pos_payment_id' in self._fields:
+            transaction_vals['pos_payment_id'] = pos_payment.id
+
         # Crear la transacción
         transaction = self.create(transaction_vals)
-        
-        # Si hay un pago POS asociado, actualizar su campo payment_transaction_id
-        if pos_payment:
+
+        # Si hay un pago POS asociado, actualizar su campo payment_transaction_id.
+        # Tanto el campo del pos.payment como el cuerpo de este if dependen de
+        # que odoo_pos_oca esté instalado (es quien aporta payment_transaction_id
+        # en pos.payment); sin POS, pos_payment es siempre None y no se ejecuta.
+        if pos_payment and hasattr(pos_payment, 'payment_transaction_id'):
             pos_payment.payment_transaction_id = transaction.id
-        
+
         return transaction
-    
+
     def _get_transaction_state_from_response(self, response_code):
         """
         Determina el estado de la transacción basado en el código de respuesta OCA
@@ -678,16 +692,22 @@ class PaymentTransaction(models.Model):
             update_vals['merchant_number'] = oca_response['Merchant']
 
         # Cuotas: el payload inicial va con Quotas=0 para que el pinpad pida
-        # al cliente cuántas cuotas. POSLink devuelve el valor elegido en la
-        # respuesta del Query como ``Quota`` (singular) o ``Quotas`` (plural).
-        quotas_raw = oca_response.get('Quota', oca_response.get('Quotas'))
-        if quotas_raw not in (None, '', False):
-            try:
-                quotas_int = int(str(quotas_raw).strip())
-                if quotas_int >= 1:
-                    update_vals['installments'] = quotas_int
-            except (TypeError, ValueError):
-                pass
+        # al cliente cuántas cuotas. POSLink no es consistente entre versiones
+        # con la key de respuesta — _oca_extract_installments cubre Quota,
+        # Quotas, Installments e installments.
+        quotas_int = self._oca_extract_installments(oca_response)
+        if quotas_int is not None:
+            update_vals['installments'] = quotas_int
+            _logger.info(
+                'OCA update_oca_transaction: cuotas extraídas=%s (tx id=%s)',
+                quotas_int, self.id,
+            )
+        else:
+            _logger.warning(
+                'OCA update_oca_transaction: respuesta sin Quota/Quotas/Installments '
+                'parseable (tx id=%s, keys=%s)',
+                self.id, list(oca_response.keys()) if isinstance(oca_response, dict) else None,
+            )
 
         self.write(update_vals)
     
@@ -761,12 +781,10 @@ class PaymentTransaction(models.Model):
             'card_last_four': oca_response.get('CardNumber', '')[-4:] if oca_response.get('CardNumber') else '',
             'issuer_code': str(oca_response.get('Issuer', '')),
             'issuer_name': self._resolve_oca_issuer_display(oca_response),
-            # Cuotas elegidas por el cliente en el pinpad: POSLink las devuelve
-            # en 'Quota' (singular) en la respuesta del Query; se mantiene
-            # 'Quotas' (plural) como fallback por compatibilidad con docs.
-            'installments': int(
-                str(oca_response.get('Quota') or oca_response.get('Quotas') or 1).strip() or 1
-            ),
+            # Cuotas elegidas por el cliente en el pinpad. _oca_extract_installments
+            # cubre las distintas keys que usa POSLink (Quota, Quotas, Installments).
+            # Si no se encuentra valor >= 1, dejar 1 como default conservador.
+            'installments': self._oca_extract_installments(oca_response) or 1,
             'acquirer': str(oca_response.get('Acquirer', '')),
             'ticket_number': oca_response.get('Ticket', ''),
             'batch_number': oca_response.get('Batch', ''),
@@ -777,22 +795,29 @@ class PaymentTransaction(models.Model):
             'oca_response_code': response_code,
             'oca_response_message': state_message,
             'oca_complete_response': json.dumps(oca_response, indent=2, ensure_ascii=False),
-            
-            # Campos de relación
-            'pos_order_id': pos_order.id if pos_order else False,
-            'pos_payment_id': pos_payment.id if pos_payment else False,
+
             'transaction_origin': 'pos_payment' if pos_payment else 'pos_order' if pos_order else 'other',
         }
-        
+        # Campos de relación POS: solo si odoo_pos_oca los aportó. Sin POS
+        # instalado, pos_order/pos_payment serán siempre None y este bloque no
+        # entra; se mantiene la verificación `'X' in self._fields` por defensa.
+        if pos_order and 'pos_order_id' in self._fields:
+            transaction_vals['pos_order_id'] = pos_order.id
+        if pos_payment and 'pos_payment_id' in self._fields:
+            transaction_vals['pos_payment_id'] = pos_payment.id
+
         # Crear la transacción
         transaction = self.create(transaction_vals)
-        
-        # Si hay un pago POS asociado, actualizar su campo payment_transaction_id
-        if pos_payment:
+
+        # Si hay un pago POS asociado, actualizar su campo payment_transaction_id.
+        # Tanto el campo del pos.payment como el cuerpo de este if dependen de
+        # que odoo_pos_oca esté instalado (es quien aporta payment_transaction_id
+        # en pos.payment); sin POS, pos_payment es siempre None y no se ejecuta.
+        if pos_payment and hasattr(pos_payment, 'payment_transaction_id'):
             pos_payment.payment_transaction_id = transaction.id
-        
+
         return transaction
-    
+
     def _generate_oca_reference_from_complete_data(self, oca_response):
         """
         Genera una referencia única para la transacción OCA con información completa.
@@ -963,19 +988,9 @@ class PaymentTransaction(models.Model):
         else:
             return 'Sin factura'
     
-    def update_payment_transaction_reference(self):
-        """
-        Actualiza el campo payment_transaction_id en el pago POS asociado
-        
-        Este método se ejecuta cuando se asocia una transacción a un pago
-        para mantener la referencia bidireccional entre pago y transacción.
-        """
-        for transaction in self:
-            if transaction.pos_payment_id:
-                # Actualizar el campo payment_transaction_id en el pago
-                transaction.pos_payment_id.payment_transaction_id = transaction.id
-                _logger.info('Campo payment_transaction_id actualizado en pago %s para transacción %s',
-                           transaction.pos_payment_id.name, transaction.oca_transaction_id)
+    # ``update_payment_transaction_reference`` y demás helpers que sincronizan
+    # con pos.payment viven en odoo_pos_oca: dependen de campos del POS y solo
+    # tienen sentido cuando ese stack está instalado.
 
     # --- Campo nuevo: enlace al pago contable (flujo backend OCA) ---
     account_payment_id = fields.Many2one(

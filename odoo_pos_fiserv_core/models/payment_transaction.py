@@ -198,18 +198,11 @@ class PaymentTransaction(models.Model):
         help='Registro de pago estándar (account.payment) cuando el cobro ITD se inició desde contabilidad.',
     )
     
-    pos_order_id = fields.Many2one(
-        'pos.order',
-        string='Pedido POS',
-        help='Pedido del punto de venta que generó la transacción'
-    )
-    
-    pos_payment_id = fields.Many2one(
-        'pos.payment',
-        string='Pago POS',
-        help='Pago del punto de venta que generó la transacción'
-    )
-    
+    # Los Many2one a 'pos.order' y 'pos.payment' viven en odoo_pos_fiserv_pos
+    # (modelo extendido por _inherit). Si solo está instalado el backend,
+    # esos campos no existen en payment.transaction y la lectura del registro
+    # no falla con _unknown.
+
     is_promotion = fields.Boolean(
         string='Es Promoción',
         help='Indica si la transacción es una promoción'
@@ -265,33 +258,11 @@ class PaymentTransaction(models.Model):
 
     def write(self, vals):
         """
-        Sobrescribe el método write para actualizar el campo payment_transaction_id
-        en el pago cuando se asocie una transacción
-        
-        Args:
-            vals (dict): Valores a escribir
-            
-        Returns:
-            bool: True si se escribió correctamente
+        Sincroniza ``account.payment.payment_transaction_id`` cuando cambia el
+        ``account_payment_id`` de la transacción. La sincronización con
+        ``pos.payment`` vive en ``odoo_pos_fiserv_pos`` para no acoplar el core
+        al módulo POS.
         """
-        # Si se está actualizando pos_payment_id, actualizar el campo correspondiente en el pago
-        if 'pos_payment_id' in vals:
-            # Obtener el pago anterior y nuevo
-            old_payment_id = self.pos_payment_id.id if self.pos_payment_id else False
-            new_payment_id = vals['pos_payment_id']
-            
-            # Si había un pago anterior, limpiar su campo payment_transaction_id
-            if old_payment_id:
-                old_payment = self.env['pos.payment'].browse(old_payment_id)
-                if old_payment.exists():
-                    old_payment.payment_transaction_id = False
-            
-            # Si hay un nuevo pago, actualizar su campo payment_transaction_id
-            if new_payment_id:
-                new_payment = self.env['pos.payment'].browse(new_payment_id)
-                if new_payment.exists():
-                    new_payment.payment_transaction_id = self.id
-
         if 'account_payment_id' in vals:
             new_ap_id = vals.get('account_payment_id')
             old_ap_id = self.account_payment_id.id if self.account_payment_id else False
@@ -303,8 +274,6 @@ class PaymentTransaction(models.Model):
                 new_ap = self.env['account.payment'].browse(new_ap_id)
                 if new_ap.exists():
                     new_ap.payment_transaction_id = self.id
-        
-        # Llamar al método write original
         return super(PaymentTransaction, self).write(vals)
 
     def _create_payment(self, **extra_create_values):
@@ -332,20 +301,23 @@ class PaymentTransaction(models.Model):
             )
             return self.account_payment_id
 
-        # Identificar transacciones que provienen del POS Fiserv (no crear account.payment)
+        # Identificar transacciones que provienen del POS Fiserv (no crear account.payment).
+        # Sin POS instalado los campos pos_*_id no existen, por eso se chequean por _fields.
+        has_pos_payment = (
+            'pos_payment_id' in self._fields and bool(self.pos_payment_id)
+        )
         is_pos_fiserv = (
             self.transaction_origin in ('pos_payment', 'pos_order')
-            or bool(self.pos_payment_id)
+            or has_pos_payment
         )
         if is_pos_fiserv:
             _logger.info(
                 'Fiserv POS: omitiendo creación de account.payment para transacción %s '
-                '(reference=%s, pos_order_id=%s, pos_payment_id=%s). '
+                '(reference=%s, transaction_origin=%s). '
                 'El cobro ya está registrado en pos.payment.',
                 self.fiserv_transaction_id or self.reference,
                 self.reference,
-                self.pos_order_id.id if self.pos_order_id else None,
-                self.pos_payment_id.id if self.pos_payment_id else None,
+                self.transaction_origin,
             )
             # Retornar recordset vacío; el flujo estándar no crea pago para esta transacción
             return self.env['account.payment']
@@ -382,11 +354,19 @@ class PaymentTransaction(models.Model):
         
         # Convertir desde centavos a la unidad correcta
         corrected_amount = amount_from_pos / 100.0 if amount_from_pos > 0 else 0.0
-        
+
+        # Si la operación es void o refund (ITD las identifica por la presencia de
+        # ``TicketNumber`` en el payload), el monto se almacena en negativo para
+        # que la payment.transaction refleje la dirección del dinero (salida).
+        # ITD recibe siempre el monto positivo en el payload; el signo es solo
+        # para representación contable interna.
+        if (pos_data or {}).get('TicketNumber') and corrected_amount > 0:
+            corrected_amount = -corrected_amount
+
         # Log para debuggear el problema del monto
-        _logger.info('Fiserv Transaction Amount Debug - Original: %s, Corrected: %s', 
+        _logger.info('Fiserv Transaction Amount Debug - Original: %s, Corrected: %s',
                     amount_from_pos, corrected_amount)
-        
+
         # Obtener el número de factura del pedido POS
         invoice_number = self._get_invoice_number_from_relations(pos_order, pos_payment)
 
@@ -435,22 +415,25 @@ class PaymentTransaction(models.Model):
             'fiserv_response_code': response_code,
             'fiserv_response_message': itd_response.get('msg', ''),
             'fiserv_complete_response': json.dumps(itd_response, indent=2, ensure_ascii=False),
-            
-            # Campos de relación
-            'pos_order_id': pos_order.id if pos_order else False,
-            'pos_payment_id': pos_payment.id if pos_payment else False,
+
             'transaction_origin': 'pos_payment' if pos_payment else 'pos_order' if pos_order else 'other',
         }
-        
+        # Campos POS: solo si odoo_pos_fiserv_pos los aportó (no romper sin POS).
+        if pos_order and 'pos_order_id' in self._fields:
+            transaction_vals['pos_order_id'] = pos_order.id
+        if pos_payment and 'pos_payment_id' in self._fields:
+            transaction_vals['pos_payment_id'] = pos_payment.id
+
         # Crear la transacción
         transaction = self.create(transaction_vals)
-        
-        # Si hay un pago POS asociado, actualizar su campo payment_transaction_id
-        if pos_payment:
+
+        # Sincronizar pos_payment.payment_transaction_id solo si el campo existe
+        # en pos.payment (lo agrega odoo_pos_fiserv_pos_payment u odoo_pos_oca).
+        if pos_payment and 'payment_transaction_id' in pos_payment._fields:
             pos_payment.payment_transaction_id = transaction.id
-        
+
         return transaction
-    
+
     def _get_transaction_state_from_response(self, response_code):
         """
         Determina el estado según ResponseCode ITD.
@@ -717,6 +700,40 @@ class PaymentTransaction(models.Model):
             return None
         return total_amount / 100.0
 
+    def _fiserv_is_outbound_tx(self):
+        """
+        Indica si esta payment.transaction representa una anulación o devolución
+        (salida de dinero), para guardar ``amount`` con signo negativo.
+
+        Discriminadores por orden de prioridad:
+        1) ``self.amount < 0``: la creación inicial ya marcó signo (vía pos_data
+           con TicketNumber o vía relación outbound). Preservar.
+        2) ``account_payment_id.payment_type == 'outbound'``: devolución por
+           ticket desde contabilidad.
+        3) ``pos_payment_id.amount < 0`` (si el módulo POS lo aporta): refund
+           registrado como pago POS.
+        4) ``pos_order_id.amount_total < 0`` (si el módulo POS lo aporta):
+           pedido de devolución POS.
+
+        Returns:
+            bool: True si la tx debe almacenar ``amount`` en negativo.
+        """
+        self.ensure_one()
+        if self.amount and self.amount < 0:
+            return True
+        ap = self.account_payment_id if 'account_payment_id' in self._fields else False
+        if ap and ap.payment_type == 'outbound':
+            return True
+        if 'pos_payment_id' in self._fields:
+            pp = self.pos_payment_id
+            if pp and getattr(pp, 'amount', 0) < 0:
+                return True
+        if 'pos_order_id' in self._fields:
+            po = self.pos_order_id
+            if po and getattr(po, 'amount_total', 0) < 0:
+                return True
+        return False
+
     def update_fiserv_transaction(self, itd_response):
         """
         Actualiza una transacción Fiserv existente con nueva información.
@@ -747,6 +764,13 @@ class PaymentTransaction(models.Model):
         # --- Importe desde TotalAmount cuando ITD lo envía (p. ej. respuesta final RC=0) ---
         corrected_amount = self._fiserv_corrected_amount_from_total_amount(itd_response)
         if corrected_amount is not None:
+            # Preservar signo negativo en void/refund: ITD siempre devuelve
+            # ``TotalAmount`` positivo, pero la payment.transaction guardada en
+            # negativo debe seguir reflejando salida de dinero. Si la tx ya estaba
+            # con monto negativo (creada por el path void/refund), o si la relación
+            # contable/POS indica devolución, forzamos signo negativo.
+            if corrected_amount > 0 and self._fiserv_is_outbound_tx():
+                corrected_amount = -corrected_amount
             update_vals['amount'] = corrected_amount
 
         # --- PosID y moneda si vienen en la respuesta ---
@@ -887,6 +911,22 @@ class PaymentTransaction(models.Model):
             partner_id = self._get_partner_id(pos_order, pos_payment)
             company_id = self._get_company_id(pos_order, pos_payment)
 
+        # Void/refund → monto en negativo en la payment.transaction (representación
+        # contable de salida de dinero). Discriminadores por orden de prioridad:
+        # 1) pago contable outbound (devolución por ticket desde backend),
+        # 2) pos.payment con amount negativo (refund POS),
+        # 3) pos.order con amount_total negativo (orden de devolución POS).
+        if corrected_amount > 0:
+            is_outbound_op = False
+            if account_pay and account_pay.payment_type == 'outbound':
+                is_outbound_op = True
+            elif pos_payment and getattr(pos_payment, 'amount', 0) < 0:
+                is_outbound_op = True
+            elif pos_order and getattr(pos_order, 'amount_total', 0) < 0:
+                is_outbound_op = True
+            if is_outbound_op:
+                corrected_amount = -corrected_amount
+
         tx_origin = 'account_payment' if account_pay else (
             'pos_payment' if pos_payment else 'pos_order' if pos_order else 'other'
         )
@@ -922,24 +962,26 @@ class PaymentTransaction(models.Model):
             'fiserv_response_code': response_code,
             'fiserv_response_message': state_message,
             'fiserv_complete_response': json.dumps(itd_response, indent=2, ensure_ascii=False),
-            
-            # Campos de relación
-            'pos_order_id': pos_order.id if pos_order else False,
-            'pos_payment_id': pos_payment.id if pos_payment else False,
+
             'account_payment_id': account_pay.id if account_pay else False,
             'transaction_origin': tx_origin,
         }
-        
+        # Campos POS: solo si odoo_pos_fiserv_pos los aportó (no romper sin POS).
+        if pos_order and 'pos_order_id' in self._fields:
+            transaction_vals['pos_order_id'] = pos_order.id
+        if pos_payment and 'pos_payment_id' in self._fields:
+            transaction_vals['pos_payment_id'] = pos_payment.id
+
         # Crear la transacción
         transaction = self.create(transaction_vals)
-        
-        # Si hay un pago POS asociado, actualizar su campo payment_transaction_id
-        if pos_payment:
+
+        # Sincronizar pos_payment.payment_transaction_id solo si el campo existe.
+        if pos_payment and 'payment_transaction_id' in pos_payment._fields:
             pos_payment.payment_transaction_id = transaction.id
 
         if account_pay:
             account_pay.payment_transaction_id = transaction.id
-        
+
         return transaction
     
     def _generate_fiserv_reference_from_complete_data(self, itd_response):
@@ -1111,19 +1153,9 @@ class PaymentTransaction(models.Model):
         else:
             return 'Sin factura'
     
-    def update_payment_transaction_reference(self):
-        """
-        Actualiza el campo payment_transaction_id en el pago POS asociado
-
-        Este método se ejecuta cuando se asocia una transacción a un pago
-        para mantener la referencia bidireccional entre pago y transacción.
-        """
-        for transaction in self:
-            if transaction.pos_payment_id:
-                # Actualizar el campo payment_transaction_id en el pago
-                transaction.pos_payment_id.payment_transaction_id = transaction.id
-                _logger.info('Campo payment_transaction_id actualizado en pago %s para transacción %s',
-                           transaction.pos_payment_id.name, transaction.fiserv_transaction_id)
+    # update_payment_transaction_reference vive en odoo_pos_fiserv_pos:
+    # depende de pos_payment_id (modelo pos.payment) y solo tiene sentido si el
+    # POS está instalado.
 
     @api.model
     def fiserv_run_purchase_query_loop(

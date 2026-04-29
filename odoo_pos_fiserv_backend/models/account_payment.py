@@ -149,6 +149,12 @@ class AccountPayment(models.Model):
         help='Oculta el botón Cancelar cuando hay una transacción POS integrada '
         'ya aprobada: se espera el Confirmar, no la cancelación.',
     )
+    pos_integrated_draft_blocked = fields.Boolean(
+        compute='_compute_pos_integrated_flags',
+        help='Oculta el botón «Restablecer a borrador» cuando hay una transacción '
+        'POS integrada (Fiserv/OCA) aprobada: un cobro con éxito en pinpad no '
+        'puede revertirse desde el form (la anulación se hace por ticket).',
+    )
 
     @api.depends('payment_method_line_id', 'payment_method_line_id.payment_provider_id')
     def _compute_fiserv_is_fiserv_payment_line(self):
@@ -190,6 +196,7 @@ class AccountPayment(models.Model):
         'fiserv_async_terminal_pending',
         'fiserv_charge_on_pos',
         'fiserv_tx_is_done',
+        'fiserv_is_integrated_journal',
     )
     def _compute_pos_integrated_flags(self):
         """
@@ -198,10 +205,18 @@ class AccountPayment(models.Model):
         Mira ambos sets de campos (vía ``_fields``) para que, cuando los dos
         backends coexistan en la misma BD, la UI combine correctamente las
         condiciones aunque Odoo sobreescriba los atributos de la vista.
+
+        ``f_waiting`` también es True si el diario está integrado a Fiserv
+        aunque el usuario aún no haya marcado el check «Cobrar en terminal»:
+        un diario Fiserv exige pasar por el pinpad sí o sí, no se puede
+        Confirmar el pago directo.
         """
         for pay in self:
             f_pending = pay.fiserv_async_terminal_pending
-            f_waiting = pay.fiserv_charge_on_pos and not pay.fiserv_tx_is_done
+            f_waiting = (
+                (pay.fiserv_charge_on_pos or pay.fiserv_is_integrated_journal)
+                and not pay.fiserv_tx_is_done
+            )
             f_done = pay.fiserv_tx_is_done
 
             o_pending = o_waiting = o_done = False
@@ -212,6 +227,7 @@ class AccountPayment(models.Model):
 
             pay.pos_integrated_post_blocked = f_pending or f_waiting or o_pending or o_waiting
             pay.pos_integrated_cancel_blocked = f_pending or f_done or o_pending or o_done
+            pay.pos_integrated_draft_blocked = f_pending or f_done or o_pending or o_done
 
     @api.depends('payment_transaction_id', 'payment_transaction_id.provider_id')
     def _compute_fiserv_payment_tx_provider_code(self):
@@ -258,6 +274,26 @@ class AccountPayment(models.Model):
         terminals = self.fiserv_selectable_terminal_ids
         if len(terminals) == 1:
             self.fiserv_terminal_id = terminals[0]
+
+    @api.onchange('fiserv_original_transaction_id')
+    def _onchange_fiserv_original_transaction_id(self):
+        """
+        Precarga partner, moneda y monto desde la transacción Fiserv original al
+        elegirla. Una devolución por ticket replica al 100%% el cobro original:
+        forzar al usuario a re-tipear esos datos solo abre la puerta a errores
+        (monto distinto al cobrado → ITD rechaza, partner ajeno → asiento mal
+        imputado). El campo ``amount`` queda readonly por modifier de la vista
+        para sellar el valor.
+        """
+        tx = self.fiserv_original_transaction_id
+        if not tx:
+            return
+        if tx.partner_id:
+            self.partner_id = tx.partner_id
+        if tx.currency_id:
+            self.currency_id = tx.currency_id
+        if tx.amount:
+            self.amount = tx.amount
 
     @api.onchange('journal_id')
     def _onchange_fiserv_auto_charge_integrated_journal(self):
@@ -436,7 +472,10 @@ class AccountPayment(models.Model):
         """
         self.ensure_one()
         prov = self._fiserv_backend_fiserv_provider()
-        empty_pos_session = self.env['pos.session'].browse()
+        # Backend NO depende de point_of_sale: pasamos sentinels falsy en vez de
+        # un recordset vacío de pos.session. Los métodos del provider y el worker
+        # ITD aceptan el argumento como opaco y solo lo usan tras chequear truthy.
+        empty_pos_session = False
         pos_session_id = False
 
         if self.payment_type == 'inbound':
@@ -555,6 +594,51 @@ class AccountPayment(models.Model):
             )
         return True
 
+    def action_draft(self):
+        """
+        Bloquea «Restablecer a borrador» para pagos con transacción Fiserv aprobada.
+
+        Una vez que el pinpad ITD aprobó la operación, revertir el pago contable
+        sin anular la transacción en la red de Fiserv dejaría la base inconsistente
+        con la red. La devolución debe hacerse por ticket: nuevo pago outbound
+        apuntando a la transacción original (campo ``fiserv_original_transaction_id``).
+        """
+        blocked = self.filtered(
+            lambda p: p.payment_transaction_id
+            and p.payment_transaction_id.provider_id.code == 'fiserv'
+            and p.payment_transaction_id.state == 'done'
+        )
+        if blocked:
+            raise UserError(
+                _(
+                    'No se puede restablecer a borrador un pago ya cobrado en '
+                    'terminal Fiserv. Para devolver el dinero al cliente, cree un '
+                    'pago de tipo «Enviar dinero» y seleccione la transacción '
+                    'original en «Devolución con terminal Fiserv».'
+                )
+            )
+        return super().action_draft()
+
+    def action_cancel(self):
+        """
+        Bloquea «Cancelar» para pagos con transacción Fiserv aprobada (igual lógica
+        que ``action_draft``).
+        """
+        blocked = self.filtered(
+            lambda p: p.payment_transaction_id
+            and p.payment_transaction_id.provider_id.code == 'fiserv'
+            and p.payment_transaction_id.state == 'done'
+        )
+        if blocked:
+            raise UserError(
+                _(
+                    'No se puede cancelar un pago ya cobrado en terminal Fiserv. '
+                    'Para devolver el dinero, cree un pago de tipo «Enviar dinero» '
+                    'y seleccione la transacción original.'
+                )
+            )
+        return super().action_cancel()
+
     def action_post(self):
         """
         Confirmar (postear contablemente). Para pagos con terminal Fiserv, solo
@@ -584,6 +668,25 @@ class AccountPayment(models.Model):
                 _(
                     'Debe crear primero la transacción con el botón «Crear transacción» '
                     'y esperar la aprobación del terminal antes de confirmar el pago.'
+                )
+            )
+
+        # Diario integrado Fiserv sin tx aprobada: forzar el flujo «Crear transacción».
+        # Cubre el caso en que el usuario llega al action_post por RPC o por una
+        # acción de servidor que evita la UI (los modifiers de la vista no aplican).
+        integrated_no_tx = self.filtered(
+            lambda p: p.fiserv_is_integrated_journal
+            and p.state == 'draft'
+            and not p.is_internal_transfer
+            and p.payment_type in ('inbound', 'outbound')
+            and (not p.payment_transaction_id or p.payment_transaction_id.state != 'done')
+        )
+        if integrated_no_tx:
+            raise UserError(
+                _(
+                    'El diario seleccionado está integrado a Fiserv. Use el botón '
+                    '«Crear transacción» y espere la aprobación del terminal antes '
+                    'de confirmar el pago.'
                 )
             )
 

@@ -15,7 +15,7 @@ transacción, terminal, reporte voucher) vive en 'odoo_pos_fiserv_core'.
     "author": "PRIMATE",
     "website": "https://www.primate.com",
     "category": "Accounting/Payment",
-    "version": "17.0.2.0.5",
+    "version": "17.0.2.0.11",
     "depends": [
         "odoo_pos_fiserv_core",
         "account_accountant",

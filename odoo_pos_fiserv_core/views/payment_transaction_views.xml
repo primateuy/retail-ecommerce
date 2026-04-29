@@ -26,10 +26,14 @@
                         </group>
                     </group>
                     <group string="Relaciones" name="fiserv_relations" invisible="provider_code != 'fiserv'">
-                        <group>
+                        <!--
+                            ``pos_order_id`` y ``pos_payment_id`` solo existen cuando
+                            odoo_pos_fiserv_pos está instalado. La vista del POS los
+                            inyecta vía xpath sobre el group ``fiserv_relations_left``;
+                            sin POS este group queda con los campos contables solamente.
+                        -->
+                        <group name="fiserv_relations_left">
                             <field name="transaction_origin"/>
-                            <field name="pos_order_id"/>
-                            <field name="pos_payment_id"/>
                             <field name="account_payment_id" invisible="transaction_origin != 'account_payment'"/>
                             <field name="is_promotion"/>
                         </group>

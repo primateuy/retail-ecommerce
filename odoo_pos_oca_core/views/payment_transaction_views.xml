@@ -30,10 +30,14 @@
                         </group>
                     </group>
                     <group string="Relaciones OCA" name="oca_relations" invisible="provider_code != 'oca'">
-                        <group string="Relaciones">
+                        <!--
+                            ``pos_order_id`` y ``pos_payment_id`` solo existen cuando
+                            odoo_pos_oca está instalado. La vista del POS los inyecta
+                            vía xpath en este group ``oca_relations_left``; sin POS
+                            queda solo con los campos contables.
+                        -->
+                        <group string="Relaciones" name="oca_relations_left">
                             <field name="transaction_origin"/>
-                            <field name="pos_order_id"/>
-                            <field name="pos_payment_id"/>
                             <field name="is_promotion"/>
                         </group>
                         <group string="Información OCA">

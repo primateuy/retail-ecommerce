@@ -16,7 +16,7 @@ No arrastra dependencia de 'point_of_sale'. Para el flujo POS instalar
     "author": "PRIMATE",
     "website": "https://www.primate.com",
     "category": "Accounting/Payment",
-    "version": "17.0.2.0.7",
+    "version": "17.0.2.0.15",
     "depends": [
         "base",
         "bus",

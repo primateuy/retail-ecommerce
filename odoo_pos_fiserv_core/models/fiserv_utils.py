@@ -48,6 +48,39 @@ FISERV_ITD_RESPONSE_CODE_MSG = {
 # la recomendación del manual es ejecutar ``processFinancialPurchaseRefund`` en su lugar.
 FISERV_ITD_RC_VOID_SHOULD_REFUND = ('109', '110')
 
+# posResponseCode (Anexo 2) que indican que un void aceptado al inicio (RC=0) no
+# encontró la transacción original al consultar el resultado en el pinpad. Esto
+# ocurre cuando el lote del pinpad cerró entre la venta y la anulación: ITD
+# acepta el processFinancialPurchaseVoidByTicket inicial (RC=0) pero la
+# respuesta del Query trae posResponseCode 21/25 ("no existe original").
+# Mismo remedio que con RC 109/110: re-ejecutar como processFinancialPurchaseRefund.
+FISERV_POS_RC_VOID_NEEDS_REFUND_AFTER_QUERY = ('21', '25')
+
+
+def fiserv_void_response_needs_refund_fallback(original_data, query_result):
+    """
+    Indica si la respuesta del Query a un void requiere fallback a refund.
+
+    Args:
+        original_data (dict): Payload original enviado a ITD.
+        query_result (dict): Respuesta final del Query loop.
+
+    Returns:
+        bool: True solo si la operación inicial fue void (TicketNumber sin
+        Amount) y el Query devolvió ``posResponseCode`` en
+        ``FISERV_POS_RC_VOID_NEEDS_REFUND_AFTER_QUERY``.
+    """
+    if not original_data or not isinstance(query_result, dict):
+        return False
+    # Void puro: tiene TicketNumber pero no Amount. Refund tiene ambos; cobro
+    # normal no tiene TicketNumber. Solo el void puro entra al fallback.
+    if not original_data.get('TicketNumber') or original_data.get('Amount'):
+        return False
+    pos_code = query_result.get('PosResponseCode') or query_result.get('posResponseCode')
+    if pos_code is None or pos_code == '':
+        return False
+    return str(pos_code).strip().upper() in FISERV_POS_RC_VOID_NEEDS_REFUND_AFTER_QUERY
+
 
 def _fiserv_extract_itd_message_from_body(response_json):
     """
@@ -354,6 +387,30 @@ def fiserv_itd_background_worker_account_payment(
                 pos_session_id,
                 original_purchase_data=data,
             )
+
+            # Fallback void→refund post-Query: ITD acepta el void inicial (RC=0)
+            # y luego en el Query devuelve posResponseCode 21/25 ("no existe
+            # original") por cierre de lote. Mismo remedio que para RC=109/110:
+            # reejecutar como refund. Aquí el swap corre en línea: el resultado
+            # final que se persiste pasa a ser el del refund.
+            if account_payment_id and fiserv_void_response_needs_refund_fallback(data, result):
+                _logger.info(
+                    'Fiserv void→refund (post-Query): posResponseCode %s en void '
+                    'tx=%s, lanzando refund automático',
+                    result.get('PosResponseCode') or result.get('posResponseCode'),
+                    tid_norm,
+                )
+                swap = prov._fiserv_run_void_to_refund_swap_in_thread(
+                    account_payment_id, data, base_url_endpoint, pos_session_id,
+                )
+                if swap:
+                    new_tid, data, result = swap
+                    transaction_id = new_tid
+                    tid_norm = str(new_tid).strip()
+                    _logger.info(
+                        'Fiserv void→refund (post-Query): swap ejecutado, nueva tx ITD=%s',
+                        tid_norm,
+                    )
             try:
                 env['payment.transaction'].fiserv_persist_after_query_generic(
                     tid_norm,

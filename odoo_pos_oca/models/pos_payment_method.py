@@ -390,6 +390,24 @@ class PosPaymentMethod(models.Model):
                 "TransactionId": transaction_id,
             }
 
+            # POSLink/OCA no garantiza que TODOS los datos importantes (Quota,
+            # Ticket, Batch, AuthorizationCode, CardNumber, etc.) lleguen en la
+            # MISMA respuesta. A veces ``Quota`` aparece en una iteración con
+            # RC=12 y luego desaparece del payload final con RC=0. Si solo
+            # persistimos el último ``result``, la cuota queda en 1.
+            #
+            # Acumulamos los valores no-vacíos de cada iteración y al final los
+            # mergeamos sobre la respuesta final: campos como ``Quota`` o
+            # ``Ticket`` se rellenan desde el accumulator si la última respuesta
+            # no los trae, sin pisar valores válidos.
+            accumulated = {}
+            mergeable_keys = (
+                'Quota', 'Quotas', 'Installments', 'installments',
+                'Ticket', 'Batch', 'AuthorizationCode', 'Merchant',
+                'CardNumber', 'Issuer', 'Acquirer', 'PosID',
+                'EmvApplicationName', 'TransactionDate', 'TransactionHour',
+            )
+
             while True:
                 sleep(4)
                 _logger.info('>>>Intento>>>')
@@ -399,7 +417,20 @@ class PosPaymentMethod(models.Model):
 
                     response_code = result['ResponseCode']
                     rt = result['RemainingExpirationTime'] if 'RemainingExpirationTime' in result else False
-                    
+
+                    # Acumular valores útiles antes de evaluar exit del loop:
+                    # cubre el caso en que la última iteración los pierda.
+                    for key in mergeable_keys:
+                        val = result.get(key)
+                        if val in (None, '', False):
+                            continue
+                        # Excluir ceros que el pinpad usa como "aún no elegido".
+                        if isinstance(val, (int, float)) and val == 0:
+                            continue
+                        if isinstance(val, str) and val.strip() in ('', '0'):
+                            continue
+                        accumulated[key] = val
+
                     # Si el código de respuesta no es de espera, salir del loop
                     if response_code not in ['10', '12']:
                         break
@@ -448,6 +479,24 @@ class PosPaymentMethod(models.Model):
                     }
                     break
                 _logger.info('>>>FIN Intento>>>')
+
+            # Mergear el accumulator sobre el result final: solo campos que
+            # falten o vengan vacíos en la última respuesta. Garantiza que
+            # ``Quota`` y otros datos capturados en iteraciones intermedias
+            # lleguen al persist (causa raíz del bug "cuota queda en 1").
+            for key, val in accumulated.items():
+                current = result.get(key)
+                is_empty = (
+                    current in (None, '', False)
+                    or (isinstance(current, (int, float)) and current == 0)
+                    or (isinstance(current, str) and current.strip() in ('', '0'))
+                )
+                if is_empty:
+                    result[key] = val
+            _logger.info(
+                'OCA Query loop final result tras merge (tx=%s):\n%s',
+                transaction_id, pprint.pformat(result),
+            )
 
             # Actualizar la transacción almacenada con la información final
             # Usar el nuevo cursor para evitar problemas

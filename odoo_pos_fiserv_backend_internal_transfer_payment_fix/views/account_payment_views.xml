@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <!--
+            La primary view de internal_transfer_payment_fix hereda el arch del
+            form base (con TODAS sus extensions ya aplicadas, incluido el
+            backend Fiserv). Por eso NO duplicamos aquí los elementos nuevos
+            (botón Crear Transacción, grupos, banners): ya están en el arch
+            heredado.
+
+            La primary sí sobreescribe el ``invisible`` de action_post,
+            action_cancel y action_draft. Esos tres son los únicos que
+            necesitamos re-aplicar para combinar la lógica Fiserv con la de
+            internal_transfer (campos ``counter_part_internal_transfer`` y
+            ``button_invisible``).
+        -->
+        <record id="account_payment_form_fiserv_terminal_internal_transfer" model="ir.ui.view">
+            <field name="name">account.payment.form.fiserv.terminal.internal_transfer</field>
+            <field name="model">account.payment</field>
+            <field name="inherit_id" ref="internal_transfer_payment_fix.view_account_internal_transfer_form"/>
+            <field name="priority" eval="99"/>
+            <field name="arch" type="xml">
+                <!-- Botón Confirmar: lógica Fiserv combinada con la de la primary. -->
+                <xpath expr="//button[@name='action_post']" position="attributes">
+                    <attribute name="invisible">state != 'draft' or pos_integrated_post_blocked or fiserv_async_terminal_pending or (fiserv_charge_on_pos and not fiserv_tx_is_done) or (fiserv_is_integrated_journal and not fiserv_tx_is_done) or (fiserv_is_fiserv_payment_line and not fiserv_tx_is_done) or counter_part_internal_transfer</attribute>
+                </xpath>
+                <!-- Botón Cancelar. -->
+                <xpath expr="//button[@name='action_cancel']" position="attributes">
+                    <attribute name="invisible">state != 'draft' or pos_integrated_cancel_blocked or counter_part_internal_transfer</attribute>
+                </xpath>
+                <!-- Botón Restablecer a borrador: bloqueado para tx Fiserv aprobada. -->
+                <xpath expr="//button[@name='action_draft']" position="attributes">
+                    <attribute name="invisible">state == 'draft' or (1 if button_invisible else 0) or pos_integrated_draft_blocked</attribute>
+                </xpath>
+                <!--
+                    Devolución Fiserv: cuando el usuario selecciona la transacción
+                    original, partner / moneda / monto se precargan vía onchange y
+                    deben quedar fijos. La primary de internal_transfer_payment_fix
+                    hace ``position="replace"`` sobre ``amount_div`` con su propio
+                    ``readonly="state != 'draft' or counter_part_internal_transfer"``
+                    para amount/currency, barriendo los xpaths del backend Fiserv.
+                    Acá los recombinamos sumando la condición Fiserv.
+                    Para ``partner_id`` la primary no lo modifica, pero el form
+                    base lo deja editable en borrador, así que también lo
+                    bloqueamos cuando hay tx original.
+                -->
+                <xpath expr="//field[@name='amount']" position="attributes">
+                    <attribute name="readonly">state != 'draft' or counter_part_internal_transfer or fiserv_original_transaction_id</attribute>
+                </xpath>
+                <xpath expr="//field[@name='currency_id']" position="attributes">
+                    <attribute name="readonly">state != 'draft' or counter_part_internal_transfer or fiserv_original_transaction_id</attribute>
+                </xpath>
+                <xpath expr="//field[@name='partner_id']" position="attributes">
+                    <attribute name="readonly">state != 'draft' or fiserv_original_transaction_id</attribute>
+                </xpath>
+            </field>
+        </record>
+    </data>
+</odoo>

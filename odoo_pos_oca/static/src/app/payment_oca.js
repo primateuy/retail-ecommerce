@@ -130,7 +130,7 @@ export class PaymentOCA extends PaymentInterface {
         data.InvoiceAmount = `${total_order_amount}`;
         // Enviar un InvoiceNumber simple - el backend se encargará de encontrar la orden correcta
         data.InvoiceNumber = "1";
-        data.Installments = "1";
+        data.Installments = "0";
         data.TicketNumber = "";
 
         // Log para debuggear los datos que se envían

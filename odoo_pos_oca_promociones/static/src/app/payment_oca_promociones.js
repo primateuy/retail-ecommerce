@@ -311,7 +311,7 @@ patch(PaymentOCA.prototype, {
         data.TaxableAmount = `${total_order_amount_without_tax}`;
         data.InvoiceAmount = `${total_order_amount}`;
         data.InvoiceNumber = "1";
-        data.Installments = `${numCuotas}`;
+        data.Installments = `0`;
         data.TicketNumber = "";
 
         const loyaltyIdsForPayload =

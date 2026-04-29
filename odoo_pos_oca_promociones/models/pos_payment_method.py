@@ -671,8 +671,18 @@ class PosPaymentMethod(models.Model):
                                     )
                                     _logger.info('No se encontró promoción aplicable para esta transacción (BIN no coincide o no hay promociones configuradas)')
                                     _logger.info('Procesando pago normalmente sin aplicar descuento ni promoción')
-                                    # Confirmar sin promoción (valores originales). Quotas = valor recibido del POS.
-                                    quota_value = _get_quota_value()
+                                    # IMPORTANTE: cuando el cobro inicial llevó NeedToReadCard=True
+                                    # (siempre que el método tenga promociones activas), el pinpad
+                                    # queda esperando processConfirmFinancialPurchase tras RC=12. Si
+                                    # no se envía, la transacción se cuelga hasta el timeout (RC=11).
+                                    # Por eso debemos enviar el Confirm SIEMPRE en este path, aunque
+                                    # no haya promoción aplicable.
+                                    #
+                                    # Probamos con ``Quotas=0`` para que el pinpad le pregunte al
+                                    # cliente la cantidad real (mismo comportamiento que el cobro
+                                    # POSLink "no asistido"). Si OCA rechaza con EXCEDE CUOTAS o
+                                    # similar, lo veremos en el ResponseCode loggeado y habrá que
+                                    # caer al fallback con cuota=1.
                                     confirm_data = {
                                         "PosID": data['PosID'],
                                         "SystemId": data['SystemId'],
@@ -682,7 +692,7 @@ class PosPaymentMethod(models.Model):
                                         "TransactionDateTimeyyyyMMddHHmmssSSS": payment_method.get_formatted_timestamp(),
                                         "TransactionId": str(transaction_id),  # String según documentación
                                         "Amount": data.get('Amount', '0'),
-                                        "Quotas": quota_value,  # Valor recibido del POS (result) o request (data)
+                                        "Quotas": 0,  # 0 = pinpad pregunta al cliente cuántas cuotas
                                         "Plan": 0,  # Número según documentación
                                         "Currency": data.get('Currency', '858'),
                                         "TaxRefund": int(data.get('TaxRefund', 1)),  # Número según documentación
@@ -698,7 +708,12 @@ class PosPaymentMethod(models.Model):
                                         "CardNumber": result.get('CardNumber', ''),
                                     }
                                     confirm_response = payment_method.processConfirmFinancialPurchase(confirm_data, pos_session_id)
-                                    _logger.info('Confirmación sin promoción enviada: ResponseCode=%s', confirm_response.get('ResponseCode'))
+                                    confirm_rc = str(confirm_response.get('ResponseCode', '999')).strip()
+                                    _logger.info(
+                                        'OCA_PROMOS_CONFIRM_NO_PROMO: Confirm enviado con Quotas=0 | '
+                                        'ResponseCode=%s | msg=%s',
+                                        confirm_rc, confirm_response.get('msg', ''),
+                                    )
                                     # NO hacer continue aquí - continuar con el flujo normal esperando a que la transacción se complete
                                     # El bucle seguirá consultando hasta que ResponseCode = '0' (transacción completada)
                                 else:

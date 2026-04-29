@@ -15,7 +15,7 @@ Incluye: invoice_number, transacción, cuotas, sesión POS y vistas de formulari
     "category": "Point of Sale",
     "version": "17.0.1.0.0",
     "depends": [
-        "odoo_pos_fiserv",
+        "odoo_pos_fiserv_core",
         "point_of_sale",
         "payment",
         "account",

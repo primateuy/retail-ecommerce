@@ -17,7 +17,7 @@ pos.payment los aporta OCA; sin OCA, instale 'odoo_pos_fiserv_pos_payment'.
     "author": "PRIMATE",
     "website": "https://www.primate.com",
     "category": "Point of Sale",
-    "version": "17.0.2.0.2",
+    "version": "17.0.2.0.3",
     "depends": [
         "odoo_pos_fiserv_core",
         "point_of_sale",
@@ -27,6 +27,7 @@ pos.payment los aporta OCA; sin OCA, instale 'odoo_pos_fiserv_pos_payment'.
         "data/fiserv_change_ticket_report_data.xml",
         "views/pos_payment_method_views.xml",
         "views/pos_config_views.xml",
+        "views/payment_transaction_views.xml",
     ],
     "assets": {
         "point_of_sale._assets_pos": [

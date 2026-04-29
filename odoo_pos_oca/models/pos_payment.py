@@ -30,7 +30,7 @@ class PosPayment(models.Model):
     # Campo para el número de cuotas
     installments = fields.Integer(
         string='Número de Cuotas',
-        default=1,
+        default=0,
         help='Número de cuotas para el pago'
     )
     
