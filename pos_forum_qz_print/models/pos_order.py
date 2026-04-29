@@ -159,19 +159,64 @@ class PosOrder(models.Model):
                     continue
                 cards |= card
         cards = cards.sudo()
-        # Bloque: excluir gift card y monedero; el usuario pide cupón de promoción / código.
+
+        # Bloque: log detallado de candidatos antes de filtrar. Permite ver desde
+        # el log qué programas se aplicaron a la orden y de qué tipo son. Útil
+        # para verificar el filtro de "next_order_coupons" (cupón de próxima
+        # compra) sin tener que abrir la tarjeta en la UI.
+        if cards:
+            candidatos_str = ", ".join(
+                "card_id=%s program='%s' program_type='%s'" % (
+                    c.id,
+                    c.program_id.name if c.program_id else '(sin programa)',
+                    c.program_id.program_type if c.program_id else '(sin tipo)',
+                )
+                for c in cards
+            )
+            _logger.info(
+                "pos_forum_qz_print: candidatos a cupón antes de filtrar | "
+                "orden=%s (id=%s) | total=%s | %s",
+                order.display_name, order.id, len(cards), candidatos_str,
+            )
+        else:
+            _logger.info(
+                "pos_forum_qz_print: sin candidatos a cupón (no hay loyalty.card "
+                "vinculadas a la orden) | orden=%s (id=%s)",
+                order.display_name, order.id,
+            )
+
+        # Bloque: imprimir SOLO los cupones de "próxima compra" (program_type =
+        # 'next_order_coupons' en Odoo 17). El filtro anterior era excluyente
+        # (descartaba solo gift_card/ewallet), lo que provocaba que cualquier
+        # programa de lealtad aplicado generara impresión: loyalty, promotion,
+        # buy_x_get_y, promo_code, coupons, etc. La regla correcta de negocio
+        # es imprimir un cupón físico únicamente cuando se emite uno usable en
+        # la próxima compra.
         cards = cards.filtered(
             lambda c: c.program_id
-            and c.program_id.program_type not in ("gift_card", "ewallet")
+            and c.program_id.program_type == "next_order_coupons"
         )
         if not cards:
             _logger.info(
-                "pos_forum_qz_print: sin cupón de promoción para orden %s (id=%s) "
-                "(source_pos_order_id, líneas coupon_id ni loyalty_card_ids del POS)",
+                "pos_forum_qz_print: sin cupón de próxima compra para orden %s "
+                "(id=%s); ningún candidato tenía program_type='next_order_coupons'",
                 order.display_name,
                 order.id,
             )
             return {}
+
+        # Bloque: log de cupones que pasaron el filtro y se van a imprimir.
+        seleccionadas_str = ", ".join(
+            "card_id=%s program='%s'" % (
+                c.id, c.program_id.name if c.program_id else '?'
+            )
+            for c in cards
+        )
+        _logger.info(
+            "pos_forum_qz_print: imprimiendo cupón(es) de próxima compra | "
+            "orden=%s (id=%s) | total=%s | %s",
+            order.display_name, order.id, len(cards), seleccionadas_str,
+        )
         # Reporte: copia de loyalty.loyalty_report + marco tipo ticket de cambio (QWeb en XML).
         report = self.env.ref(
             "pos_forum_qz_print.report_loyalty_card_pos_thermal", raise_if_not_found=False
