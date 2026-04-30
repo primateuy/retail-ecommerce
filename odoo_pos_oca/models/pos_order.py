@@ -119,6 +119,41 @@ class PosOrder(models.Model):
         )
         return html_str
 
+    @api.model
+    def get_oca_voucher_print_data(self, order_id):
+        """
+        Resuelve el reporte y los IDs necesarios para descargar el voucher OCA
+        como PDF desde el frontend (fallback de QZ Tray).
+
+        Devuelve la misma forma de contrato que ``get_loyalty_coupon_code_print_data``
+        del módulo ``pos_forum_qz_print``: un dict con ``doc_ids`` y ``report_xml_id``,
+        listos para invocar ``this.report.doAction(report_xml_id, doc_ids)`` en el JS.
+        Si no hay voucher OCA aplicable a la orden, devuelve ``{}`` y el caller debe
+        omitir la descarga (no es error).
+
+        Args:
+            order_id (int): ID backend de ``pos.order``.
+
+        Returns:
+            dict: ``{'doc_ids': [int, ...], 'report_xml_id': str}`` o ``{}``.
+        """
+        order = self.browse(order_id)
+        if not order.exists():
+            return {}
+        transaction = self._find_payment_transaction_for_pos_receipt(order)
+        if not transaction or not transaction.provider_id or transaction.provider_id.code != 'oca':
+            return {}
+        report = self.env.ref(
+            'odoo_pos_oca.action_report_payment_transaction_oca_voucher',
+            raise_if_not_found=False,
+        )
+        if not report:
+            return {}
+        return {
+            'doc_ids': transaction.ids,
+            'report_xml_id': 'odoo_pos_oca.action_report_payment_transaction_oca_voucher',
+        }
+
     def _find_payment_transaction_for_pos_receipt(self, order):
         """
         Localiza la transacción de tarjeta asociada a la orden POS.

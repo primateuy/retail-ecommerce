@@ -13,6 +13,7 @@
                            invisible="not use_qz_tray"
                            placeholder="Ej: EPSON TM-T20"/>
                     <field name="qz_tray_print_pos_receipt" invisible="not use_qz_tray"/>
+                    <field name="qz_tray_download_on_failure" invisible="not use_qz_tray"/>
                 </group>
             </xpath>
         </field>

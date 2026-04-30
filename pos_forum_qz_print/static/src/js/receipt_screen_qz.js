@@ -82,6 +82,76 @@ patch(ReceiptScreen.prototype, {
     },
 
     /**
+     * Descarga la rutina como un único PDF combinado cuando QZ no responde.
+     *
+     * Solo se invoca si ``cfg.qz_tray_download_on_failure`` está activo. En
+     * lugar de hacer varias descargas seguidas (que el navegador bloquea como
+     * pop-ups y además mezclan PDF y HTML), se envía un POST con el HTML del
+     * recibo + el id del pedido al endpoint del servidor; el backend genera
+     * los reportes que apliquen, los concatena con saltos de página y devuelve
+     * un único PDF que el navegador descarga vía submit del form oculto.
+     */
+    async _downloadRoutineReports(orderId) {
+        const order = this.pos.get_order();
+        const loyaltyCardIds = collectLoyaltyCardIdsFromCurrentOrder(this.pos);
+
+        let receiptHtml = "";
+        try {
+            receiptHtml = await this._qzBuildReceiptHtml();
+        } catch (e) {
+            console.warn(`${LOG} Fallback descarga: no se pudo construir el HTML del recibo | %s`, e);
+        }
+
+        // Bloque: form oculto con POST tradicional. Es la forma más fiable de
+        // disparar la descarga de un binario: el browser lee el header
+        // Content-Disposition y guarda el archivo sin abrir nueva pestaña.
+        const form = document.createElement("form");
+        form.method = "POST";
+        form.action = "/pos_forum_qz_print/download_routine_pdf";
+        form.target = "_self";
+        form.style.display = "none";
+
+        const addField = (name, value) => {
+            const input = document.createElement("input");
+            input.type = "hidden";
+            input.name = name;
+            input.value = value == null ? "" : String(value);
+            form.appendChild(input);
+        };
+
+        // Bloque: token CSRF expuesto por Odoo en window.odoo.csrf_token.
+        const csrfToken = (window.odoo && window.odoo.csrf_token) || "";
+        addField("csrf_token", csrfToken);
+        addField("order_id", orderId);
+        addField("receipt_html", receiptHtml || "");
+        addField("loyalty_card_ids", (loyaltyCardIds || []).join(","));
+
+        document.body.appendChild(form);
+        try {
+            console.info(
+                `${LOG} Fallback descarga: enviando form a /pos_forum_qz_print/download_routine_pdf | order_id=${orderId} | loyalty_cards=${
+                    (loyaltyCardIds || []).join(",") || "(ninguna)"
+                } | receipt_html_len=${(receiptHtml || "").length}`
+            );
+            form.submit();
+        } finally {
+            // Bloque: dejar el form un instante en el DOM para que el navegador
+            // procese el submit antes de removerlo.
+            setTimeout(() => {
+                if (form.parentNode) {
+                    form.parentNode.removeChild(form);
+                }
+            }, 1500);
+        }
+
+        const orderRef = order?.pos_reference || order?.name || "";
+        this.env.services.notification.add(
+            `QZ no disponible. Descargando PDF de rutina${orderRef ? ` (${orderRef})` : ""}.`,
+            { type: "info" }
+        );
+    },
+
+    /**
      * Rutina QZ: recibo + ticket de cambio + voucher OCA + cupón de promoción (si aplica).
      */
     async printChangeTicketRoutine() {
@@ -94,13 +164,16 @@ patch(ReceiptScreen.prototype, {
         if (!cfg.change_ticket_report_id) {
             return _superPrintChangeTicketRoutine.call(this);
         }
+        // Bloque: orderId se declara fuera del try para reutilizarlo en el
+        // fallback de descarga del catch sin tener que volver a resolverlo.
+        let orderId = null;
         try {
             const order = this.pos.get_order();
             if (!order) {
                 this.env.services.notification.add("No se encontró la orden.", { type: "warning" });
                 return;
             }
-            const orderId = await this._qzResolveOrderId();
+            orderId = await this._qzResolveOrderId();
             if (!orderId) {
                 this.env.services.notification.add(
                     "La orden aún no está en el servidor. Intente de nuevo en unos segundos.",
@@ -152,12 +225,23 @@ patch(ReceiptScreen.prototype, {
                 { type: "success" }
             );
         } catch (error) {
-            console.error(`${LOG} Rutina QZ error → PDF estándar.`, error);
+            console.error(`${LOG} Rutina QZ error.`, error);
+            // Bloque: fallback configurable según ``qz_tray_download_on_failure``.
+            // Por default (False) solo se notifica el error sin descargar nada.
+            // Si está activo, se descargan los 4 reportes (los que apliquen)
+            // como PDF/HTML para que el operador los imprima manualmente.
+            if (cfg.qz_tray_download_on_failure && orderId) {
+                this.env.services.notification.add(
+                    `QZ no disponible: ${error?.message || String(error)}. Descargando reportes...`,
+                    { type: "warning" }
+                );
+                return await this._downloadRoutineReports(orderId);
+            }
             this.env.services.notification.add(
-                `QZ: ${error?.message || String(error)}. Se usará PDF.`,
+                `No se pudo conectar a la impresora QZ: ${error?.message || String(error)}. ` +
+                "Active 'Descargar reportes si QZ falla' en la configuración del POS si quiere obtener los documentos.",
                 { type: "warning" }
             );
-            return _superPrintChangeTicketRoutine.call(this);
         }
     },
 
