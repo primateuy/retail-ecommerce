@@ -31,3 +31,14 @@ class PosConfig(models.Model):
         help="Si está activo junto con QZ Tray, el recibo estándar del POS se "
         "renderiza a HTML y se manda por QZ en lugar del servicio de impresión del navegador.",
     )
+    # Bloque: fallback de descarga cuando QZ no se puede conectar a la impresora.
+    # Si está desactivado, ante un error de QZ se notifica sin descargar nada
+    # (el usuario debe resolver la conexión manualmente).
+    qz_tray_download_on_failure = fields.Boolean(
+        string="Descargar reportes si QZ falla",
+        default=False,
+        help="Si está activo y la impresora QZ no responde durante la rutina de "
+        "impresión, se descargan los reportes (recibo, ticket de cambio, voucher "
+        "OCA y cupón de próxima compra cuando aplican) para que el operador los "
+        "imprima manualmente. Si está desactivado, solo se notifica el error.",
+    )
