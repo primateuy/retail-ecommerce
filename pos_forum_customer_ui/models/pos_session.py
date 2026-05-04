@@ -27,17 +27,11 @@ class PosSession(models.Model):
         Returns:
             dict: Parametros de busqueda para el modelo l10n_latam.identification.type.
         """
-        # Preparar el dominio y campos minimos.
-        # ``company_type`` (l10n_uy_einvoice_base): 'person' / 'company' / 'both'.
-        # Necesario para filtrar los selects del partner editor del POS por tipo
-        # de contacto (personas ven person + both; empresas, company + both).
-        fields = ["name", "code", "country_id", "check_number", "check_type", "is_vat"]
-        if "company_type" in self.env["l10n_latam.identification.type"]._fields:
-            fields.append("company_type")
+        # Preparar el dominio y campos minimos
         return {
             "search_params": {
                 "domain": [],
-                "fields": fields,
+                "fields": ["name", "code", "country_id", "check_number", "check_type", "is_vat"],
             },
         }
 
