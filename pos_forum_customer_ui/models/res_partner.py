@@ -111,101 +111,100 @@ class ResPartner(models.Model):
         # Forzar coincidencia completa
         return "^" + "".join(regex_parts) + "$"
 
+    # Campos que se devuelven al frontend tras una consulta DGI para refrescar
+    # el formulario del POS. Incluyen ``id`` implicitamente al usar ``read()``.
+    _POS_RUT_FIELDS = [
+        "name",
+        "social_reason",
+        "street",
+        "street2",
+        "city",
+        "state_id",
+        "country_id",
+        "zip",
+        "phone",
+        "mobile",
+        "email",
+        "vat",
+        "is_company",
+        "company_type",
+    ]
+
     @api.model
     def pos_consultar_rut(self, partner_id):
         """
-        Consulta datos de RUT y devuelve los campos relevantes para POS.
+        Consulta DGI sobre un partner ya existente reusando el mismo metodo
+        que se ejecuta desde el backend (``get_partner_dgi_data`` definido en
+        ``l10n_uy_einvoice_uruware``). El metodo persiste los datos en el
+        partner via ``load_dgi_data`` -> ``write``.
 
         Args:
             partner_id (int): ID del partner a consultar.
 
         Returns:
-            dict: Datos del partner actualizados para el POS.
+            dict: Campos del partner actualizados para el POS.
         """
         # Validar que exista el partner
         partner = self.browse(partner_id).exists()
         if not partner:
             raise UserError(_("Partner not found for RUT query."))
 
-        # Validar que el metodo de consulta exista
-        if not hasattr(partner, "_consultar_partner_ruc"):
+        # Validar disponibilidad del metodo (depende de l10n_uy_einvoice_uruware
+        # estar instalado en la DB; no se agrega como dependencia hard para que
+        # el modulo siga siendo reusable en clientes sin esa localizacion).
+        if not hasattr(partner, "get_partner_dgi_data"):
             raise UserError(_("RUT query is not available on this system."))
 
         # Validar que el partner tenga numero de documento
         if not partner.vat:
             raise UserError(_("Document number is required to query RUT."))
 
-        # Ejecutar consulta y actualizar el partner
-        partner._consultar_partner_ruc()
+        # Ejecutar consulta DGI; persiste valores via partner.write() interno
+        partner.get_partner_dgi_data()
 
-        # Retornar campos necesarios para refrescar en POS
-        fields_to_read = [
-            "name",
-            "social_reason",
-            "street",
-            "street2",
-            "city",
-            "state_id",
-            "country_id",
-            "zip",
-            "phone",
-            "mobile",
-            "email",
-            "vat",
-            "is_company",
-            "company_type",
-        ]
-        return partner.read(fields_to_read)[0]
+        # Retornar campos para refrescar el formulario del POS
+        return partner.read(self._POS_RUT_FIELDS)[0]
 
     @api.model
     def pos_consultar_rut_preview(self, vat):
         """
-        Consulta datos de RUT sin guardar el partner en base.
+        Consulta DGI desde el alta de cliente del POS (cuando aun no hay id).
 
-        Esta funcion permite validar/consultar el RUT desde el POS
-        antes de guardar el cliente, devolviendo los datos para
-        completar la pantalla en frontend.
+        ``get_partner_dgi_data`` requiere un registro persistido porque al final
+        hace ``partner.write(...)``. Por eso se crea un partner minimo con el VAT
+        y se ejecuta la consulta sobre ese registro. El id devuelto se asocia al
+        formulario del POS para que el guardado posterior haga update y no cree
+        un partner adicional. Si DGI falla, el RPC hace rollback y el partner no
+        queda huerfano.
 
         Args:
             vat (str): Numero de documento a consultar.
 
         Returns:
-            dict: Datos del partner resultante para el POS.
+            dict: Campos del partner (incluye ``id``) para el POS.
         """
-        # Validar que exista numero de documento
+        # Validar numero de documento
         if not vat:
             raise UserError(_("Document number is required to query RUT."))
 
-        # Preparar un registro en memoria para evitar guardado
-        partner = self.new({"vat": vat})
+        Partner = self.env["res.partner"]
 
-        # Validar que el metodo de consulta exista en el sistema
-        if not hasattr(partner, "_consultar_partner_ruc"):
+        # Validar disponibilidad del metodo en el sistema
+        if not hasattr(Partner, "get_partner_dgi_data"):
             raise UserError(_("RUT query is not available on this system."))
 
-        # Ejecutar consulta y poblar datos en memoria
-        partner._consultar_partner_ruc()
+        # Crear partner minimo con el VAT (en contexto from_pos para que las
+        # validaciones de telefono se apliquen como cualquier alta del POS)
+        partner = Partner.with_context(from_pos=True).create({
+            "name": vat,
+            "vat": vat,
+        })
 
-        # Preparar campos relevantes para refrescar en POS
-        fields_to_read = [
-            "name",
-            "social_reason",
-            "street",
-            "street2",
-            "city",
-            "state_id",
-            "country_id",
-            "zip",
-            "phone",
-            "mobile",
-            "email",
-            "vat",
-            "is_company",
-            "company_type",
-        ]
+        # Ejecutar consulta DGI sobre el partner creado
+        partner.get_partner_dgi_data()
 
-        # Retornar valores desde cache del registro en memoria
-        return partner.read(fields_to_read)[0]
+        # Retornar campos (incluye id) para refrescar el formulario del POS
+        return partner.read(self._POS_RUT_FIELDS)[0]
 
     @api.model
     def create_from_pos(self, vals):
