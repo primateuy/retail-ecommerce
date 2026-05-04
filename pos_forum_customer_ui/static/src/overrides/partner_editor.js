@@ -405,21 +405,40 @@ patch(PartnerDetailsEdit.prototype, {
             return;
         }
 
-        // Ejecutar la consulta en backend segun el estado del registro
+        // Ejecutar la consulta DGI llamando al mismo metodo que se ejecuta en
+        // backend (``get_partner_dgi_data`` de l10n_uy_einvoice_uruware) via
+        // los wrappers ``pos_consultar_rut`` / ``pos_consultar_rut_preview``.
         let data = false;
-        if (this.props.partner.id) {
-            // Consultar con partner existente
-            data = await this.orm.call("res.partner", "pos_consultar_rut", [
-                this.props.partner.id,
-            ]);
-        } else {
-            // Consultar sin guardar usando metodo de previsualizacion
-            data = await this.orm.call("res.partner", "pos_consultar_rut_preview", [
-                this.changes.vat,
-            ]);
+        try {
+            if (this.props.partner.id) {
+                // Partner existente: actualiza el registro y devuelve campos
+                data = await this.orm.call("res.partner", "pos_consultar_rut", [
+                    this.props.partner.id,
+                ]);
+            } else {
+                // Alta de cliente: el backend crea el partner con el VAT,
+                // ejecuta la consulta DGI y devuelve los campos + id. Asociamos
+                // ese id al formulario para que el guardado posterior haga
+                // update y no cree un partner adicional.
+                data = await this.orm.call("res.partner", "pos_consultar_rut_preview", [
+                    this.changes.vat,
+                ]);
+                if (data && data.id) {
+                    this.props.partner.id = data.id;
+                }
+            }
+        } catch (error) {
+            // Mostrar el error tal cual viene de DGI/backend
+            const message =
+                error?.data?.message || error?.message || _t("Unknown error.");
+            this.popup.add(ErrorPopup, {
+                title: _t("RUT Query"),
+                body: message,
+            });
+            return;
         }
 
-        // Aplicar datos devueltos en el formulario
+        // Volcar la respuesta DGI al formulario del POS
         this._applyRutData(data);
     },
 
@@ -431,14 +450,26 @@ patch(PartnerDetailsEdit.prototype, {
         this.changes.name = data.name || this.changes.name;
         this.changes.social_reason = data.social_reason || this.changes.social_reason;
         this.changes.street = data.street || this.changes.street;
+        this.changes.street2 = data.street2 || this.changes.street2;
         this.changes.city = data.city || this.changes.city;
-        this.changes.state_id = data.state_id && data.state_id[0];
-        this.changes.country_id = data.country_id && data.country_id[0];
+        // Preservar valores existentes si DGI no los devuelve (no pisar con false)
+        this.changes.state_id = (data.state_id && data.state_id[0]) || this.changes.state_id;
+        this.changes.country_id = (data.country_id && data.country_id[0]) || this.changes.country_id;
+        // Si DGI dejo state pero no country, inferir country desde el state
+        // (Uruware no setea country_id; el state apunta al res.country.state de UY)
+        if (this.changes.state_id && !this.changes.country_id) {
+            const state = this.pos.states?.find((s) => s.id === this.changes.state_id);
+            if (state?.country_id) {
+                this.changes.country_id = state.country_id[0];
+            }
+        }
         this.changes.zip = data.zip || this.changes.zip;
         this.changes.phone = data.phone || this.changes.phone;
         this.changes.mobile = data.mobile || this.changes.mobile;
         this.changes.email = data.email || this.changes.email;
         this.changes.vat = data.vat || this.changes.vat;
+        // Uruware fuerza is_company=True para consultas de RUC; el template OWL
+        // reacciona y conmuta entre seccion PERSONA y EMPRESA automaticamente.
         this.changes.is_company = Boolean(data.is_company);
         this.changes.company_type = data.company_type || this.changes.company_type;
     },
