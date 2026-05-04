@@ -4,8 +4,7 @@
     'description': """
         Módulo que permite:
         1. No descargar la factura en el POS
-        2. Agregar un diseño de recibo personalizado con información del CFE
-           (Comprobante Fiscal Electrónico) después de la facturación.
+        2. Agregar un diseño de recibo personalizado con información del CFE (Comprobante Fiscal Electrónico) después de la facturación.
         
         Requiere el módulo custom_receipts_for_pos para funcionar correctamente.
     """,
@@ -21,6 +20,7 @@
         # Orden explícito: receipt_cfe_data.js debe ir al final para que el patch de
         # OrderReceipt (CFE + voucher OCA) sobrescriba al de custom_receipts_for_pos.
         'point_of_sale._assets_pos': [
+            'odoo_pos_no_invoice/static/src/css/receipt_print.css',
             'odoo_pos_no_invoice/static/src/overrides/xml/ticket_screen_buttons.xml',
             'odoo_pos_no_invoice/static/src/overrides/components/payment_screen/payment_screen.js',
             'odoo_pos_no_invoice/static/src/overrides/components/receipt_screen/receipt_screen.js',

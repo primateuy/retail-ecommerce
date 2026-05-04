@@ -225,9 +225,9 @@ class PosOrder(models.Model):
                 _logger.warning('Factura %s no existe', account_move_id)
                 return {}
             
-            # Invalidar cache y re-leer para asegurar datos actualizados
+            # Invalidar cache y re-leer con sudo para asegurar datos actualizados y acceso completo.
             invoice.invalidate_recordset(['cfe_serie_num', 'name', 'cfe_hash', 'cfe_url_qr', 'cfe_type', 'qr_img', 'cfe_cae_from', 'cfe_cae_to', 'cfe_cae_exp_date', 'cfe_cae_auth'])
-            invoice = invoice.browse(account_move_id)
+            invoice = invoice.sudo().browse(account_move_id)
             
             _logger.info('Factura encontrada: ID=%s, name=%s', invoice.id, invoice.name)
             
@@ -373,7 +373,14 @@ class PosOrder(models.Model):
                 'punto_emision': punto_emision_nombre,
             }
             
-            _logger.info('✓ Datos CFE obtenidos desde factura %s: tipo=%s, serie=%s, numero=%s', account_move_id, tipo_nombre, serie, numero)
+            _logger.info(
+                '✓ Datos CFE obtenidos desde factura %s: tipo=%s, serie=%s, numero=%s | '
+                'journal_id=%s dgi_sucursal_id=%s sucursal_nombre=%r sucursal_direccion=%r sucursal_ciudad=%r',
+                account_move_id, tipo_nombre, serie, numero,
+                invoice.journal_id.id if invoice.journal_id else None,
+                invoice.journal_id.dgi_sucursal_id.id if invoice.journal_id and invoice.journal_id.dgi_sucursal_id else None,
+                sucursal_nombre, sucursal_direccion, sucursal_ciudad,
+            )
             
         except Exception as e:
             _logger.error('Error al obtener datos CFE desde factura %s: %s', account_move_id, str(e), exc_info=True)
@@ -578,7 +585,11 @@ class PosOrder(models.Model):
                     else ''
                 )
             receipt_data['adenda_data'].update({
-                'cashier': pos_order.user_id.name if pos_order.user_id else '',
+                'cashier': (
+                    pos_order.employee_id.name
+                    if hasattr(pos_order, 'employee_id') and pos_order.employee_id
+                    else pos_order.user_id.name if pos_order.user_id else ''
+                ),
                 'seller': seller,
                 'points_policy': pos_order.config_id.pos_points_policy if pos_order.config_id else '',
             })
