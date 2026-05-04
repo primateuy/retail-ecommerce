@@ -31,7 +31,7 @@ class PosSession(models.Model):
         return {
             "search_params": {
                 "domain": [],
-                "fields": ["name", "code", "country_id", "check_number", "check_type", "is_vat"],
+                "fields": ["name", "code", "country_id", "check_number", "check_type", "is_vat", "company_type"],
             },
         }
 

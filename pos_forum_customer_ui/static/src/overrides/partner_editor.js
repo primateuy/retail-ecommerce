@@ -74,14 +74,21 @@ patch(PartnerDetailsEdit.prototype, {
     },
 
     /**
-     * Tipos de documento disponibles en el POS filtrados por tipo de partner.
-     * Empresas: solo tipos con is_vat=True (RUT, RUC).
-     * Personas: solo tipos con is_vat=False (CI, DNI, etc.).
+     * Tipos de documento filtrados por tipo de contacto.
+     * Criterio primario: company_type ('company', 'person', 'both').
+     * Fallback para tipos sin company_type: is_vat=true → empresa, is_vat=false → persona, null → ambos.
      */
     get identificationTypes() {
-        const allTypes = this.pos.identification_types || [];
-        const isCompany = Boolean(this.changes.is_company);
-        return allTypes.filter((doc) => (isCompany ? doc.is_vat : !doc.is_vat));
+      const allTypes = this.pos.identification_types || [];
+      const isCompany = Boolean(this.changes.is_company);
+      return allTypes.filter((doc) => {
+          const ct = doc.company_type;
+          if (ct === "company") return isCompany;
+          if (ct === "person") return !isCompany;
+          if (ct === "both") return true;
+          // tipos sin company_type: usar is_vat como fallback
+          return isCompany ? !!doc.is_vat : !doc.is_vat;
+      });
     },
 
     /**
