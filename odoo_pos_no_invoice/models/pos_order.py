@@ -1,6 +1,5 @@
 from datetime import date as py_date
 from datetime import datetime
-import time
 
 from odoo import _, models, api, fields
 from odoo.tools import is_html_empty
@@ -454,14 +453,15 @@ class PosOrder(models.Model):
             receipt_data['order_id'] = pos_order.id
 
         # Usar la factura de la orden si no se recibió account_move_id explícito.
+        # Una sola lectura: si todavía no hay account_move (orden $0 sin pagos,
+        # facturación deshabilitada, etc.) se cae al fallback "source=order" más
+        # abajo. Antes había un busy-wait (20 × time.sleep(1)) que bloqueaba el
+        # worker hasta 20 s en escenarios donde la factura nunca se iba a crear.
         if not normalized_account_move_id and pos_order:
-            for _attempt in range(20):
-                pos_order.invalidate_recordset(['account_move'])
-                pos_order = self.browse(pos_order.id).sudo()
-                if pos_order.account_move:
-                    normalized_account_move_id = pos_order.account_move.id
-                    break
-                time.sleep(1)
+            pos_order.invalidate_recordset(['account_move'])
+            pos_order = self.browse(pos_order.id).sudo()
+            if pos_order.account_move:
+                normalized_account_move_id = pos_order.account_move.id
         # Preparar la factura en caso de existir para construir el recibo.
         invoice = self.env['account.move']
         if normalized_account_move_id:
@@ -604,14 +604,12 @@ class PosOrder(models.Model):
             if pos_order:
                 expected_line_count = len(pos_order.lines)
 
+            # Una sola lectura: si todavía no hay líneas (caso típico: factura $0
+            # sin reconciliar) más abajo cae al fallback con line_ids. El antiguo
+            # busy-wait (20 × time.sleep(1)) bloqueaba el worker hasta 20 s extra.
+            invoice.invalidate_recordset(['invoice_line_ids', 'amount_total', 'amount_tax', 'amount_untaxed'])
+            invoice = self.env['account.move'].browse(invoice.id).sudo()
             invoice_lines = invoice.invoice_line_ids
-            for _attempt in range(20):
-                if invoice_lines and (not expected_line_count or len(invoice_lines) >= expected_line_count):
-                    break
-                time.sleep(1)
-                invoice.invalidate_recordset(['invoice_line_ids', 'amount_total', 'amount_tax', 'amount_untaxed'])
-                invoice = self.env['account.move'].browse(invoice.id).sudo()
-                invoice_lines = invoice.invoice_line_ids
 
             if not invoice_lines:
                 fallback_lines = invoice.line_ids.filtered(

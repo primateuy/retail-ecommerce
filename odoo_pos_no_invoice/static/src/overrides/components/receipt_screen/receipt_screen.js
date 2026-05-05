@@ -46,27 +46,20 @@ patch(ReceiptScreen.prototype, {
         }
 
         // Intentar obtener datos del recibo desde la factura antes de imprimir.
+        // Una sola llamada: el server ya hace fallback a `source=order` cuando no
+        // hay factura disponible. El antiguo bucle de 20 intentos × 1 s + el
+        // busy-wait del server provocaba ~7 min de "loading" en el caso refund $0
+        // sin línea de pago (cuando la factura no se iba a crear nunca).
         let receiptServerData = null;
         const orm = this.env.services.orm;
-        const maxAttempts = 20;
-        for (let attempt = 0; attempt < maxAttempts; attempt++) {
-            try {
-                receiptServerData = await orm.call(
-                    "pos.order",
-                    "get_receipt_data_from_invoice_or_order",
-                    [[], accountMoveId, orderReference, orderServerId]
-                );
-                if (
-                    receiptServerData?.source === "invoice" &&
-                    receiptServerData?.orderlines?.length
-                ) {
-                    break;
-                }
-            } catch (error) {
-                console.error("Error al obtener datos de la factura para el recibo:", error);
-                break;
-            }
-            await new Promise((resolve) => setTimeout(resolve, 1000));
+        try {
+            receiptServerData = await orm.call(
+                "pos.order",
+                "get_receipt_data_from_invoice_or_order",
+                [[], accountMoveId, orderReference, orderServerId]
+            );
+        } catch (error) {
+            console.error("Error al obtener datos de la factura para el recibo:", error);
         }
 
         const normalizePaymentName = (name) => {
