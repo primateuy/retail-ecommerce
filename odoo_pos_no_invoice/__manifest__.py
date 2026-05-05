@@ -4,9 +4,8 @@
     'description': """
         Módulo que permite:
         1. No descargar la factura en el POS
-        2. Agregar un diseño de recibo personalizado con información del CFE
-           (Comprobante Fiscal Electrónico) después de la facturación.
-        
+        2. Agregar un diseño de recibo personalizado con información del CFE (Comprobante Fiscal Electrónico) después de la facturación.
+
         Requiere el módulo custom_receipts_for_pos para funcionar correctamente.
     """,
     'category': 'Localization',
