@@ -259,7 +259,8 @@ class PaymentTransaction(models.Model):
         del POS usando el código del campo a solicitar y lo escribe en los
         destinos definidos. Soporta:
         - Alias heredados (ticket, batch, etc.) via FORUM_TX_FIELD_TARGETS
-        - Nombres de campo directos de payment.transaction (cualquier Char/Text)
+        - Nombres de campo directos de payment.transaction. La conversión al
+          tipo del campo destino la hace _forum_coerce_value_for_field.
         """
         base = {}
         # Inicializar campos conocidos del diccionario heredado con cadena vacía
@@ -288,25 +289,26 @@ class PaymentTransaction(models.Model):
 
             raw = manual_vals.get(code)
 
-            # Resolver valor según tipo de campo
-            if request_field.field_type == "many2one" and target == "stamp":
-                value = self._forum_resolve_stamp_label(raw)
-            else:
-                if raw is None or raw is False:
+            if target in FORUM_TX_FIELD_TARGETS:
+                # Alias heredado: ambos destinos son Char (OCA + manual_*).
+                # Se mantiene la conversión a string como antes para conservar
+                # 100% de retrocompatibilidad con el flujo existente.
+                if request_field.field_type == "many2one" and target == "stamp":
+                    value = self._forum_resolve_stamp_label(raw)
+                elif raw is None or raw is False:
                     value = ""
                 else:
                     value = str(raw).strip()
-
-            if target in FORUM_TX_FIELD_TARGETS:
-                # Alias heredado: escribir en ambos campos (OCA + manual_*)
                 oca_f, manual_f = FORUM_TX_FIELD_TARGETS[target]
                 if oca_f:
                     base[oca_f] = value
                 if manual_f:
                     base[manual_f] = value
             elif target in tx_fields:
-                # Campo directo de payment.transaction
-                base[target] = value
+                # Campo directo de payment.transaction: convertir según su tipo.
+                base[target] = self._forum_coerce_value_for_field(
+                    raw, tx_fields[target]
+                )
             else:
                 _logger.warning(
                     "FORUM manual POS: config línea id=%s mapeo «%s» no es un campo "
@@ -315,6 +317,89 @@ class PaymentTransaction(models.Model):
                     target,
                 )
         return base
+
+    @api.model
+    def _forum_coerce_value_for_field(self, raw, field):
+        """
+        Convierte el valor crudo del popup POS al tipo del campo destino.
+
+        El popup envía siempre strings (o el id en el caso del sello). Para
+        campos no-Char hay que parsear; cuando el valor está vacío o no se
+        puede parsear, se devuelve un default razonable según el tipo para
+        evitar errores de create() sin perder el resto del payload.
+        """
+        ftype = field.type
+        empty_default = {
+            "integer": 0,
+            "float": 0.0,
+            "monetary": 0.0,
+            "boolean": False,
+            "date": False,
+            "datetime": False,
+            "many2one": False,
+            "selection": False,
+        }
+        if raw is None or raw is False:
+            return empty_default.get(ftype, "")
+        raw_str = str(raw).strip()
+        if not raw_str:
+            return empty_default.get(ftype, "")
+        if ftype in ("char", "text"):
+            return raw_str
+        if ftype == "integer":
+            try:
+                return int(raw_str)
+            except (ValueError, TypeError):
+                _logger.warning(
+                    "FORUM manual POS: valor «%s» no es entero válido para %s; usa 0.",
+                    raw_str, field.name,
+                )
+                return 0
+        if ftype in ("float", "monetary"):
+            try:
+                return float(raw_str.replace(",", "."))
+            except (ValueError, TypeError):
+                _logger.warning(
+                    "FORUM manual POS: valor «%s» no es numérico válido para %s; usa 0.0.",
+                    raw_str, field.name,
+                )
+                return 0.0
+        if ftype == "boolean":
+            return raw_str.lower() in ("1", "true", "yes", "si", "sí", "y", "t")
+        if ftype == "date":
+            try:
+                return fields.Date.to_date(raw_str)
+            except (ValueError, TypeError):
+                _logger.warning(
+                    "FORUM manual POS: valor «%s» no es una fecha válida para %s; se omite.",
+                    raw_str, field.name,
+                )
+                return False
+        if ftype == "datetime":
+            try:
+                return fields.Datetime.to_datetime(raw_str)
+            except (ValueError, TypeError):
+                _logger.warning(
+                    "FORUM manual POS: valor «%s» no es un datetime válido para %s; se omite.",
+                    raw_str, field.name,
+                )
+                return False
+        if ftype == "many2one":
+            try:
+                return int(raw_str)
+            except (ValueError, TypeError):
+                _logger.warning(
+                    "FORUM manual POS: valor «%s» no es id válido para %s; se omite.",
+                    raw_str, field.name,
+                )
+                return False
+        if ftype == "selection":
+            # Odoo valida que el valor esté en las opciones al hacer create().
+            return raw_str
+        # Tipo no soportado explícitamente: pasar tal cual y dejar que Odoo
+        # decida. Si llega aquí, _selection_transaction_fields lo dejó pasar
+        # como excepción o se invocó el helper desde otro flujo.
+        return raw_str
 
     @api.model
     def _forum_parse_manual_payment_json(self, json_text):

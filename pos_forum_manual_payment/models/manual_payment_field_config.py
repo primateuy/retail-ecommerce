@@ -9,6 +9,14 @@ un proveedor manual, incluyendo obligatoriedad y valor por defecto.
 from odoo import api, fields, models
 from odoo.exceptions import ValidationError
 
+# Tipos de campo de payment.transaction soportados como destino del mapeo.
+# La conversión del valor capturado en POS al tipo correspondiente la hace
+# _forum_coerce_value_for_field en payment_transaction.py.
+SUPPORTED_TX_FIELD_TYPES = (
+    "char", "text", "integer", "float", "monetary",
+    "boolean", "date", "datetime", "selection", "many2one",
+)
+
 
 class ManualPaymentFieldConfig(models.Model):
     """
@@ -82,7 +90,8 @@ class ManualPaymentFieldConfig(models.Model):
     def _selection_transaction_fields(self):
         """
         Genera dinámicamente las opciones del campo transaction_field_mapping
-        a partir de los campos Char/Text escriturables de payment.transaction.
+        a partir de los campos escriturables de payment.transaction cuyo tipo
+        es soportado por el coercionador (ver SUPPORTED_TX_FIELD_TYPES).
 
         Incluye «none» para el mapeo por sinónimos y los alias heredados
         (ticket, batch, etc.) para retrocompatibilidad con registros existentes.
@@ -100,8 +109,9 @@ class ManualPaymentFieldConfig(models.Model):
         }
         for key, label in _legacy_aliases.items():
             result.append((key, label))
-        # Campos reales de payment.transaction (Char/Text, no readonly, no computed)
-        # Se excluyen los alias heredados para evitar claves duplicadas en el Selection
+        # Campos reales de payment.transaction soportados (no readonly, no
+        # computed, no related). Se excluyen los alias heredados para evitar
+        # claves duplicadas en el Selection.
         tx_model = self.env["payment.transaction"]
         skip_fields = {
             "id", "display_name", "create_uid", "create_date",
@@ -110,12 +120,14 @@ class ManualPaymentFieldConfig(models.Model):
         for fname, field_obj in sorted(tx_model._fields.items()):
             if fname in skip_fields:
                 continue
-            if field_obj.type not in ("char", "text"):
+            if field_obj.type not in SUPPORTED_TX_FIELD_TYPES:
                 continue
-            if field_obj.readonly or field_obj.compute:
+            if field_obj.readonly or field_obj.compute or field_obj.related:
                 continue
             label = field_obj.string or fname
-            result.append((fname, "%s (%s)" % (label, fname)))
+            # Incluir el tipo entre paréntesis para que el usuario sepa qué
+            # formato espera el campo destino.
+            result.append((fname, "%s (%s) [%s]" % (label, fname, field_obj.type)))
         return result
 
     @api.model

@@ -1,7 +1,7 @@
 {
     "name": "POS Pagos Manuales (FORUM)",
     "summary": "Transacciones de pago manual en POS integradas con payment.transaction",
-    "version": "17.0.1.0.0",
+    "version": "17.0.1.1.0",
     "author": "PRIMATE",
     "website": "https://www.primate.uy",
     "category": "Point of Sale",
