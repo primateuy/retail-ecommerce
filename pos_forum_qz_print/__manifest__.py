@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 {
     "name": "POS Forum — Impresión QZ Tray",
-    "version": "17.0.1.0.4",
+    "version": "17.0.1.0.5",
     "category": "Point of Sale",
     "summary": "Ticket de cambio y recibo POS vía QZ Tray (impresora local sin diálogo del navegador).",
     "description": """

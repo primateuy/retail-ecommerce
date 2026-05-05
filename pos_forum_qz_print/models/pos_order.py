@@ -185,21 +185,27 @@ class PosOrder(models.Model):
                 order.display_name, order.id,
             )
 
-        # Bloque: imprimir SOLO los cupones de "próxima compra" (program_type =
-        # 'next_order_coupons' en Odoo 17). El filtro anterior era excluyente
-        # (descartaba solo gift_card/ewallet), lo que provocaba que cualquier
-        # programa de lealtad aplicado generara impresión: loyalty, promotion,
-        # buy_x_get_y, promo_code, coupons, etc. La regla correcta de negocio
-        # es imprimir un cupón físico únicamente cuando se emite uno usable en
-        # la próxima compra.
+        # Bloque: imprimir solo los cupones que sirven para una próxima compra.
+        # Se replica la misma regla que usa Odoo en
+        # ``pos_loyalty/models/pos_order.py::confirm_coupon_programs`` para
+        # construir ``new_coupon_info`` (lo que el core considera "código nuevo
+        # a mostrar en el recibo"):
+        #   applies_on == 'future'  AND  program_type NOT IN ('gift_card','ewallet')
+        # Esto cubre tanto el tipo literal ``next_order_coupons`` como
+        # programas ``coupons`` o ``loyalty`` configurados con
+        # ``applies_on='future'``, y deja afuera promotion / buy_x_get_y /
+        # promo_code (que son ``current``) y gift_card / ewallet (no se imprimen
+        # como cupón de próxima compra).
         cards = cards.filtered(
             lambda c: c.program_id
-            and c.program_id.program_type == "next_order_coupons"
+            and c.program_id.applies_on == "future"
+            and c.program_id.program_type not in ("gift_card", "ewallet")
         )
         if not cards:
             _logger.info(
                 "pos_forum_qz_print: sin cupón de próxima compra para orden %s "
-                "(id=%s); ningún candidato tenía program_type='next_order_coupons'",
+                "(id=%s); ningún candidato cumplió applies_on='future' y "
+                "program_type fuera de gift_card/ewallet",
                 order.display_name,
                 order.id,
             )
