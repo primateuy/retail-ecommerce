@@ -19,6 +19,17 @@
                             <label for="default_partner_city" class="col-lg-4 o_light_label" />
                             <field name="default_partner_city" />
                         </div>
+                        <div class="row">
+                            <label for="default_partner_country_id" class="col-lg-4 o_light_label" />
+                            <field name="default_partner_country_id" />
+                        </div>
+                        <div class="row">
+                            <label for="default_partner_state_id" class="col-lg-4 o_light_label" />
+                            <field
+                                name="default_partner_state_id"
+                                domain="[('country_id', '=', default_partner_country_id)]"
+                            />
+                        </div>
                     </div>
                 </setting>
             </xpath>

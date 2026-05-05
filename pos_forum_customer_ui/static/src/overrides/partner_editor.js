@@ -60,6 +60,15 @@ patch(PartnerDetailsEdit.prototype, {
         if (!this.changes.city) {
             this.changes.city = this.pos.config.default_partner_city || false;
         }
+        // Many2one llega del backend como [id, display_name] o como número segun version
+        if (!this.changes.country_id) {
+            const c = this.pos.config.default_partner_country_id;
+            this.changes.country_id = (Array.isArray(c) ? c[0] : c) || false;
+        }
+        if (!this.changes.state_id) {
+            const s = this.pos.config.default_partner_state_id;
+            this.changes.state_id = (Array.isArray(s) ? s[0] : s) || false;
+        }
     },
 
     toggleIsCompany() {
@@ -558,12 +567,20 @@ patch(PartnerDetailsEdit.prototype, {
             }
         }
 
-        // Aplicar defaults de configuracion si aun falta calle o ciudad
+        // Aplicar defaults de configuracion si aun falta calle, ciudad, estado o pais
         if (!this.changes.street) {
             this.changes.street = this.pos.config.default_partner_street || false;
         }
         if (!this.changes.city) {
             this.changes.city = this.pos.config.default_partner_city || false;
+        }
+        if (!this.changes.country_id) {
+            const c = this.pos.config.default_partner_country_id;
+            this.changes.country_id = (Array.isArray(c) ? c[0] : c) || false;
+        }
+        if (!this.changes.state_id) {
+            const s = this.pos.config.default_partner_state_id;
+            this.changes.state_id = (Array.isArray(s) ? s[0] : s) || false;
         }
 
         // Si es empresa, ocultar fecha de nacimiento

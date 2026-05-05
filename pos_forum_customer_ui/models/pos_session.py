@@ -73,7 +73,12 @@ class PosSession(models.Model):
             and len(result["search_params"]["fields"]) > 0
         ):
             # Agregar campos si no existen
-            for field_name in ["default_partner_street", "default_partner_city"]:
+            for field_name in [
+                "default_partner_street",
+                "default_partner_city",
+                "default_partner_state_id",
+                "default_partner_country_id",
+            ]:
                 if field_name not in result["search_params"]["fields"]:
                     result["search_params"]["fields"].append(field_name)
         # Retornar parametros extendidos
