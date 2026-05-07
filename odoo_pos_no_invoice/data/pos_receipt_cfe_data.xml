@@ -673,21 +673,27 @@
                     <t t-if="props.data.loyalty_visible">
                         <t t-set="loyalty" t-value="props.data.loyaltyStats[0]"/>
                         <div>
-                            Puntos Acumulados: <t t-esc="loyalty.points.balance"/>
+                            Puntos Acumulados: <t t-esc="loyalty.points.balance - loyalty.points.won"/>
                             <br/>
                             <t t-if="loyalty.points.won > 0">
                             Puntos Generados: <t t-esc="loyalty.points.won"/>
                             <br/>
                             </t>
-                            <t t-if="props.data.points_lost > 0">
-                            Puntos Perdidos: <t t-esc="props.data.points_lost"/>
-                            <br/>
+                            <t t-if="props.data.points_lost != 0">
+                                <t t-if="props.data.points_lost > 0">
+                                Puntos Perdidos: <t t-esc="props.data.points_lost"/>
+                                <br/>
+                                </t>
+                                <t t-if="props.data.points_lost &lt; 0">
+                                Puntos Devueltos: <t t-esc="Math.abs(props.data.points_lost)"/>
+                                <br/>
+                                </t>
                             </t>
                             <t t-if="loyalty.points.spent > 0">
                             Puntos Canjeados: <t t-esc="loyalty.points.spent"/>
                             <br/>
                             </t>
-                            Nuevo Total: <t t-esc="loyalty.points.balance + loyalty.points.won - loyalty.points.spent - props.data.points_lost"/>
+                             Nuevo Total: <t t-esc="loyalty.points.balance - loyalty.points.spent - props.data.points_lost"/>
                         </div>
                     </t>
                     <!-- 3.4 Política de cambio: movida a sección EXTRA (después del FIN ADENDA) -->
