@@ -59,9 +59,25 @@
                             <label class="form-label label" for="birthdate_date">Fecha de nacimiento <span class="text-danger">*</span></label>
                             <input class="detail form-control" id="birthdate_date" name="birthdate_date" t-model="changes.birthdate_date" type="date" required="required" />
                         </div>
+                        <div class="partner-detail col" t-if="partnerGenderEnabled">
+                            <label class="form-label label" for="gender">Genero</label>
+                            <select class="detail form-select" id="gender" name="gender" t-model="changes.gender">
+                                <option value="">Seleccione</option>
+                                <option value="male">Masculino</option>
+                                <option value="female">Femenino</option>
+                                <option value="other">Otro</option>
+                            </select>
+                        </div>
                         <div class="partner-detail col">
                             <label class="form-label label" for="email_person">Correo electronico</label>
-                            <input class="detail form-control" id="email_person" name="email" t-model="changes.email" placeholder="Correo electronico" t-att="{'disabled': isFieldCommercialAndPartnerIsChild('email')}" />
+                            <input class="detail form-control" id="email_person" name="email" t-model="changes.email" placeholder="Correo electronico"
+                                t-att-disabled="isFieldCommercialAndPartnerIsChild('email') || uiState.no_tiene_mail" />
+                            <div class="form-check mt-1">
+                                <input class="form-check-input" type="checkbox" id="no_tiene_mail_person"
+                                    t-att-checked="uiState.no_tiene_mail"
+                                    t-on-change="toggleNoTieneMail" />
+                                <label class="form-check-label" for="no_tiene_mail_person">No tiene mail</label>
+                            </div>
                         </div>
                         <div class="partner-detail col">
                             <label class="form-label label" for="mobile_person"><t t-esc="mobileLabel" /></label>
@@ -129,7 +145,14 @@
                         </div>
                         <div class="partner-detail col">
                             <label class="form-label label" for="email_company">Correo electronico</label>
-                            <input class="detail form-control" id="email_company" name="email" t-model="changes.email" placeholder="Correo electronico" t-att="{'disabled': isFieldCommercialAndPartnerIsChild('email')}" />
+                            <input class="detail form-control" id="email_company" name="email" t-model="changes.email" placeholder="Correo electronico"
+                                t-att-disabled="isFieldCommercialAndPartnerIsChild('email') || uiState.no_tiene_mail" />
+                            <div class="form-check mt-1">
+                                <input class="form-check-input" type="checkbox" id="no_tiene_mail_company"
+                                    t-att-checked="uiState.no_tiene_mail"
+                                    t-on-change="toggleNoTieneMail" />
+                                <label class="form-check-label" for="no_tiene_mail_company">No tiene mail</label>
+                            </div>
                         </div>
                         <div class="partner-detail col">
                             <label class="form-label label" for="mobile_company"><t t-esc="mobileLabel" /></label>

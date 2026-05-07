@@ -5,6 +5,7 @@ import { ErrorPopup } from "@point_of_sale/app/errors/popups/error_popup";
 import { PartnerDetailsEdit } from "@point_of_sale/app/screens/partner_list/partner_editor/partner_editor";
 import { patch } from "@web/core/utils/patch";
 import { useService } from "@web/core/utils/hooks";
+import { useState } from "@odoo/owl";
 
 // Forzar uso del template personalizado del modulo
 PartnerDetailsEdit.template = "pos_forum_customer_ui.PartnerDetailsEdit";
@@ -18,8 +19,12 @@ patch(PartnerDetailsEdit.prototype, {
         this.orm = useService("orm");
         this.popup = useService("popup");
 
-        // Inicializar campos adicionales usados por la UI personalizada
+        // Estado UI exclusivo del formulario (no se persiste en el partner)
+        // Auto-marcar si el partner ya existe y no tiene email registrado
         const partner = this.props.partner;
+        this.uiState = useState({
+            no_tiene_mail: Boolean(partner.id) && !partner.email,
+        });
         this.changes.is_company = Boolean(partner.is_company);
         this.changes.company_type = partner.company_type || (partner.is_company ? "company" : "person");
         this.changes.l10n_latam_identification_type_id =
@@ -41,6 +46,11 @@ patch(PartnerDetailsEdit.prototype, {
             if (this.changes.lastname === undefined) {
                 this.changes.lastname = partner.lastname || false;
             }
+        }
+
+        // Inicializar genero cuando partner_gender esta disponible
+        if (this.partnerGenderEnabled && this.changes.gender === undefined) {
+            this.changes.gender = partner.gender || false;
         }
 
         // Aplicar valores por defecto para calle y ciudad cuando corresponde
@@ -71,6 +81,10 @@ patch(PartnerDetailsEdit.prototype, {
     get partnerFirstnameEnabled() {
         // Definir si el POS debe usar firstname/lastname
         return Boolean(this.pos.partner_firstname_enabled);
+    },
+
+    get partnerGenderEnabled() {
+        return Boolean(this.pos.partner_gender_enabled);
     },
 
     /**
@@ -166,7 +180,11 @@ patch(PartnerDetailsEdit.prototype, {
     },
 
     onVatChange() {
-        // Validar documento al modificar el campo
+        // Para RUT/RUC la consulta DGI es la validacion autoritativa; no validar
+        // aqui para evitar el doble popup al perder foco al presionar el boton.
+        if (this.showConsultRutButton) {
+            return;
+        }
         this._validateVatValue(this.changes.vat);
     },
 
@@ -249,85 +267,26 @@ patch(PartnerDetailsEdit.prototype, {
         }
     },
 
-    _getCountryPhoneConfig() {
-        // Obtener configuracion de telefono del pais seleccionado (incluye codigo para validacion)
-        const country = this.pos.countries?.find((c) => c.id === this.changes.country_id);
-        const code = country?.phone_code != null ? String(country.phone_code) : "";
-        return {
-            length: country?.pos_phone_length || 0,
-            format: country?.pos_phone_format || "",
-            phoneCode: code,
-        };
-    },
-
-    _buildPhoneRegex(phoneFormat) {
-        // Convertir formato simple a regex equivalente
-        if (!phoneFormat) {
-            return null;
-        }
-        const regexParts = [];
-        for (const char of phoneFormat) {
-            if (char === "x" || char === "X") {
-                regexParts.push("\\d");
-            } else if (/\d/.test(char)) {
-                regexParts.push(char.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&"));
-            } else if (/\s/.test(char)) {
-                regexParts.push("\\s?");
-            } else {
-                regexParts.push(char.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&"));
-            }
-        }
-        return new RegExp(`^${regexParts.join("")}$`);
-    },
-
     /**
-     * Valida formato y longitud del telefono considerando codigo de pais.
+     * Valida que la parte nacional del telefono tenga exactamente 8 digitos.
      * Retorna true si es valido, false si es invalido (y muestra popup).
      */
     _validatePhoneValue(value, label) {
-        const { length, format, phoneCode } = this._getCountryPhoneConfig();
-        // Si no hay valor pero el pais exige telefono, se valida en campos obligatorios
         if (!value || (value || "").trim() === "") {
             return true;
         }
+        const country = this.pos.countries?.find((c) => c.id === this.changes.country_id);
+        const phoneCode = country?.phone_code != null ? String(country.phone_code) : "";
         const digitsOnly = (value || "").replace(/\D/g, "");
-        // Parte nacional: quitar codigo de pais al inicio si esta presente
-        let nationalDigits = digitsOnly;
-        if (phoneCode && digitsOnly.startsWith(phoneCode)) {
-            nationalDigits = digitsOnly.slice(phoneCode.length);
-        }
-        if (length && nationalDigits.length !== length) {
+        const nationalDigits = phoneCode && digitsOnly.startsWith(phoneCode)
+            ? digitsOnly.slice(phoneCode.length)
+            : digitsOnly;
+        if (nationalDigits.length !== 8) {
             this._showValidationError(
                 _t("Invalid Phone"),
-                _t("%s must be %s digits.", label, length)
+                _t("%s must be 8 digits.", label)
             );
             return false;
-        }
-        // Si el pais tiene codigo pero no longitud configurada, exigir al menos 8 digitos nacionales
-        if (phoneCode && (value || "").trim() && nationalDigits.length < 8 && !length) {
-            this._showValidationError(
-                _t("Invalid Phone"),
-                _t("%s must have at least 8 digits after the country code.", label)
-            );
-            return false;
-        }
-        const regex = this._buildPhoneRegex(format);
-        if (regex) {
-            let nationalValue = (value || "").trim();
-            if (nationalValue.startsWith("+")) {
-                nationalValue = nationalValue.slice(1).trim();
-                if (phoneCode) {
-                    const reCode = new RegExp("^" + phoneCode.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\s*");
-                    nationalValue = nationalValue.replace(reCode, "").trim();
-                }
-            }
-            if (nationalValue && !regex.test(nationalValue)) {
-                this._showValidationError(
-                    _t("Invalid Phone"),
-                    _t("%s format does not match the required pattern.", label)
-                );
-                return false;
-            }
         }
         return true;
     },
@@ -408,20 +367,26 @@ patch(PartnerDetailsEdit.prototype, {
         // Ejecutar la consulta DGI llamando al mismo metodo que se ejecuta en
         // backend (``get_partner_dgi_data`` de l10n_uy_einvoice_uruware) via
         // los wrappers ``pos_consultar_rut`` / ``pos_consultar_rut_preview``.
+        const identTypeId = this.changes.l10n_latam_identification_type_id || false;
+
         let data = false;
         try {
             if (this.props.partner.id) {
-                // Partner existente: actualiza el registro y devuelve campos
+                // Partner existente: actualiza el registro y devuelve campos.
+                // Se pasa el tipo de identificacion seleccionado en el formulario
+                // para que DGI valide contra el tipo correcto y no el de la BD.
                 data = await this.orm.call("res.partner", "pos_consultar_rut", [
                     this.props.partner.id,
+                    identTypeId,
                 ]);
             } else {
-                // Alta de cliente: el backend crea el partner con el VAT,
-                // ejecuta la consulta DGI y devuelve los campos + id. Asociamos
-                // ese id al formulario para que el guardado posterior haga
-                // update y no cree un partner adicional.
+                // Alta de cliente: el backend crea el partner con el VAT y el
+                // tipo de identificacion, ejecuta la consulta DGI y devuelve
+                // los campos + id. Asociamos ese id al formulario para que el
+                // guardado posterior haga update y no cree un partner adicional.
                 data = await this.orm.call("res.partner", "pos_consultar_rut_preview", [
                     this.changes.vat,
+                    identTypeId,
                 ]);
                 if (data && data.id) {
                     this.props.partner.id = data.id;
@@ -474,6 +439,19 @@ patch(PartnerDetailsEdit.prototype, {
         this.changes.company_type = data.company_type || this.changes.company_type;
     },
 
+    toggleNoTieneMail() {
+        this.uiState.no_tiene_mail = !this.uiState.no_tiene_mail;
+        if (this.uiState.no_tiene_mail) {
+            this.changes.email = false;
+        }
+    },
+
+    _validateEmailFormat(email) {
+        // Regex equivalente al email_re de Odoo (RFC 5322 simplificado)
+        const emailRegex = /^[^\s@"(),:;<>[\\\]]+@[^\s@"(),:;<>[\\\]]+\.[a-zA-Z]{2,}$/;
+        return emailRegex.test(email);
+    },
+
     saveChanges() {
         // Si partner_firstname no esta disponible, evitar enviar campos inexistentes
         if (!this.partnerFirstnameEnabled) {
@@ -481,10 +459,13 @@ patch(PartnerDetailsEdit.prototype, {
             delete this.changes.lastname;
         }
 
-        // Si es empresa, limpiar nombres de persona
+        // Si es empresa, limpiar nombres y genero de persona
         if (this.partnerFirstnameEnabled && this.changes.is_company) {
             delete this.changes.firstname;
             delete this.changes.lastname;
+        }
+        if (this.partnerGenderEnabled && this.changes.is_company) {
+            delete this.changes.gender;
         }
 
         // Validar telefono y celular antes de guardar (muestra popup si estan mal)
@@ -496,10 +477,25 @@ patch(PartnerDetailsEdit.prototype, {
         }
 
         // Validar campos obligatorios
-        const missing = [];
-        if (!this.changes.email) {
-            missing.push(_t("Email"));
+        // Validar email solo cuando no se marco "No tiene mail"
+        if (!this.uiState.no_tiene_mail) {
+            if (!this.changes.email) {
+                this._showValidationError(
+                    _t("Correo electronico requerido"),
+                    _t("Ingrese un correo electronico o marque 'No tiene mail'.")
+                );
+                return;
+            }
+            if (!this._validateEmailFormat(this.changes.email)) {
+                this._showValidationError(
+                    _t("Correo electronico invalido"),
+                    _t("El formato del correo electronico no es valido.")
+                );
+                return;
+            }
         }
+
+        const missing = [];
         if (!this.changes.mobile) {
             missing.push(_t("Mobile"));
         }

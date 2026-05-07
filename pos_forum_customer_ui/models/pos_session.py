@@ -132,9 +132,9 @@ class PosSession(models.Model):
                 if field_name not in result["search_params"]["fields"]:
                     result["search_params"]["fields"].append(field_name)
 
-            # Agregar firstname/lastname solo si existen en el modelo
+            # Agregar firstname/lastname/gender solo si existen en el modelo
             partner_fields = self.env["res.partner"]._fields
-            for field_name in ["firstname", "lastname"]:
+            for field_name in ["firstname", "lastname", "gender"]:
                 if field_name in partner_fields and field_name not in result["search_params"]["fields"]:
                     result["search_params"]["fields"].append(field_name)
         # Retornar parametros extendidos
@@ -150,8 +150,9 @@ class PosSession(models.Model):
         # Ejecutar procesamiento base
         super()._pos_data_process(loaded_data)
 
-        # Informar si partner_firstname esta disponible
+        # Informar si partner_firstname y partner_gender estan disponibles
         partner_fields = self.env["res.partner"]._fields
         loaded_data["partner_firstname_enabled"] = all(
             field_name in partner_fields for field_name in ["firstname", "lastname"]
         )
+        loaded_data["partner_gender_enabled"] = "gender" in partner_fields
