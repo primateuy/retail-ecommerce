@@ -66,16 +66,10 @@ msgid "POS Phone Validation"
 msgstr "Validación de teléfono POS"
 
 #. module: pos_forum_customer_ui
-#: code:addons/pos_forum_customer_ui/models/res_partner.py:58
+#: code:addons/pos_forum_customer_ui/models/res_partner.py:0
 #, python-format
-msgid "Phone length must be %s digits for this country."
-msgstr "El teléfono debe tener %s dígitos para este país."
-
-#. module: pos_forum_customer_ui
-#: code:addons/pos_forum_customer_ui/models/res_partner.py:70
-#, python-format
-msgid "Phone format does not match the required pattern."
-msgstr "El formato del teléfono no coincide con el patrón requerido."
+msgid "Phone must be 8 digits."
+msgstr "El teléfono debe tener 8 dígitos."
 
 #. module: pos_forum_customer_ui
 #: code:addons/pos_forum_customer_ui/models/res_partner.py:83
@@ -105,22 +99,8 @@ msgstr "Se requiere número de documento para consultar el RUT."
 #. odoo-javascript
 #: code:addons/pos_forum_customer_ui/static/src/overrides/partner_editor.js:0
 #, python-format
-msgid "%s format does not match the required pattern."
-msgstr "El formato de %s no coincide con el patrón requerido."
-
-#. module: pos_forum_customer_ui
-#. odoo-javascript
-#: code:addons/pos_forum_customer_ui/static/src/overrides/partner_editor.js:0
-#, python-format
-msgid "%s must be %s digits."
-msgstr "%s debe tener %s dígitos."
-
-#. module: pos_forum_customer_ui
-#. odoo-javascript
-#: code:addons/pos_forum_customer_ui/static/src/overrides/partner_editor.js:0
-#, python-format
-msgid "%s must have at least 8 digits after the country code."
-msgstr "%s debe tener al menos 8 dígitos después del código de país."
+msgid "%s must be 8 digits."
+msgstr "%s debe tener 8 dígitos."
 
 #. module: pos_forum_customer_ui
 #. odoo-javascript

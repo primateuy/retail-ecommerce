@@ -17,7 +17,8 @@ patch(PosStore.prototype, {
             this.identification_type_by_id[item.id] = item;
         }
 
-        // Guardar bandera de disponibilidad de partner_firstname
+        // Guardar banderas de disponibilidad de partner_firstname y partner_gender
         this.partner_firstname_enabled = Boolean(loadedData.partner_firstname_enabled);
+        this.partner_gender_enabled = Boolean(loadedData.partner_gender_enabled);
     },
 });
