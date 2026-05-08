@@ -18,16 +18,16 @@
     <record id="pos_receipt_cfe_bantey" model="pos.receipt">
         <field name="name">Recibo con CFE</field>
         <field name="design_receipt"><![CDATA[
-        <div class="pos-receipt">
+        <div style="width:80mm; margin: 0; padding: 0; font-family:'Courier New',monospace; font-size:12px; box-sizing:border-box" class="pos-receipt">
             <!-- Encabezado de la empresa -->
-            <div style="font-size:13px; text-align:center;">
+            <div style="font-size:13px; text-align:center; width:100%">
                 <t t-if="props.data.headerData.company.name">
-                    <div style="font-weight:bold; font-size:15px;">
+                    <div style="font-weight:bold; font-size:15px; width:100%">
                         <t t-esc="props.data.headerData.company.name" />
                     </div>
                 </t>
                 <t t-if="props.data.headerData.company.street">
-                    <div style="font-size:12px;">
+                    <div style="font-size:12px; width:100%">
                         <t t-esc="props.data.headerData.company.street"/>
                         <t t-if="props.data.headerData.company.city">
                             , <t t-esc="props.data.headerData.company.city"/>
@@ -35,7 +35,7 @@
                     </div>
                 </t>
                 <t t-if="props.data.headerData.company.vat">
-                    <div style="font-size:12px;">
+                    <div style="font-size:12px; width:100%">
                         RUT: <t t-esc="props.data.headerData.company.vat" />
                     </div>
                 </t>
@@ -44,11 +44,11 @@
                 </t>
             </div>
             <br/>
-            
+
             <!-- Información de la orden -->
-            <div style="font-size:13px; text-align:center;">
-                <div>
-                    Fecha: 
+            <div style="font-size:13px; text-align:center; width:100%">
+                <div style="width:100%">
+                    Fecha:
                     <t t-if="props.receipt.date">
                         <t t-esc="props.receipt.date"/>
                     </t>
@@ -56,36 +56,39 @@
                         <t t-esc="props.order.validation_date"/>
                     </t>
                 </div>
-                <div>
-                    Hora: 
+                <div style="width:100%">
+                    Hora:
                     <t t-if="props.receipt.time">
                         <t t-esc="props.receipt.time"/>
                     </t>
                 </div>
-                <div>
+                <div style="width:100%">
                     Cajero: <t t-esc="props.receipt.headerData.cashier" />
                 </div>
                 <t t-if="props.data.headerData.trackingNumber">
-                    <div class="fw-bolder" style="margin-top:5px;">
+                    <div class="fw-bolder" style="margin-top:5px; width:100%">
                         <span class="fs-2" t-esc="props.data.headerData.trackingNumber" />
                     </div>
                 </t>
+                <t t-if="props.data.name">
+                    <div style="width:100%">N° Orden: <t t-esc="props.data.name"/></div>
+                </t>
             </div>
             <br/>
-            
+
             <!-- Información del CFE (si está disponible) - Similar a imagen de referencia -->
             <!-- Los datos del CFE se obtienen directamente desde props.data.cfe_data -->
             <t t-if="props.data.cfe_data and (props.data.cfe_data.tipo or props.data.cfe_data.serie or props.data.cfe_data.numero)">
-                <div style="font-size:12px; border-top:1px solid black; border-bottom:1px solid black; padding:5px; margin:10px 0;">
-                    <div style="text-align:center; font-weight:bold; margin-bottom:5px; font-size:13px;">
+                <div style="font-size:12px; border-top:1px solid black; border-bottom:1px solid black; padding:5px; margin:10px 0; width:100%">
+                    <div style="text-align:center; font-weight:bold; margin-bottom:5px; font-size:13px; width:100%">
                         COMPROBANTE FISCAL ELECTRÓNICO
                     </div>
-                    <div style="text-align:center; font-size:12px;">
+                    <div style="text-align:center; font-size:12px; width:100%">
                         <t t-if="props.data.cfe_data.tipo">
                             Tipo: <t t-esc="props.data.cfe_data.tipo"/>
                         </t>
                     </div>
-                    <div style="text-align:center; font-size:12px;">
+                    <div style="text-align:center; font-size:12px; width:100%">
                         <t t-if="props.data.cfe_data.serie">
                             Serie: <t t-esc="props.data.cfe_data.serie"/>
                         </t>
@@ -94,62 +97,66 @@
                             Nro.: <t t-esc="props.data.cfe_data.numero"/>
                         </t>
                     </div>
-                    <div style="text-align:center; font-size:12px;">
+                    <div style="text-align:center; font-size:12px; width:100%">
                         <t t-if="props.data.cfe_data.ruc_emisor">
                             RUT: <t t-esc="props.data.cfe_data.ruc_emisor"/>
                         </t>
                     </div>
-                    <div style="text-align:center; font-size:12px;">
+                    <div style="text-align:center; font-size:12px; width:100%">
                         <t t-if="props.data.cfe_data.pago">
                             Pago: <t t-esc="props.data.cfe_data.pago"/>
                         </t>
                     </div>
+                     <div style="text-align:center; font-size:12px; width:100%">
+                        <t t-if="props.data.currency_name">
+                            Moneda: <t t-esc="props.data.currency_name"/>
+                        </t>
+                    </div>
                 </div>
             </t>
-            
+
             <!-- Mensaje de consumo final - Con borde como en la imagen -->
-            <div style="text-align:center; font-weight:bold; border:2px solid black; padding:8px; margin:10px 0; font-size:13px;">
+            <div style="text-align:center; font-weight:bold; border:2px solid black; padding:8px; margin:10px 0; font-size:13px; width:100%">
                 CONSUMO FINAL
             </div>
-            
+
             <!-- Líneas de productos -->
-            <div>
-                <table class='receipt-orderlines' style="font-size:13px; border-style:double;
-                    border-left:none; border-right:none; border-bottom:none; width:100%;">
+            <div style="width:100%">
+                <table class='receipt-orderlines' style="font-size:13px; border-style:double; border-left:none; border-right:none; border-bottom:none; width:100%; table-layout:fixed">
                     <colgroup>
-                        <col width='40%' />
-                        <col width='20%' />
-                        <col width='20%' />
-                        <col width='20%' />
+                        <col style="width:45%"/>
+                        <col style="width:15%"/>
+                        <col style="width:17%"/>
+                        <col style="width:23%"/>
                     </colgroup>
-                    <tr style="border-bottom:1px dashed black;">
-                        <th style="text-align:left;">Producto</th>
-                        <th style="text-align:right;">Cant.</th>
-                        <th style="text-align:right;">P. Unit.</th>
-                        <th style="text-align:right;">Total</th>
+                    <tr style="border-bottom:1px dashed black">
+                        <th style="text-align:left">Producto</th>
+                        <th style="text-align:right">Cant.</th>
+                        <th style="text-align:right">P. Unit.</th>
+                        <th style="text-align:right">Total</th>
                     </tr>
                     <t t-if="props.order and props.order.length and props.order[0] and props.order[0].pos and props.order[0].pos.mainScreen and props.order[0].pos.mainScreen.props and props.order[0].pos.mainScreen.props.order and props.order[0].pos.mainScreen.props.order.orderlines and props.order[0].pos.mainScreen.props.order.orderlines.length">
                         <t t-if="props.order[0].pos.mainScreen.props">
                             <tr t-foreach="props.order[0].pos.mainScreen.props.order.orderlines" t-as="orderline" t-key="orderline_index">
-                                <td style="padding-top:1%; padding-bottom:1%; text-align:left; font-size:12px;">
+                                <td style="padding-top:1%; padding-bottom:1%; text-align:left; font-size:12px">
                                     <t t-esc="orderline.productName"/>
                                     <t t-if="orderline.discount > 0">
-                                        <div style="font-size:11px; font-style:italic; color:#808080;">
+                                        <div style="font-size:11px; font-style:italic; color:#808080; width:100%">
                                             <t t-esc="orderline.discount"/>% desc.
                                         </div>
                                     </t>
                                     <t t-if="orderline.customerNote">
-                                        <div style="font-size:11px;" t-esc="orderline.customerNote"/>
+                                        <div style="font-size:11px; width:100%" t-esc="orderline.customerNote"/>
                                     </t>
                                 </td>
-                                <td style="text-align:right; font-size:12px;">
+                                <td style="text-align:right; font-size:12px">
                                     <t t-esc="orderline.qty"/>
                                 </td>
-                                <td style="text-align:right; font-size:12px;">
-                                    <t t-esc="orderline.unitPrice"/>
+                                <td style="text-align:right; font-size:12px">
+                                    <t t-esc="(orderline.unitPrice || '').replace('$', '').trim()"/>
                                 </td>
-                                <td style="text-align:right; font-size:12px;">
-                                    <t t-esc="orderline.price"/>
+                                <td style="text-align:right; font-size:12px">
+                                    <t t-esc="(orderline.price || '').replace('$', '').trim()"/>
                                 </td>
                             </tr>
                         </t>
@@ -157,25 +164,25 @@
                     <t t-else="">
                         <t t-if="props.orderlines and props.orderlines.length">
                             <tr t-foreach="props.orderlines" t-as="orderline" t-key="orderline_index">
-                                <td style="padding-top:1%; padding-bottom:1%; text-align:left; font-size:12px;">
+                                <td style="padding-top:1%; padding-bottom:1%; text-align:left; font-size:12px">
                                     <t t-esc="orderline.productName"/>
                                     <t t-if="orderline.discount > 0">
-                                        <div style="font-size:11px; font-style:italic; color:#808080;">
+                                        <div style="font-size:11px; font-style:italic; color:#808080; width:100%">
                                             <t t-esc="orderline.discount"/>% desc.
                                         </div>
                                     </t>
                                     <t t-if="orderline.customerNote">
-                                        <div style="font-size:11px;" t-esc="orderline.customerNote"/>
+                                        <div style="font-size:11px; width:100%" t-esc="orderline.customerNote"/>
                                     </t>
                                 </td>
-                                <td style="text-align:right; font-size:12px;">
+                                <td style="text-align:right; font-size:12px">
                                     <t t-esc="orderline.qty"/>
                                 </td>
-                                <td style="text-align:right; font-size:12px;">
-                                    <t t-esc="orderline.unitPrice"/>
+                                <td style="text-align:right; font-size:12px">
+                                    <t t-esc="(orderline.unitPrice || '').replace('$', '').trim()"/>
                                 </td>
-                                <td style="text-align:right; font-size:12px;">
-                                    <t t-esc="orderline.price"/>
+                                <td style="text-align:right; font-size:12px">
+                                    <t t-esc="(orderline.price || '').replace('$', '').trim()"/>
                                 </td>
                             </tr>
                         </t>
@@ -183,135 +190,135 @@
                 </table>
             </div>
             <br />
-            
+
             <!-- Totales -->
-            <div style="padding-top:6px;">
+            <div style="padding-top:6px; width:100%">
                 <t t-set='taxincluded' t-value='Math.abs(props.receipt.amount_total - props.receipt.total_with_tax) &lt;= 0.000001' />
                 <t t-if='!taxincluded'>
                     <br/>
-                    <div style="font-weight:700; font-size:13px; border-top:1px dashed;">
-                        <span style="margin-left:40%;">Tot. Neto IVA Bas: </span>
+                    <div style="font-weight:700; font-size:13px; border-top:1px dashed;; width:100%">
+                        <span style="">Tot. Neto IVA Bas: </span>
                         <span t-esc='props.pos.env.utils.formatCurrency(props.data.total_without_tax)' class="pos-receipt-right-align"/>
                     </div>
-                    <div style="font-weight:700; font-size:13px;">
-                        <span style="margin-left:40%;">Tot. IVA Bas: </span>
+                    <div style="font-weight:700; font-size:13px; width:100%">
+                        <span style="">Tot. IVA Bas: </span>
                         <span t-esc='props.pos.env.utils.formatCurrency(props.data.amount_tax)' class="pos-receipt-right-align"/>
                     </div>
                 </t>
                 <!-- Total -->
                 <br/>
-                <div style="font-weight:700; font-size:14px; border-top:1px solid black; padding-top:5px;">
-                    <span style="margin-left:40%;">TOTAL: </span>
+                <div style="font-weight:700; font-size:14px; border-top:1px solid black; padding-top:5px; width:100%">
+                    <span style="">TOTAL: </span>
                     <span t-esc='props.pos.env.utils.formatCurrency(props.data.amount_total)' class="pos-receipt-right-align"/>
                 </div>
                 <br/><br/>
             </div>
-            
+
             <!-- Líneas de pago -->
             <t t-foreach='props.paymentlines' t-as='line' t-key="line_index">
-                <div style="font-size:13px; border-top:1px dashed; padding-top:5px;">
-                    <span style="margin-left:40%;"><t t-esc='line.name' /></span>
+                <div style="font-size:13px; border-top:1px dashed; padding-top:5px; width:100%">
+                    <span style=""><t t-esc='line.name' /></span>
                     <span t-esc='props.pos.env.utils.formatCurrency(line.amount)' class="pos-receipt-right-align"/>
                 </div>
             </t>
             <br/>
-            
+
             <!-- Cambio -->
-            <div class="receipt-change" style="font-size:13px;">
-                <span style="margin-left:40%;">CAMBIO: </span>
+            <div class="receipt-change" style="font-size:13px; width:100%">
+                <span style="">CAMBIO: </span>
                 <span t-esc='props.pos.env.utils.formatCurrency(props.receipt.change)' class="pos-receipt-right-align"/>
             </div>
             <br/>
-            
+
             <!-- Información adicional del CFE (ADENDA) - Similar a imagen de referencia -->
             <t t-if="props.data.cfe_data and (props.data.cfe_data.tipo or props.data.cfe_data.serie or props.data.cfe_data.numero)">
-                <div style="font-size:11px; border-top:1px dashed; padding-top:5px; margin-top:10px;">
-                    <div style="text-align:center; font-weight:bold; margin-bottom:5px; font-size:12px;">
+                <div style="font-size:11px; border-top:1px dashed; padding-top:5px; margin-top:10px; width:100%">
+                    <div style="text-align:center; font-weight:bold; margin-bottom:5px; font-size:12px; width:100%">
                         ADENDA
                     </div>
-                    <div style="text-align:left; padding-left:10px;">
+                    <div style="text-align:left; padding-left:10px; width:100%">
                         <t t-if="props.data.cfe_data.vta_cont">
-                            <div>Vta.Cont.: <t t-esc="props.data.cfe_data.vta_cont"/></div>
+                            <div style="width:100%">Vta.Cont.: <t t-esc="props.data.cfe_data.vta_cont"/></div>
                         </t>
                         <t t-if="props.data.cfe_data.caja">
-                            <div>Caja: <t t-esc="props.data.cfe_data.caja"/></div>
+                            <div style="width:100%">Caja: <t t-esc="props.data.cfe_data.caja"/></div>
                         </t>
                         <t t-if="props.data.cfe_data.cajero">
-                            <div>Cajero: <t t-esc="props.data.cfe_data.cajero"/></div>
+                            <div style="width:100%">Cajero: <t t-esc="props.data.cfe_data.cajero"/></div>
                         </t>
                         <t t-if="props.data.cfe_data.vend">
-                            <div>Vend.: <t t-esc="props.data.cfe_data.vend"/></div>
+                            <div style="width:100%">Vend.: <t t-esc="props.data.cfe_data.vend"/></div>
                         </t>
                         <t t-if="props.data.cfe_data.store">
-                            <div><t t-esc="props.data.cfe_data.store"/></div>
+                            <div style="width:100%"><t t-esc="props.data.cfe_data.store"/></div>
                         </t>
                     </div>
                 </div>
-                
+
                 <!-- FIN ADENDA y verificación del CFE -->
-                <div style="font-size:11px; border-top:1px dashed; padding-top:5px; margin-top:10px; text-align:center;">
-                    <div style="font-weight:bold; margin-bottom:10px; font-size:12px;">
+                <div style="font-size:11px; border-top:1px dashed; padding-top:5px; margin-top:10px; text-align:center; width:100%">
+                    <div style="font-weight:bold; margin-bottom:10px; font-size:12px; width:100%">
                         FIN ADENDA
                     </div>
-                    
+
                     <!-- Código QR del CFE - Debe aparecer después de FIN ADENDA -->
                     <t t-if="props.data.cfe_data.qr_base64">
-                        <div style="text-align:center; margin:10px 0;">
+                        <div style="text-align:center; margin:10px 0; width:100%">
                             <img t-att-src="'data:image/png;base64,' + props.data.cfe_data.qr_base64"
-                                 style="max-width:150px; height:auto;"/>
+                                 style="max-width:150px; height:auto"/>
                         </div>
                     </t>
-                    
+
                     <!-- Código de Seguridad -->
                     <t t-if="props.data.cfe_data.codigo_seguridad">
-                        <div style="margin-bottom:5px; font-size:11px;">
+                        <div style="margin-bottom:5px; font-size:11px; width:100%">
                             <strong>Código de Seguridad:</strong> <t t-esc="props.data.cfe_data.codigo_seguridad"/>
                         </div>
                     </t>
-                    
+
                     <!-- URL de verificación -->
                     <t t-if="props.data.cfe_data.url_verificacion">
-                        <div style="margin-bottom:5px; font-size:10px; word-break:break-all; overflow-wrap:break-word; white-space:normal;">
+                        <div style="margin-bottom:5px; font-size:10px; word-break:break-all; overflow-wrap:break-word; white-space:normal; width:100%">
                             Puede verificar comprobante en:<br/>
                             <t t-esc="props.data.cfe_data.url_verificacion"/>
                         </div>
                     </t>
-                    
+
                     <!-- Información CAE -->
                     <t t-if="props.data.cfe_data.cae_numero">
-                        <div style="margin-top:10px; padding-top:5px;">
-                            <div style="font-size:11px;"><strong>IVA al día. Nro. CAE:</strong> <t t-esc="props.data.cfe_data.cae_numero"/></div>
+                        <div style="margin-top:10px; padding-top:5px; width:100%">
+                            <div style="font-size:11px; width:100%"><strong>IVA al día. Nro. CAE:</strong> <t t-esc="props.data.cfe_data.cae_numero"/></div>
                             <t t-if="props.data.cfe_data.cae_rango_desde and props.data.cfe_data.cae_rango_hasta">
-                                <div style="font-size:11px;"><strong>Rango:</strong> <t t-esc="props.data.cfe_data.cae_rango_desde"/> - <t t-esc="props.data.cfe_data.cae_rango_hasta"/></div>
+                                <div style="font-size:11px; width:100%"><strong>Rango:</strong> <t t-esc="props.data.cfe_data.cae_rango_desde"/> - <t t-esc="props.data.cfe_data.cae_rango_hasta"/></div>
                             </t>
                             <t t-if="props.data.cfe_data.serie">
-                                <div style="font-size:11px;"><strong>Serie:</strong> <t t-esc="props.data.cfe_data.serie"/></div>
+                                <div style="font-size:11px; width:100%"><strong>Serie:</strong> <t t-esc="props.data.cfe_data.serie"/></div>
                             </t>
                             <t t-if="props.data.cfe_data.cae_fecha_vencimiento">
-                                <div style="font-size:11px;"><strong>Fecha de vencimiento:</strong> <t t-esc="props.data.cfe_data.cae_fecha_vencimiento"/></div>
+                                <div style="font-size:11px; width:100%"><strong>Fecha de vencimiento:</strong> <t t-esc="props.data.cfe_data.cae_fecha_vencimiento"/></div>
                             </t>
                         </div>
                     </t>
                 </div>
             </t>
-            
+
             <div class='before-footer' />
-            
+
             <!-- Footer -->
-            <div t-if='props.receipt.footer_html' style="text-align:center; font-size:12px;">
+            <div t-if='props.receipt.footer_html' style="text-align:center; font-size:12px; width:100%">
                 <t t-raw='props.receipt.footer_html'/>
             </div>
-            <div t-if='!props.receipt.footer_html and props.receipt.footer' style="text-align:center; font-size:12px;">
+            <div t-if='!props.receipt.footer_html and props.receipt.footer' style="text-align:center; font-size:12px; width:100%">
                 <br/>
                 <t t-esc='props.receipt.footer'/>
                 <br/><br/>
             </div>
-            
-            <div class='after-footer' style="font-size:12px;">
+
+            <div class='after-footer' style="font-size:12px; width:100%">
                 <t t-foreach='props.paymentlines' t-as='line' t-key="line_index">
                     <t t-if='line.ticket'>
                         <br />
-                        <div class="pos-payment-terminal-receipt">
+                        <div style="width:100%" class="pos-payment-terminal-receipt">
                             <t t-raw='line.ticket'/>
                         </div>
                     </t>
@@ -320,120 +327,122 @@
 
             <!-- Voucher tarjeta OCA (mismo bloque que FORUM; recibo Bantey) -->
             <t t-if="props.data.oca_voucher and props.data.oca_voucher.show_client_copy">
-                <div style="font-family: 'Courier New', Courier, monospace; font-size: 13px; line-height: 1.4; border-top: 1px dashed #000; margin-top: 12px; padding-top: 10px;">
-                    <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
+                <div style="font-family: 'Courier New', Courier, monospace; font-size: 13px; line-height: 1.4; border-top: 1px dashed #000; margin-top: 12px; padding-top: 10px; width:100%">
+                    <div style="display:flex; justify-content:space-between; margin-bottom:6px; width:100%">
                         <span t-esc="props.data.oca_voucher.date_str"/>
                         <span t-esc="props.data.oca_voucher.time_str"/>
                     </div>
-                    <div style="text-align:center; font-weight:bold; font-size:15px; margin-bottom:4px;">OCA Comercios</div>
-                    <div style="text-align:center; margin-bottom:2px;">
+                    <div style="text-align:center; font-weight:bold; font-size:15px; margin-bottom:4px; width:100%">OCA Comercios</div>
+                    <div style="text-align:center; margin-bottom:2px; width:100%">
                         <t t-esc="props.data.oca_voucher.issuer_name || 'TARJETA'"/> ONLINE
                     </div>
-                    <div style="text-align:center; font-weight:bold; font-size:14px; margin-bottom:8px;">
+                    <div style="text-align:center; font-weight:bold; font-size:14px; margin-bottom:8px; width:100%">
                         <t t-esc="props.data.oca_voucher.company_name"/>
                     </div>
-                    <div style="display:flex; justify-content:space-between; gap:8px; margin-bottom:8px;">
-                        <div style="flex:1;"><t t-esc="props.data.oca_voucher.branch_street"/></div>
-                        <div style="text-align:right; flex:1;">RUT <t t-esc="props.data.oca_voucher.branch_vat"/></div>
+                    <div style="display:flex; justify-content:space-between; gap:8px; margin-bottom:8px; width:100%">
+                        <div style="flex:1; width:100%"><t t-esc="props.data.oca_voucher.branch_street"/></div>
+                        <div style="text-align:right; flex:1; width:100%">RUT <t t-esc="props.data.oca_voucher.branch_vat"/></div>
                     </div>
-                    <div style="text-align:center; font-weight:bold; margin-bottom:8px;">
+                    <div style="text-align:center; font-weight:bold; margin-bottom:8px; width:100%">
                         Voucher de Tarjeta <t t-esc="props.data.oca_voucher.voucher_ref"/>
                     </div>
-                    <div style="display:flex; justify-content:space-between; margin-bottom:2px;">
+                    <div style="display:flex; justify-content:space-between; margin-bottom:2px; width:100%">
                         <span>TARJETA: <t t-esc="props.data.oca_voucher.issuer_name"/></span>
                         <span>Online <t t-esc="props.data.oca_voucher.acquirer || 'OCA'"/></span>
                     </div>
-                    <div style="display:flex; justify-content:space-between; margin-bottom:2px;">
+                    <div style="display:flex; justify-content:space-between; margin-bottom:2px; width:100%">
                         <span>Comercio: <t t-esc="props.data.oca_voucher.merchant_number"/></span>
                         <span>Terminal: <t t-esc="props.data.oca_voucher.pos_id"/></span>
                     </div>
-                    <div style="display:flex; justify-content:space-between; margin-bottom:2px;">
+                    <div style="display:flex; justify-content:space-between; margin-bottom:2px; width:100%">
                         <span>Operacion: Venta</span>
                         <span t-esc="props.data.oca_voucher.datetime_str"/>
                     </div>
-                    <div style="display:flex; justify-content:space-between; margin-bottom:2px;">
+                    <div style="display:flex; justify-content:space-between; margin-bottom:2px; width:100%">
                         <span>Producto: <t t-esc="props.data.oca_voucher.acquirer"/></span>
                         <span>Ticket: <t t-esc="props.data.oca_voucher.ticket_number"/></span>
                     </div>
-                    <div style="display:flex; justify-content:space-between; margin-bottom:2px;">
+                    <div style="display:flex; justify-content:space-between; margin-bottom:2px; width:100%">
                         <span>LOTE: <t t-esc="props.data.oca_voucher.batch_number"/></span>
                         <span>Ingreso: NFC</span>
                     </div>
-                    <div style="display:flex; justify-content:space-between; margin-bottom:2px;">
+                    <div style="display:flex; justify-content:space-between; margin-bottom:2px; width:100%">
                         <span>Tarjeta: <t t-esc="props.data.oca_voucher.card_masked"/></span>
                         <span>Exp: xx/xx</span>
                     </div>
-                    <div style="display:flex; justify-content:space-between; margin-bottom:2px;">
+                    <div style="display:flex; justify-content:space-between; margin-bottom:2px; width:100%">
                         <span>Cuotas: <t t-esc="props.data.oca_voucher.installments"/></span>
                         <span>Plan: <t t-esc="props.data.oca_voucher.issuer_code || '0'"/></span>
                     </div>
-                    <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
+                    <div style="display:flex; justify-content:space-between; margin-bottom:8px; width:100%">
                         <span>Autorizacion: <t t-esc="props.data.oca_voucher.authorization_code"/></span>
                         <span>No.FACT: <t t-esc="props.data.oca_voucher.invoice_number"/></span>
                     </div>
-                    <div style="display:flex; justify-content:space-between; font-weight:bold; margin:6px 0 4px 0;">
+                    <div style="display:flex; justify-content:space-between; font-weight:bold; margin:6px 0 4px 0; width:100%">
                         <span>IMPORTE</span>
                         <span t-if="typeof props.data.oca_voucher.amount === 'number'" t-esc="props.pos.env.utils.formatCurrency(props.data.oca_voucher.amount)"/>
                     </div>
-                    <div style="display:flex; justify-content:space-between; font-weight:bold; font-size:15px; margin-bottom:8px;">
+                    <div style="display:flex; justify-content:space-between; font-weight:bold; font-size:15px; margin-bottom:8px; width:100%">
                         <span>TOTAL A PAGAR</span>
                         <span t-if="typeof props.data.oca_voucher.amount === 'number'" t-esc="props.pos.env.utils.formatCurrency(props.data.oca_voucher.amount)"/>
                     </div>
-                    <div style="margin-bottom:6px;"><t t-esc="props.data.oca_voucher.partner_name"/></div>
-                    <div style="text-align:center; font-size:11px; margin:6px 0;">NO REQUIERE PIN NI OTROS DATOS</div>
-                    <div style="text-align:center; font-size:11px;">NO APLICA Ley</div>
-                    <div style="text-align:center; font-size:11px; margin:6px 0;">Adq: <t t-esc="props.data.oca_voucher.acquirer"/></div>
-                    <div style="font-size:11px; text-align:center; margin-bottom:8px;">Aplica dev. IVA-Ley 19210 Sin nro. factura no aplica ley</div>
-                    <div style="text-align:center; font-size:12px; font-weight:bold; margin-bottom:10px;">MUCHAS GRACIAS</div>
-                    <div style="background:#000; color:#fff; text-align:center; font-weight:bold; padding:6px 4px; margin-top:4px;">
+                    <div style="margin-bottom:6px; width:100%"><t t-esc="props.data.oca_voucher.partner_name"/></div>
+                    <div style="text-align:center; font-size:11px; margin:6px 0; width:100%">NO REQUIERE PIN NI OTROS DATOS</div>
+                    <div style="text-align:center; font-size:11px; width:100%">NO APLICA Ley</div>
+                    <div style="text-align:center; font-size:11px; margin:6px 0; width:100%">Adq: <t t-esc="props.data.oca_voucher.acquirer"/></div>
+                    <div style="font-size:11px; text-align:center; margin-bottom:8px; width:100%">Aplica dev. IVA-Ley 19210 Sin nro. factura no aplica ley</div>
+                    <div style="text-align:center; font-size:12px; font-weight:bold; margin-bottom:10px; width:100%">MUCHAS GRACIAS</div>
+                    <div style="background:#000; color:#fff; text-align:center; font-weight:bold; padding:6px 4px; margin-top:4px; width:100%">
                         *** COPIA CLIENTE ***
                     </div>
                 </div>
             </t>
-            
+
             <br/><br/>
-            <div style="font-size:12px; text-align:center;">
+            <div style="font-size:12px; text-align:center; width:100%">
                 ¡Gracias por su compra!
             </div>
+            <div style="page-break-after:always"></div>
         </div>]]></field>
     </record>
 
     <record id="pos_receipt_cfe_forum" model="pos.receipt">
         <field name="name">Recibo con CFE (FORUM)</field>
         <field name="design_receipt"><![CDATA[<!-- FORUM v2 -->
-        <div class="pos-receipt">
+        <style>@page { size: 80mm auto; margin: 0; } @media print { body { margin: 0; } }</style>
+        <div style="width:80mm; margin:0; padding:0; font-family:'Courier New',monospace; font-size:12px; box-sizing:border-box" class="pos-receipt">
 
             <!-- ===================== ENCABEZADO ===================== -->
 
             <!-- 1.1 Logo de rutina de impresión -->
             <t t-if="props.data.receipt_logo">
-                <div style="text-align:center; margin-bottom:8px;">
+                <div style="text-align:center; margin-bottom:8px; width:100%">
                     <img t-att-src="'data:image/png;base64,' + props.data.receipt_logo"
-                         style="max-width:160px; height:auto;"/>
+                         style="max-width:160px; height:auto"/>
                 </div>
             </t>
 
             <!-- Nombre de empresa y RUT (siempre visibles) -->
-            <div style="font-size:13px; text-align:center;">
+            <div style="font-size:13px; text-align:center; width:100%">
                 <t t-if="props.data.headerData.company.name">
-                    <div style="font-weight:bold; font-size:15px;">
+                    <div style="font-weight:bold; font-size:15px; width:100%">
                         <t t-esc="props.data.headerData.company.name" />
                     </div>
                 </t>
                 <t t-if="props.data.headerData.company.vat">
-                    <div style="font-size:12px;">RUT: <t t-esc="props.data.headerData.company.vat" /></div>
+                    <div style="font-size:12px; width:100%">RUT: <t t-esc="props.data.headerData.company.vat" /></div>
                 </t>
                 <t t-if="props.pos.env.services.pos.company.phone">
-                    <div style="font-size:12px;">Tel: <t t-esc="props.pos.env.services.pos.company.phone"/></div>
+                    <div style="font-size:12px; width:100%">Tel: <t t-esc="props.pos.env.services.pos.company.phone"/></div>
                 </t>
             </div>
 
             <!-- 1.2 Datos de sucursal desde el Punto de Emisión -->
             <t t-if="props.data.cfe_data and props.data.cfe_data.sucursal_nombre">
-                <div style="text-align:center; font-size:13px; margin-top:4px;">
-                    <div style="font-weight:bold;"><t t-esc="props.data.cfe_data.sucursal_nombre"/></div>
+                <div style="text-align:center; font-size:13px; margin-top:4px; width:100%">
+                    <div style="font-weight:bold; width:100%"><t t-esc="props.data.cfe_data.sucursal_nombre"/></div>
                     <t t-if="props.data.cfe_data.sucursal_direccion">
-                        <div style="font-size:12px;">
+                        <div style="font-size:12px; width:100%">
                             <t t-esc="props.data.cfe_data.sucursal_direccion"/>
                             <t t-if="props.data.cfe_data.sucursal_ciudad">
                                 , <t t-esc="props.data.cfe_data.sucursal_ciudad"/>
@@ -445,7 +454,7 @@
             <t t-else="">
                 <!-- Fallback: dirección de la empresa -->
                 <t t-if="props.data.headerData.company.street">
-                    <div style="font-size:12px; text-align:center;">
+                    <div style="font-size:12px; text-align:center; width:100%">
                         <t t-esc="props.data.headerData.company.street"/>
                         <t t-if="props.data.headerData.company.city">
                             , <t t-esc="props.data.headerData.company.city"/>
@@ -455,51 +464,21 @@
             </t>
             <br/>
 
-            <!-- Datos del comprobante: condición, orden, fecha, tipo, forma de pago -->
-            <!-- 1.5 Cliente y 1.6 Sucursal/Caja se movieron a ADENDA -->
-            <div style="font-size:12px;">
-                <t t-if="props.data.legal_data and props.data.legal_data.purchase_condition">
-                    <div>Condición de compra: <t t-esc="props.data.legal_data.purchase_condition"/></div>
-                </t>
-                <!-- 1.3 "Número de Orden" en lugar de "Número de Ticket" -->
-                <t t-if="props.data.legal_data and props.data.legal_data.ticket_number">
-                    <div>Número de Orden: <t t-esc="props.data.legal_data.ticket_number"/></div>
-                </t>
-                <t t-if="props.data.legal_data and props.data.legal_data.date">
-                    <div>Fecha: <t t-esc="props.data.legal_data.date"/></div>
-                </t>
-                <!-- 1.4 Tipo de Documento con número/nombre del CFE -->
-                <div>
-                    Tipo de documento:
-                    <t t-if="props.data.cfe_data and props.data.cfe_data.tipo">
-                        <t t-esc="props.data.cfe_data.tipo"/>
-                        <t t-if="props.data.cfe_data.cfe_serie_num">
-                            - <t t-esc="props.data.cfe_data.cfe_serie_num"/>
-                        </t>
-                    </t>
-                    <t t-elif="props.data.legal_data and props.data.legal_data.document_type">
-                        <t t-esc="props.data.legal_data.document_type"/>
-                    </t>
-                </div>
-                <!-- 1.7 Forma de pago desde DGI -->
-                <t t-if="props.data.cfe_data and props.data.cfe_data.pago">
-                    <div>Forma de pago: <t t-esc="props.data.cfe_data.pago"/></div>
-                </t>
-            </div>
-            <br/>
-
             <!-- Información del CFE -->
             <t t-if="props.data.cfe_data and (props.data.cfe_data.tipo or props.data.cfe_data.serie or props.data.cfe_data.numero)">
-                <div style="font-size:12px; border-top:1px solid black; border-bottom:1px solid black; padding:5px; margin:10px 0;">
-                    <div style="text-align:center; font-weight:bold; margin-bottom:5px; font-size:13px;">
+                <div style="font-size:12px; border-top:1px solid black; border-bottom:1px solid black; padding:5px; margin:10px 0; width:100%">
+                    <div style="text-align:center; font-weight:bold; margin-bottom:5px; font-size:13px; width:100%">
                         COMPROBANTE FISCAL ELECTRÓNICO
                     </div>
-                    <div style="text-align:center; font-size:12px;">
+                    <div style="text-align:center; font-size:12px; width:100%">
+                        <t t-if="props.data.name">
+                            <div style="width:100%">N° <t t-esc="props.data.name"/></div>
+                        </t>
                         <t t-if="props.data.cfe_data.tipo">
                             Tipo: <t t-esc="props.data.cfe_data.tipo"/>
                         </t>
                     </div>
-                    <div style="text-align:center; font-size:12px;">
+                    <div style="text-align:center; font-size:12px; width:100%">
                         <t t-if="props.data.cfe_data.serie">
                             Serie: <t t-esc="props.data.cfe_data.serie"/>
                         </t>
@@ -508,12 +487,12 @@
                             Nro.: <t t-esc="props.data.cfe_data.numero"/>
                         </t>
                     </div>
-                    <div style="text-align:center; font-size:12px;">
+                    <div style="text-align:center; font-size:12px; width:100%">
                         <t t-if="props.data.cfe_data.ruc_emisor">
                             RUT: <t t-esc="props.data.cfe_data.ruc_emisor"/>
                         </t>
                     </div>
-                    <div style="text-align:center; font-size:12px;">
+                    <div style="text-align:center; font-size:12px; width:100%">
                         <t t-if="props.data.cfe_data.pago">
                             Pago: <t t-esc="props.data.cfe_data.pago"/>
                         </t>
@@ -522,34 +501,39 @@
             </t>
 
             <!-- Mensaje de consumo final -->
-            <div style="text-align:center; font-weight:bold; border:2px solid black; padding:8px; margin:10px 0; font-size:13px;">
+            <div style="text-align:center; font-weight:bold; border:2px solid black; padding:8px; margin:10px 0; font-size:13px; width:100%">
                 CONSUMO FINAL
             </div>
 
-            <!-- ===================== CUERPO ===================== -->
+            <!-- ===================== MONEDA ===================== -->
+            <div style="font-size:14px; width:100%">
+               <t t-if="props.data.currency_name">
+                  Moneda: <t t-esc="props.data.currency_name"/>
+               </t>
+             </div>
 
+            <!-- ===================== CUERPO ===================== -->
             <!-- 2.5 Tabla de productos — notas y combos a ancho completo, sin precio -->
-            <div>
-                <table class='receipt-orderlines' style="font-size:13px; border-style:double;
-                    border-left:none; border-right:none; border-bottom:none; width:100%;">
+            <div style="width:100%">
+                <table class='receipt-orderlines' style="font-size:13px; border-style:double; border-left:none; border-right:none; border-bottom:none; width:100%; table-layout:fixed">
                     <colgroup>
-                        <col width='40%' />
-                        <col width='20%' />
-                        <col width='20%' />
-                        <col width='20%' />
+                        <col style="width:45%"/>
+                        <col style="width:15%"/>
+                        <col style="width:18%"/>
+                        <col style="width:23%"/>
                     </colgroup>
-                    <tr style="border-bottom:1px dashed black;">
-                        <th style="text-align:left;">Producto</th>
-                        <th style="text-align:right;">Cant.</th>
-                        <th style="text-align:right;">P. Unit.</th>
-                        <th style="text-align:right;">Total</th>
+                    <tr style="border-bottom:1px dashed black">
+                        <th style="text-align:left">Producto</th>
+                        <th style="text-align:right">Cant.</th>
+                        <th style="text-align:right">P. Unit.</th>
+                        <th style="text-align:right">Total</th>
                     </tr>
                     <t t-if="props.orderlines and props.orderlines.length">
                         <t t-foreach="props.orderlines" t-as="orderline" t-key="orderline_index">
                             <!-- Nota o combo: línea a ancho completo sin cantidades ni precios -->
                             <t t-if="orderline.is_note or orderline.is_combo">
                                 <tr>
-                                    <td colspan="4" style="padding-top:2%; padding-bottom:2%; text-align:left; font-size:12px; font-style:italic;">
+                                    <td colspan="4" style="padding-top:2%; padding-bottom:2%; text-align:left; font-size:10px; font-style:italic">
                                         <t t-esc="orderline.productName"/>
                                     </td>
                                 </tr>
@@ -557,29 +541,29 @@
                             <t t-else="">
                                 <!-- Línea normal -->
                                 <tr>
-                                    <td style="padding-top:1%; padding-bottom:1%; text-align:left; font-size:12px;">
+                                    <td style="padding-top:1%; padding-bottom:1%; text-align:left; font-size:12px">
                                         <t t-esc="orderline.productName"/>
                                         <t t-if="orderline.discount > 0">
-                                            <div style="font-size:11px; font-style:italic; color:#808080;">
+                                            <div style="font-size:11px; font-style:italic; color:#808080; width:100%">
                                                 <t t-esc="orderline.discount"/>% desc.
                                             </div>
                                         </t>
                                         <t t-if="orderline.customerNote">
-                                            <div style="font-size:11px;" t-esc="orderline.customerNote"/>
+                                            <div style="font-size:11px; width:100%" t-esc="orderline.customerNote"/>
                                         </t>
                                     </td>
-                                    <td style="text-align:right; font-size:12px;"><t t-esc="orderline.qty"/></td>
-                                    <td style="text-align:right; font-size:12px;">
+                                    <td style="text-align:right; font-size:12px"><t t-esc="orderline.qty"/></td>
+                                    <td style="text-align:right; font-size:12px">
                                         <t t-if="typeof orderline.unitPrice === 'number'">
-                                            <t t-esc="props.pos.env.utils.formatCurrency(orderline.unitPrice)"/>
+                                            <t t-esc="props.pos.env.utils.formatCurrency(orderline.unitPrice).replace('$', '').trim()"/>
                                         </t>
-                                        <t t-else=""><t t-esc="orderline.unitPrice"/></t>
+                                        <t t-else=""><t t-esc="(orderline.unitPrice || '').replace('$', '').trim()"/></t>
                                     </td>
-                                    <td style="text-align:right; font-size:12px;">
+                                    <td style="text-align:right; font-size:12px">
                                         <t t-if="typeof orderline.price === 'number'">
-                                            <t t-esc="props.pos.env.utils.formatCurrency(orderline.price)"/>
+                                            <t t-esc="props.pos.env.utils.formatCurrency(orderline.price).replace('$', '').trim()"/>
                                         </t>
-                                        <t t-else=""><t t-esc="orderline.price"/></t>
+                                        <t t-else=""><t t-esc="(orderline.price || '').replace('$', '').trim()"/></t>
                                     </td>
                                 </tr>
                             </t>
@@ -591,15 +575,15 @@
 
             <!-- Detalle de impuestos con nombres requeridos -->
             <t t-if="props.data.tax_details and props.data.tax_details.length">
-                <div style="font-size:12px; border-top:1px dashed; padding-top:5px;">
-                    <table style="width:100%;">
+                <div style="font-size:12px; border-top:1px dashed; padding-top:5px; width:100%">
+                    <table style="width:100%">
                         <tr>
-                            <th style="text-align:left;">Tasa 22%</th>
-                            <th style="text-align:right;">IVA</th>
-                            <th style="text-align:right;">Neto</th>
+                            <th style="text-align:left">Tasa 22%</th>
+                            <th style="text-align:right">IVA</th>
+                            <th style="text-align:right">Neto</th>
                         </tr>
                         <tr t-foreach="props.data.tax_details" t-as="tax_detail" t-key="tax_detail_index">
-                            <td style="text-align:left; font-size:12px;">
+                            <td style="text-align:left; font-size:12px">
                             <t t-if="tax_detail.tax_group_rate !== undefined &amp;&amp; tax_detail.tax_group_rate !== null">
                                     Tasa 22%: <t t-esc="tax_detail.tax_group_rate"/>%
                                 </t>
@@ -607,12 +591,12 @@
                                     <t t-esc="tax_detail.tax_group_name"/>
                                 </t>
                             </td>
-                            <td style="text-align:right; font-size:12px;">
+                            <td style="text-align:right; font-size:12px">
                                 <t t-if="typeof tax_detail.tax_group_amount === 'number'">
                                     <t t-esc="props.pos.env.utils.formatCurrency(tax_detail.tax_group_amount)"/>
                                 </t>
                             </td>
-                            <td style="text-align:right; font-size:12px;">
+                            <td style="text-align:right; font-size:12px">
                                 <t t-if="typeof tax_detail.tax_group_base_amount === 'number'">
                                     <t t-esc="props.pos.env.utils.formatCurrency(tax_detail.tax_group_base_amount)"/>
                                 </t>
@@ -624,26 +608,20 @@
             </t>
 
             <!-- Totales -->
-            <div style="padding-top:6px;">
-                <div style="font-weight:700; font-size:14px; border-top:1px solid black; padding-top:5px;">
-                    <span style="margin-left:40%;">TOTAL: </span>
+            <div style="padding-top:6px; width:100%">
+                <div style="font-weight:700; font-size:14px; border-top:1px solid black; padding-top:5px; width:100%">
+                    <span style="">TOTAL: </span>
                     <t t-if="typeof props.data.amount_total === 'number'">
                         <span t-esc='props.pos.env.utils.formatCurrency(props.data.amount_total)' class="pos-receipt-right-align"/>
                     </t>
                 </div>
-                <!-- 2.1 Moneda de la transacción -->
-                <t t-if="props.data.currency_name">
-                    <div style="font-size:11px; text-align:right; padding-right:0;">
-                        Moneda: <t t-esc="props.data.currency_name"/>
-                    </div>
-                </t>
                 <br/>
             </div>
 
             <!-- 2.3 Múltiples medios de pago (nombres normalizados por JS/Python) -->
             <t t-foreach='props.paymentlines' t-as='line' t-key="line_index">
-                <div style="font-size:13px; border-top:1px dashed; padding-top:5px;">
-                    <span style="margin-left:40%;"><t t-esc='line.name' /></span>
+                <div style="font-size:13px; border-top:1px dashed; padding-top:5px; width:100%">
+                    <span style=""><t t-esc='line.name' /></span>
                     <t t-if="typeof line.amount === 'number'">
                         <span t-esc='props.pos.env.utils.formatCurrency(line.amount)' class="pos-receipt-right-align"/>
                     </t>
@@ -651,8 +629,8 @@
             </t>
 
             <!-- Cambio -->
-            <div class="receipt-change" style="font-size:13px; border-top:1px dashed; padding-top:5px;">
-                <span style="margin-left:40%;">CAMBIO: </span>
+            <div class="receipt-change" style="font-size:13px; border-top:1px dashed; padding-top:5px; width:100%">
+                <span style="">CAMBIO: </span>
                 <t t-if="typeof props.receipt.change === 'number'">
                     <span t-esc='props.pos.env.utils.formatCurrency(props.receipt.change)' class="pos-receipt-right-align"/>
                 </t>
@@ -660,8 +638,8 @@
 
             <!-- 2.2 Total Recibido -->
             <t t-if="typeof props.data.total_received === 'number' and props.data.total_received > 0">
-                <div style="font-weight:700; font-size:13px; border-top:1px dashed; padding-top:5px;">
-                    <span style="margin-left:40%;">TOTAL RECIBIDO: </span>
+                <div style="font-weight:700; font-size:13px; border-top:1px dashed; padding-top:5px; width:100%">
+                    <span style="">TOTAL RECIBIDO: </span>
                     <span t-esc='props.pos.env.utils.formatCurrency(props.data.total_received)' class="pos-receipt-right-align"/>
                 </div>
             </t>
@@ -669,35 +647,53 @@
 
             <!-- ===================== ADENDA ===================== -->
             <!-- 3.1 Interlineado mejorado entre renglones -->
-            <div style="font-size:11px; border-top:1px dashed; padding-top:5px; margin-top:10px;">
-                <div style="text-align:center; font-weight:bold; margin-bottom:6px; font-size:12px;">
+            <div style="font-size:11px; border-top:1px dashed; padding-top:5px; margin-top:10px; width:100%">
+                <div style="text-align:center; font-weight:bold; margin-bottom:6px; font-size:12px; width:100%">
                     ADENDA
                 </div>
-                <div style="text-align:left; padding-left:10px; line-height:1.6;">
+                <div style="text-align:left; padding-left:10px; line-height:1.6; width:100%">
                     <!-- 3.2 Cajero -->
                     <t t-if="props.data.adenda_data and props.data.adenda_data.cashier">
-                        <div style="margin-bottom:4px;">Cajero: <t t-esc="props.data.adenda_data.cashier"/></div>
+                        <div style="margin-bottom:4px; width:100%">Cajero: <t t-esc="props.data.adenda_data.cashier"/></div>
                     </t>
                     <!-- 3.2 Vendedor -->
                     <t t-if="props.data.adenda_data and props.data.adenda_data.seller">
-                        <div style="margin-bottom:4px;">Vendedor: <t t-esc="props.data.adenda_data.seller"/></div>
+                        <div style="margin-bottom:4px; width:100%">Vendedor: <t t-esc="props.data.adenda_data.seller"/></div>
                     </t>
                     <!-- 3.5 Cliente (movido desde encabezado) -->
                     <t t-if="props.data.legal_data and props.data.legal_data.customer_name">
-                        <div style="margin-bottom:4px;">Cliente: <t t-esc="props.data.legal_data.customer_name"/></div>
-                    </t>
-                    <!-- 3.6 Punto de Venta/Caja (movido desde encabezado) -->
-                    <t t-if="props.data.legal_data and props.data.legal_data.branch_name">
-                        <div style="margin-bottom:4px;">Punto de Venta: <t t-esc="props.data.legal_data.branch_name"/></div>
+                        <div style="margin-bottom:4px; width:100%">Cliente: <t t-esc="props.data.legal_data.customer_name"/></div>
                     </t>
                     <t t-if="props.data.adenda_data and props.data.adenda_data.points_policy">
-                        <div style="margin-bottom:4px;">Sistema de puntos: <t t-esc="props.data.adenda_data.points_policy"/></div>
+                        <div style="margin-bottom:4px; width:100%">Sistema de puntos: <t t-esc="props.data.adenda_data.points_policy"/></div>
                     </t>
                     <!-- 3.3 Puntos de fidelidad en el mismo renglón -->
-                    <t t-if="props.data.loyaltyStats and props.data.loyaltyStats.length">
+                    <!-- Si el cliente es Consumidor Final o Empleado no genera puntos de fidelidad.-->
+
+                    <t t-if="props.data.loyalty_visible">
                         <t t-set="loyalty" t-value="props.data.loyaltyStats[0]"/>
-                        <div style="margin-bottom:4px;">
-                            Puntos acumulados: <t t-esc="loyalty.points.balance"/> | Puntos generados: <t t-esc="loyalty.points.won"/>
+                        <div>
+                            Puntos Acumulados: <t t-esc="loyalty.points.balance - loyalty.points.won"/>
+                            <br/>
+                            <t t-if="loyalty.points.won > 0">
+                            Puntos Generados: <t t-esc="loyalty.points.won"/>
+                            <br/>
+                            </t>
+                            <t t-if="props.data.points_lost != 0">
+                                <t t-if="props.data.points_lost > 0">
+                                Puntos Perdidos: <t t-esc="props.data.points_lost"/>
+                                <br/>
+                                </t>
+                                <t t-if="props.data.points_lost &lt; 0">
+                                Puntos Devueltos: <t t-esc="Math.abs(props.data.points_lost)"/>
+                                <br/>
+                                </t>
+                            </t>
+                            <t t-if="loyalty.points.spent > 0">
+                            Puntos Canjeados: <t t-esc="loyalty.points.spent"/>
+                            <br/>
+                            </t>
+                             Nuevo Total: <t t-esc="loyalty.points.balance - loyalty.points.spent - props.data.points_lost"/>
                         </div>
                     </t>
                     <!-- 3.4 Política de cambio: movida a sección EXTRA (después del FIN ADENDA) -->
@@ -706,29 +702,29 @@
 
             <!-- ===================== EXTRA ===================== -->
             <!-- FIN ADENDA + QR + CAE + Datos legales + Política de cambio -->
-            <div style="font-size:11px; border-top:1px dashed; padding-top:5px; margin-top:10px; text-align:center;">
-                <div style="font-weight:bold; margin-bottom:10px; font-size:12px;">
+            <div style="font-size:11px; border-top:1px dashed; padding-top:5px; margin-top:10px; text-align:center; width:100%">
+                <div style="font-weight:bold; margin-bottom:10px; font-size:12px; width:100%">
                     FIN ADENDA
                 </div>
 
                 <!-- 4.1 Código QR del CFE -->
                 <t t-if="props.data.cfe_data and props.data.cfe_data.qr_base64">
-                    <div style="text-align:center; margin:10px 0;">
+                    <div style="text-align:center; margin:10px 0; width:100%">
                         <img t-att-src="'data:image/png;base64,' + props.data.cfe_data.qr_base64"
-                             style="max-width:150px; height:auto;"/>
+                             style="max-width:150px; height:auto"/>
                     </div>
                 </t>
 
                 <!-- 4.3 Datos legales: Código de Seguridad -->
                 <t t-if="props.data.cfe_data and props.data.cfe_data.codigo_seguridad">
-                    <div style="margin-bottom:5px; font-size:11px;">
+                    <div style="margin-bottom:5px; font-size:11px; width:100%">
                         <strong>Código de Seguridad:</strong> <t t-esc="props.data.cfe_data.codigo_seguridad"/>
                     </div>
                 </t>
 
                 <!-- URL de verificación -->
                 <t t-if="props.data.cfe_data and props.data.cfe_data.url_verificacion">
-                    <div style="margin-bottom:5px; font-size:10px; word-break:break-all; overflow-wrap:break-word; white-space:normal;">
+                    <div style="margin-bottom:5px; font-size:10px; word-break:break-all; overflow-wrap:break-word; white-space:normal; width:100%">
                         Puede verificar comprobante en:<br/>
                         <t t-esc="props.data.cfe_data.url_verificacion"/>
                     </div>
@@ -736,23 +732,23 @@
 
                 <!-- 4.2 Datos CAE -->
                 <t t-if="props.data.cfe_data and props.data.cfe_data.cae_numero">
-                    <div style="margin-top:10px; padding-top:5px;">
-                        <div style="font-size:11px;"><strong>IVA al día. Nro. CAE:</strong> <t t-esc="props.data.cfe_data.cae_numero"/></div>
+                    <div style="margin-top:10px; padding-top:5px; width:100%">
+                        <div style="font-size:11px; width:100%"><strong>IVA al día. Nro. CAE:</strong> <t t-esc="props.data.cfe_data.cae_numero"/></div>
                         <t t-if="props.data.cfe_data.cae_rango_desde and props.data.cfe_data.cae_rango_hasta">
-                            <div style="font-size:11px;"><strong>Rango:</strong> <t t-esc="props.data.cfe_data.cae_rango_desde"/> - <t t-esc="props.data.cfe_data.cae_rango_hasta"/></div>
+                            <div style="font-size:11px; width:100%"><strong>Rango:</strong> <t t-esc="props.data.cfe_data.cae_rango_desde"/> - <t t-esc="props.data.cfe_data.cae_rango_hasta"/></div>
                         </t>
                         <t t-if="props.data.cfe_data.serie">
-                            <div style="font-size:11px;"><strong>Serie:</strong> <t t-esc="props.data.cfe_data.serie"/></div>
+                            <div style="font-size:11px; width:100%"><strong>Serie:</strong> <t t-esc="props.data.cfe_data.serie"/></div>
                         </t>
                         <t t-if="props.data.cfe_data.cae_fecha_vencimiento">
-                            <div style="font-size:11px;"><strong>Fecha de vencimiento:</strong> <t t-esc="props.data.cfe_data.cae_fecha_vencimiento"/></div>
+                            <div style="font-size:11px; width:100%"><strong>Fecha de vencimiento:</strong> <t t-esc="props.data.cfe_data.cae_fecha_vencimiento"/></div>
                         </t>
                     </div>
                 </t>
 
                 <!-- 3.4 / 4.4 Política de cambio — centrada, con espacio -->
                 <t t-if="props.data.adenda_data and props.data.adenda_data.return_policy">
-                    <div style="text-align:center; font-size:11px; margin:12px 4px 6px 4px; padding:6px; border-top:1px dashed;">
+                    <div style="text-align:center; font-size:11px; margin:12px 4px 6px 4px; padding:6px; border-top:1px dashed; width:100%">
                         <t t-raw="props.data.adenda_data.return_policy"/>
                     </div>
                 </t>
@@ -760,10 +756,10 @@
 
             <!-- Código de barras del número de orden debajo de la adenda -->
             <t t-if="props.data.barcode_src">
-                <div style="text-align:center; margin-top:10px;">
+                <div style="text-align:center; margin-top:10px; width:100%">
                     <img t-att-src="props.data.barcode_src"
-                         style="max-width:100%; height:auto;"/>
-                    <div style="font-size:11px; margin-top:4px;">
+                         style="max-width:100%; height:auto"/>
+                    <div style="font-size:11px; margin-top:4px; width:100%">
                         <t t-esc="props.data.barcode_value"/>
                     </div>
                 </div>
@@ -772,20 +768,20 @@
             <div class='before-footer' />
 
             <!-- Footer -->
-            <div t-if='props.receipt.footer_html and !props.data.skip_footer' style="text-align:center; font-size:12px;">
+            <div t-if='props.receipt.footer_html and !props.data.skip_footer' style="text-align:center; font-size:12px; width:100%">
                 <t t-raw='props.receipt.footer_html'/>
             </div>
-            <div t-if='!props.receipt.footer_html and props.receipt.footer and !props.data.skip_footer' style="text-align:center; font-size:12px;">
+            <div t-if='!props.receipt.footer_html and props.receipt.footer and !props.data.skip_footer' style="text-align:center; font-size:12px; width:100%">
                 <br/>
                 <t t-esc='props.receipt.footer'/>
                 <br/><br/>
             </div>
 
-            <div class='after-footer' style="font-size:12px;">
+            <div class='after-footer' style="font-size:12px; width:100%">
                 <t t-foreach='props.paymentlines' t-as='line' t-key="line_index">
                     <t t-if='line.ticket'>
                         <br />
-                        <div class="pos-payment-terminal-receipt">
+                        <div style="width:100%" class="pos-payment-terminal-receipt">
                             <t t-raw='line.ticket'/>
                         </div>
                     </t>
@@ -794,82 +790,82 @@
 
             <!-- Voucher tarjeta OCA al final del recibo de compra (copia cliente) -->
             <t t-if="props.data.oca_voucher and props.data.oca_voucher.show_client_copy">
-                <div style="font-family: 'Courier New', Courier, monospace; font-size: 13px; line-height: 1.4; border-top: 1px dashed #000; margin-top: 12px; padding-top: 10px;">
-                    <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
+                <div style="font-family: 'Courier New', Courier, monospace; font-size: 13px; line-height: 1.4; border-top: 1px dashed #000; margin-top: 12px; padding-top: 10px; width:100%">
+                    <div style="display:flex; justify-content:space-between; margin-bottom:6px; width:100%">
                         <span t-esc="props.data.oca_voucher.date_str"/>
                         <span t-esc="props.data.oca_voucher.time_str"/>
                     </div>
-                    <div style="text-align:center; font-weight:bold; font-size:15px; margin-bottom:4px;">OCA Comercios</div>
-                    <div style="text-align:center; margin-bottom:2px;">
+                    <div style="text-align:center; font-weight:bold; font-size:15px; margin-bottom:4px; width:100%">OCA Comercios</div>
+                    <div style="text-align:center; margin-bottom:2px; width:100%">
                         <t t-esc="props.data.oca_voucher.issuer_name || 'TARJETA'"/> ONLINE
                     </div>
-                    <div style="text-align:center; font-weight:bold; font-size:14px; margin-bottom:8px;">
+                    <div style="text-align:center; font-weight:bold; font-size:14px; margin-bottom:8px; width:100%">
                         <t t-esc="props.data.oca_voucher.company_name"/>
                     </div>
-                    <div style="display:flex; justify-content:space-between; gap:8px; margin-bottom:8px;">
-                        <div style="flex:1;"><t t-esc="props.data.oca_voucher.branch_street"/></div>
-                        <div style="text-align:right; flex:1;">RUT <t t-esc="props.data.oca_voucher.branch_vat"/></div>
+                    <div style="display:flex; justify-content:space-between; gap:8px; margin-bottom:8px; width:100%">
+                        <div style="flex:1; width:100%"><t t-esc="props.data.oca_voucher.branch_street"/></div>
+                        <div style="text-align:right; flex:1; width:100%">RUT <t t-esc="props.data.oca_voucher.branch_vat"/></div>
                     </div>
-                    <div style="text-align:center; font-weight:bold; margin-bottom:8px;">
+                    <div style="text-align:center; font-weight:bold; margin-bottom:8px; width:100%">
                         Voucher de Tarjeta <t t-esc="props.data.oca_voucher.voucher_ref"/>
                     </div>
-                    <div style="display:flex; justify-content:space-between; margin-bottom:2px;">
+                    <div style="display:flex; justify-content:space-between; margin-bottom:2px; width:100%">
                         <span>TARJETA: <t t-esc="props.data.oca_voucher.issuer_name"/></span>
                         <span>Online <t t-esc="props.data.oca_voucher.acquirer || 'OCA'"/></span>
                     </div>
-                    <div style="display:flex; justify-content:space-between; margin-bottom:2px;">
+                    <div style="display:flex; justify-content:space-between; margin-bottom:2px; width:100%">
                         <span>Comercio: <t t-esc="props.data.oca_voucher.merchant_number"/></span>
                         <span>Terminal: <t t-esc="props.data.oca_voucher.pos_id"/></span>
                     </div>
-                    <div style="display:flex; justify-content:space-between; margin-bottom:2px;">
+                    <div style="display:flex; justify-content:space-between; margin-bottom:2px; width:100%">
                         <span>Operacion: Venta</span>
                         <span t-esc="props.data.oca_voucher.datetime_str"/>
                     </div>
-                    <div style="display:flex; justify-content:space-between; margin-bottom:2px;">
+                    <div style="display:flex; justify-content:space-between; margin-bottom:2px; width:100%">
                         <span>Producto: <t t-esc="props.data.oca_voucher.acquirer"/></span>
                         <span>Ticket: <t t-esc="props.data.oca_voucher.ticket_number"/></span>
                     </div>
-                    <div style="display:flex; justify-content:space-between; margin-bottom:2px;">
+                    <div style="display:flex; justify-content:space-between; margin-bottom:2px; width:100%">
                         <span>LOTE: <t t-esc="props.data.oca_voucher.batch_number"/></span>
                         <span>Ingreso: NFC</span>
                     </div>
-                    <div style="display:flex; justify-content:space-between; margin-bottom:2px;">
+                    <div style="display:flex; justify-content:space-between; margin-bottom:2px; width:100%">
                         <span>Tarjeta: <t t-esc="props.data.oca_voucher.card_masked"/></span>
                         <span>Exp: xx/xx</span>
                     </div>
-                    <div style="display:flex; justify-content:space-between; margin-bottom:2px;">
+                    <div style="display:flex; justify-content:space-between; margin-bottom:2px; width:100%">
                         <span>Cuotas: <t t-esc="props.data.oca_voucher.installments"/></span>
                         <span>Plan: <t t-esc="props.data.oca_voucher.issuer_code || '0'"/></span>
                     </div>
-                    <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
+                    <div style="display:flex; justify-content:space-between; margin-bottom:8px; width:100%">
                         <span>Autorizacion: <t t-esc="props.data.oca_voucher.authorization_code"/></span>
                         <span>No.FACT: <t t-esc="props.data.oca_voucher.invoice_number"/></span>
                     </div>
-                    <div style="display:flex; justify-content:space-between; font-weight:bold; margin:6px 0 4px 0;">
+                    <div style="display:flex; justify-content:space-between; font-weight:bold; margin:6px 0 4px 0; width:100%">
                         <span>IMPORTE</span>
                         <span t-if="typeof props.data.oca_voucher.amount === 'number'" t-esc="props.pos.env.utils.formatCurrency(props.data.oca_voucher.amount)"/>
                     </div>
-                    <div style="display:flex; justify-content:space-between; font-weight:bold; font-size:15px; margin-bottom:8px;">
+                    <div style="display:flex; justify-content:space-between; font-weight:bold; font-size:15px; margin-bottom:8px; width:100%">
                         <span>TOTAL A PAGAR</span>
                         <span t-if="typeof props.data.oca_voucher.amount === 'number'" t-esc="props.pos.env.utils.formatCurrency(props.data.oca_voucher.amount)"/>
                     </div>
-                    <div style="margin-bottom:6px;"><t t-esc="props.data.oca_voucher.partner_name"/></div>
-                    <div style="text-align:center; font-size:11px; margin:6px 0;">NO REQUIERE PIN NI OTROS DATOS</div>
-                    <div style="text-align:center; font-size:11px;">NO APLICA Ley</div>
-                    <div style="text-align:center; font-size:11px; margin:6px 0;">Adq: <t t-esc="props.data.oca_voucher.acquirer"/></div>
-                    <div style="font-size:11px; text-align:center; margin-bottom:8px;">Aplica dev. IVA-Ley 19210 Sin nro. factura no aplica ley</div>
-                    <div style="text-align:center; font-size:12px; font-weight:bold; margin-bottom:10px;">MUCHAS GRACIAS</div>
-                    <div style="background:#000; color:#fff; text-align:center; font-weight:bold; padding:6px 4px; margin-top:4px;">
+                    <div style="margin-bottom:6px; width:100%"><t t-esc="props.data.oca_voucher.partner_name"/></div>
+                    <div style="text-align:center; font-size:11px; margin:6px 0; width:100%">NO REQUIERE PIN NI OTROS DATOS</div>
+                    <div style="text-align:center; font-size:11px; width:100%">NO APLICA Ley</div>
+                    <div style="text-align:center; font-size:11px; margin:6px 0; width:100%">Adq: <t t-esc="props.data.oca_voucher.acquirer"/></div>
+                    <div style="font-size:11px; text-align:center; margin-bottom:8px; width:100%">Aplica dev. IVA-Ley 19210 Sin nro. factura no aplica ley</div>
+                    <div style="text-align:center; font-size:12px; font-weight:bold; margin-bottom:10px; width:100%">MUCHAS GRACIAS</div>
+                    <div style="background:#000; color:#fff; text-align:center; font-weight:bold; padding:6px 4px; margin-top:4px; width:100%">
                         *** COPIA CLIENTE ***
                     </div>
                 </div>
             </t>
 
             <br/><br/>
-            <div style="font-size:12px; text-align:center;">
+            <div style="font-size:12px; text-align:center; width:100%">
                 ¡Gracias por su compra!
             </div>
+            <div style="page-break-after:always"></div>
         </div>]]></field>
     </record>
 </odoo>
-

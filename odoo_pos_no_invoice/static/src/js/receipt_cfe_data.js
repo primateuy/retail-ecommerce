@@ -30,16 +30,20 @@ patch(OrderReceipt.prototype, {
         // Obtener servicio ORM para llamadas al backend desde el POS.
         this.orm = useService("orm");
         // Inicializar el estado local con los datos necesarios para el recibo.
+        // Snapshot del empleado/vendedor de la orden actual antes de que cambie.
+        const currentOrder = this.pos.get_order();
         this.state = useState({
             cfeData: {},
             receiptData: null,
             ocaVoucher: {},
+            snapshotSeller: currentOrder?.employee_id?.name || '',
         });
-        
+
         // Cargar datos del recibo y CFE sin bloquear el render del ticket.
         onMounted(() => {
             this._loadReceiptData();
         });
+
     },
 
     /**
@@ -74,7 +78,7 @@ patch(OrderReceipt.prototype, {
         if (!order) {
             console.log('No hay orden disponible en el POS, se usará referencia del recibo');
         }
-        
+
         // Registrar información de contexto para depuración controlada.
         console.log('=== Cargando datos CFE para recibo ===');
         if (order) {
@@ -83,7 +87,7 @@ patch(OrderReceipt.prototype, {
             console.log('order.server_id:', order.server_id);
             console.log('order.id:', order.id);
         }
-        
+
         // Obtener account_move_id desde la orden local.
         let accountMoveId = null;
         if (order && order.account_move) {
@@ -96,7 +100,7 @@ patch(OrderReceipt.prototype, {
             }
             console.log('account_move_id obtenido desde order.account_move:', accountMoveId);
         }
-        
+
         // Obtener datos completos del recibo desde la factura y hacer fallback a la orden.
             try {
                 const receiptServerData = await this.orm.call(
@@ -105,28 +109,38 @@ patch(OrderReceipt.prototype, {
                     [[], accountMoveId, orderReference, orderServerId]
                 );
                 if (receiptServerData) {
-                    // Solo actualizar el estado si la factura trae líneas completas.
                     if (receiptServerData.source === 'invoice' && receiptServerData.orderlines?.length) {
+                        // Factura con líneas completas: usar todos los datos del servidor.
                         this.state.receiptData = receiptServerData;
                         if (!accountMoveId && receiptServerData.account_move_id) {
                             accountMoveId = receiptServerData.account_move_id;
                         }
                         console.log('Datos del recibo (factura) aplicados:', receiptServerData);
                     } else {
-                        console.log('Datos del recibo incompletos, se mantiene el POS:', receiptServerData);
+                        // Sin líneas de factura: usar solo adenda, moneda y datos auxiliares del servidor.
+                        this.state.receiptData = {
+                            ...(this.state.receiptData || {}),
+                            adenda_data: receiptServerData.adenda_data || {},
+                            currency_name: receiptServerData.currency_name || '',
+                            legal_data: receiptServerData.legal_data || {},
+                        };
+                        if (!accountMoveId && receiptServerData.account_move_id) {
+                            accountMoveId = receiptServerData.account_move_id;
+                        }
+                        console.log('Datos auxiliares del servidor aplicados:', receiptServerData);
                     }
                 }
             } catch (e) {
             console.error('Error al obtener datos del recibo desde servidor:', e);
         }
-        
+
         // Obtener datos del CFE desde account_move si está disponible.
         if (accountMoveId) {
             console.log('Obteniendo datos CFE desde factura ID:', accountMoveId);
             try {
                 const cfeData = await this.orm.call('pos.order', 'get_cfe_data_from_invoice', [[], accountMoveId]) || {};
                 console.log('Datos CFE obtenidos:', cfeData);
-                
+
                 // Agregar información adicional de la orden para la adenda.
                 if (cfeData && (cfeData.tipo || cfeData.serie || cfeData.numero)) {
                     cfeData.vta_cont = order?.pos_reference || order?.name || '';
@@ -134,7 +148,7 @@ patch(OrderReceipt.prototype, {
                     cfeData.cajero = order?.user_id ? (order.user_id.name || '') : '';
                     cfeData.vend = '0';
                     cfeData.store = order?.config_id ? `STORE-${order.config_id.id}` : '';
-                    
+
                     // Método de pago utilizado en la operación.
                     if (order?.payment_ids && order.payment_ids.length > 0) {
                         const paymentMethod = order.payment_ids[0].payment_method_id;
@@ -142,7 +156,7 @@ patch(OrderReceipt.prototype, {
                     } else {
                         cfeData.pago = 'Contado';
                     }
-                    
+
                     this.state.cfeData = cfeData;
                     console.log('✓ Datos CFE cargados correctamente:', this.state.cfeData);
                 } else {
@@ -182,10 +196,10 @@ patch(OrderReceipt.prototype, {
 
     /**
      * Extiende templateProps para incluir datos del CFE directamente desde account_move
-     * 
+     *
      * Los datos del CFE se obtienen en onWillStart y se agregan a props.data,
      * igual que el resto de la información del recibo.
-     * 
+     *
      * @returns {Object} Props extendidos con datos del CFE
      */
     get templateProps() {
@@ -193,7 +207,7 @@ patch(OrderReceipt.prototype, {
         const order = this.pos.get_order();
         // Recuperar el partner asociado a la orden si existe.
         const partner = order ? order.get_partner() : null;
-        
+
         // Usar los datos del CFE: preferir state (cargado async), si no, usar props.data.cfe_data
         // (pre-cargado por printReceipt antes de llamar al printer).
         const stateHasCfe = this.state.cfeData &&
@@ -201,7 +215,7 @@ patch(OrderReceipt.prototype, {
         const cfeData = stateHasCfe ? this.state.cfeData : (this.props.data?.cfe_data || {});
         // Usar los datos del recibo cargados desde factura/orden.
         const receiptData = this.state.receiptData || {};
-        
+
         // Definir datos legales con fallback a la información local del POS.
         const legalData = {
             purchase_condition: receiptData.legal_data?.purchase_condition
@@ -232,12 +246,18 @@ patch(OrderReceipt.prototype, {
         const returnPolicyValue = receiptData.adenda_data?.return_policy || footerHtml || footerText || '';
 
         // Definir datos de adenda con fallback a la información local del POS.
+        // this.props.data?.adenda_data cubre el render de impresión (nueva instancia sin state).
         const adendaData = {
             cashier: receiptData.adenda_data?.cashier
+                || this.props.data?.adenda_data?.cashier
                 || this.props.data?.cashier
                 || this.props.data?.headerData?.cashier
                 || '',
-            seller: receiptData.adenda_data?.seller || '',
+            seller: receiptData.adenda_data?.seller
+                || this.props.data?.adenda_data?.seller
+                || this.state.snapshotSeller
+                || order?.employee_id?.name
+                || '',
             points_policy: receiptData.adenda_data?.points_policy
                 || this.pos?.config?.pos_points_policy
                 || '',
@@ -266,19 +286,19 @@ patch(OrderReceipt.prototype, {
             || normalizedPaymentlines.reduce((acc, l) => acc + (typeof l.amount === 'number' ? l.amount : 0), 0);
 
         // Construir URL del código de barras para el número de ticket.
-        const barcodeValue = legalData.ticket_number || this.props.data?.name || '';
+        const barcodeValue = this.props.data?.name || legalData.ticket_number || '';
         const baseUrl = this.props.data?.base_url || this.pos?.base_url || '';
         const barcodeSrc = barcodeValue
             ? `${baseUrl}/report/barcode/Code128/${encodeURIComponent(barcodeValue)}?width=300&height=80`
             : '';
-        
+
         // Log para validar el contenido de CFE en el render del recibo.
         console.log('=== templateProps CFE ===');
         console.log('cfeData:', cfeData);
-        console.log('cfeData.tipo:', cfeData.tipo);
-        console.log('cfeData.serie:', cfeData.serie);
-        console.log('cfeData.numero:', cfeData.numero);
         console.log('cfeData tiene datos:', !!(cfeData.tipo || cfeData.serie || cfeData.numero));
+        console.log('receiptData.adenda_data:', receiptData.adenda_data);
+        console.log('seller:', receiptData.adenda_data?.seller, '| order.employee_id:', order?.employee_id?.name);
+        console.log('currency_name - receiptData:', receiptData?.currency_name, '| pos.currency:', this.pos?.currency?.name, '| config.currency_id:', this.pos?.config?.currency_id?.name);
 
         // Construir props combinando datos estándar con los obtenidos del servidor.
         // Definir líneas de pedido priorizando datos del servidor.
@@ -311,6 +331,17 @@ patch(OrderReceipt.prototype, {
                     this.props.data?.oca_voucher || {}
                 )} | fromState=${JSON.stringify(this.state.ocaVoucher || {})}`
         );
+        const pointsLost = this.pos.lostPoints?.[0]?.lostPoint || 0;
+
+        // Excluir categorías que no acumulan puntos (ej: Consumidor final, Empleado).
+        // partner.category_id en POS es un array de IDs (campo many2many).
+        const partnerCategoryIds = partner?.category_id || [];
+        const excludedCategoryIds = [1, 2];
+        const loyaltyVisible = !!(
+            (this.props.data?.loyaltyStats?.length) &&
+            !partnerCategoryIds.some(id => excludedCategoryIds.includes(id))
+        );
+        console.log('ETIQUETAS partner.category_id:', partnerCategoryIds, '| loyalty_visible:', loyaltyVisible);
 
         // Construir objeto final de props para el template del recibo.
         const props = {
@@ -327,7 +358,9 @@ patch(OrderReceipt.prototype, {
                 oca_voucher: mergedOcaVoucher,
                 receipt_logo: receiptLogo,
                 total_received: totalReceived,
-                currency_name: receiptData?.currency_name || this.props.data?.currency_name || '',
+                currency_name: receiptData?.currency_name || this.props.data?.currency_name || this.pos?.currency?.name || this.pos?.config?.currency_id?.name || '',
+                points_lost: pointsLost,
+                loyalty_visible: loyaltyVisible,
             },
             order: order,
             receipt: this.props.data,
@@ -335,14 +368,13 @@ patch(OrderReceipt.prototype, {
             paymentlines: receiptPaymentlines,
             partner: partner,
         };
-        
+
         // Log final para verificar que los datos estén en props.data.
         console.log('props.data.cfe_data:', props.data.cfe_data);
         console.log('props.data.cfe_data?.tipo:', props.data.cfe_data?.tipo);
         console.log('props.data.cfe_data?.serie:', props.data.cfe_data?.serie);
         console.log('props.data.cfe_data?.numero:', props.data.cfe_data?.numero);
-        
+
         return props;
     },
 });
-
