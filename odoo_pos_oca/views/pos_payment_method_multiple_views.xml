@@ -10,25 +10,25 @@
                     <field name="is_multiple" invisible="1"/>
                     <field name="payment_provider"
                            required="use_payment_terminal == 'oca'" invisible="use_payment_terminal != 'oca'"/>
-                    <field name="pos_id" invisible="use_payment_terminal != 'oca' or is_multiple != True"
+                    <field name="pos_id" invisible="use_payment_terminal != 'oca' or not is_multiple"
                            required="use_payment_terminal == 'oca'"/>
-                    <field name="url_webservice" invisible="is_multiple != False  or use_payment_terminal != 'oca'"
+                    <field name="url_webservice" invisible="is_multiple or use_payment_terminal != 'oca'"
                            required="use_payment_terminal == 'oca'"/>
                 </xpath>
                 <xpath expr="//field[@name='codigo_sistema']" position="replace">
-                    <field name="codigo_sistema" invisible="is_multiple != False or use_payment_terminal != 'oca'"
+                    <field name="codigo_sistema" invisible="is_multiple or use_payment_terminal != 'oca'"
                            required="use_payment_terminal == 'oca'"/>
                 </xpath>
                 <xpath expr="//field[@name='codigo_terminal']" position="replace">
-                    <field name="codigo_terminal" invisible="is_multiple != False or use_payment_terminal != 'oca'"
+                    <field name="codigo_terminal" invisible="is_multiple or use_payment_terminal != 'oca'"
                            required="use_payment_terminal == 'oca'"/>
                 </xpath>
                 <xpath expr="//field[@name='client_app_id']" position="replace">
-                    <field name="client_app_id" invisible="is_multiple != False  or use_payment_terminal != 'oca'"
+                    <field name="client_app_id" invisible="is_multiple or use_payment_terminal != 'oca'"
                            required="use_payment_terminal == 'oca'"/>
                 </xpath>
                 <xpath expr="//field[@name='codigo_sucursal']" position="replace">
-                    <field name="codigo_sucursal" invisible="is_multiple != False  or use_payment_terminal != 'oca'"
+                    <field name="codigo_sucursal" invisible="is_multiple or use_payment_terminal != 'oca'"
                            required="use_payment_terminal == 'oca'"/>
                 </xpath>
             </field>

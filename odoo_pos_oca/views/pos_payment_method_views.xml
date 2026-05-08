@@ -7,7 +7,6 @@
             <field name="inherit_id" ref="point_of_sale.pos_payment_method_view_form"/>
             <field name="arch" type="xml">
                 <xpath expr="//field[@name='use_payment_terminal']" position="after">
-                    <field name="company_id" invisible="1"/>
                     <field name="url_webservice" invisible="use_payment_terminal != 'oca'" required="use_payment_terminal == 'oca'"/>
                     <field name="codigo_sistema" invisible="use_payment_terminal != 'oca'" required="use_payment_terminal == 'oca'"/>
                     <field name="codigo_terminal" invisible="use_payment_terminal != 'oca'" required="use_payment_terminal == 'oca'"/>
