@@ -25,8 +25,18 @@ class PosSession(models.Model):
         return result
 
     def _get_pos_ui_pos_res_banks(self, params):
-        banks = self.env["res.bank"].search_read(**params["search_params"])
+        # sudo: lectura transparente para usuarios PDV sin permisos contables.
+        banks = self.env["res.bank"].sudo().search_read(**params["search_params"])
         return banks
+
+    def _get_pos_ui_stock_picking_type(self, params):
+        # sudo: el usuario PDV puede no tener visibilidad sobre el stock.picking.type
+        # del POS (reglas de registro por almacén/compañía). Sin sudo, el search_read
+        # del core devuelve [] y el [0] revienta con IndexError, cortando la carga.
+        result = self.env['stock.picking.type'].sudo().search_read(
+            **params['search_params']
+        )
+        return result[0] if result else {}
 
     def load_pos_data(self):
         loaded_data = {}
