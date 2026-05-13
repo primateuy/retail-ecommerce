@@ -331,7 +331,9 @@ patch(OrderReceipt.prototype, {
                     this.props.data?.oca_voucher || {}
                 )} | fromState=${JSON.stringify(this.state.ocaVoucher || {})}`
         );
-        const pointsLost = this.pos.lostPoints?.[0]?.lostPoint || 0;
+        // Leer desde props.data.pointsDeducted (seteado por export_for_printing de la orden).
+        // this.pos.lostPoints era global y traía datos de órdenes anteriores.
+        const pointsLost = this.props.data?.pointsDeducted?.[0]?.lostPoint || 0;
 
         // Excluir categorías que no acumulan puntos (ej: Consumidor final, Empleado).
         // partner.category_id en POS es un array de IDs (campo many2many).
