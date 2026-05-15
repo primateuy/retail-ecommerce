@@ -478,11 +478,13 @@ patch(PartnerDetailsEdit.prototype, {
         }
 
         // Validar telefono y celular antes de guardar (muestra popup si estan mal)
-        if (!this._validatePhoneValue(this.changes.mobile, _t("Celular"))) {
-            return;
-        }
-        if (!this._validatePhoneValue(this.changes.phone, _t("Telefono"))) {
-            return;
+        if (this.changes.company_type === "person") {
+            if (!this._validatePhoneValue(this.changes.mobile, _t("Celular"))) {
+                return;
+            }
+            if (!this._validatePhoneValue(this.changes.phone, _t("Telefono"))) {
+                return;
+            }
         }
 
         // Validar campos obligatorios
@@ -517,6 +519,10 @@ patch(PartnerDetailsEdit.prototype, {
         // Fecha de nacimiento obligatoria para personas (no para empresa)
         if (!this.changes.is_company && !this.changes.birthdate_date) {
             missing.push(_t("Date of Birth"));
+        }
+        // Género obligatorio para personas cuando el módulo partner_gender está activo
+        if (!this.changes.is_company && this.partnerGenderEnabled && !this.changes.gender) {
+            missing.push(_t("Genero"));
         }
 
         // Fecha de nacimiento no puede ser futura
