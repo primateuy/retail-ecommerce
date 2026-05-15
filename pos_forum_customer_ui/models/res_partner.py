@@ -22,6 +22,9 @@ class ResPartner(models.Model):
             return
 
         for partner in self:
+            # Empresas no tienen restricción de formato en teléfono/celular.
+            if partner.is_company:
+                continue
             if not partner.country_id:
                 continue
 
