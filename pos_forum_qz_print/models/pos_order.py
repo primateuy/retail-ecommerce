@@ -201,7 +201,7 @@ class PosOrder(models.Model):
             cards = Card.sudo().search([
                 ("partner_id", "=", order.partner_id.id),
                 ("program_id.applies_on", "=", "future"),
-                ("program_id.program_type", "=", ["gift_card", "ewallet"]),
+                ("program_id.program_type", "not in", ["gift_card", "ewallet"]),
                 ("write_date", ">=", window_start),
                 ("write_date", "<=", window_end),
             ], order="id desc", limit=10)
