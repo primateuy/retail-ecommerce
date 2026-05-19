@@ -1,6 +1,6 @@
 {
     'name': 'POS - Asegurar Lista de Precio en Reembolso',
-    'version': '17.0.1.1.0',
+    'version': '17.0.1.4.0',
     'category': 'Point of Sale',
     'summary': 'Al crear un reembolso en POS, la nueva orden hereda la lista de precio de la orden original y bloquea su cambio salvo que la heredada sea la default del POS.',
     'author': 'PRIMATE',
