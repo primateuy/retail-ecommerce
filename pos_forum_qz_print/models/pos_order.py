@@ -160,10 +160,7 @@ class PosOrder(models.Model):
                 cards |= card
         cards = cards.sudo()
 
-        # Bloque: log detallado de candidatos antes de filtrar. Permite ver desde
-        # el log qué programas se aplicaron a la orden y de qué tipo son. Útil
-        # para verificar el filtro de "next_order_coupons" (cupón de próxima
-        # compra) sin tener que abrir la tarjeta en la UI.
+        # Bloque: log detallado de candidatos antes de filtrar.
         if cards:
             candidatos_str = ", ".join(
                 "card_id=%s program='%s' program_type='%s'" % (
@@ -186,21 +183,29 @@ class PosOrder(models.Model):
             )
 
         # Bloque: imprimir solo los cupones que sirven para una próxima compra.
-        # Se replica la misma regla que usa Odoo en
-        # ``pos_loyalty/models/pos_order.py::confirm_coupon_programs`` para
-        # construir ``new_coupon_info`` (lo que el core considera "código nuevo
-        # a mostrar en el recibo"):
-        #   applies_on == 'future'  AND  program_type NOT IN ('gift_card','ewallet')
-        # Esto cubre tanto el tipo literal ``next_order_coupons`` como
-        # programas ``coupons`` o ``loyalty`` configurados con
-        # ``applies_on='future'``, y deja afuera promotion / buy_x_get_y /
-        # promo_code (que son ``current``) y gift_card / ewallet (no se imprimen
-        # como cupón de próxima compra).
         cards = cards.filtered(
             lambda c: c.program_id
             and c.program_id.applies_on == "future"
             and c.program_id.program_type not in ("gift_card", "ewallet")
         )
+
+        # Bloque: fallback por ventana de tiempo (write_date). Cubre source_pos_order_id=NULL
+        # y el caso donde Odoo actualiza una tarjeta existente en lugar de crear una nueva
+        # (el socio ya tiene un cupón pendiente del mismo programa). Se ejecuta DESPUÉS del
+        # filtro para no bloquearse por tarjetas de otros tipos (loyalty/both) que llegan
+        # en loyalty_card_ids desde el cliente.
+        if not cards and order.partner_id and order.date_order:
+            from datetime import timedelta
+            window_start = order.date_order - timedelta(minutes=2)
+            window_end = order.date_order + timedelta(minutes=10)
+            cards = Card.sudo().search([
+                ("partner_id", "=", order.partner_id.id),
+                ("program_id.applies_on", "=", "future"),
+                ("program_id.program_type", "=", ["gift_card", "ewallet"]),
+                ("write_date", ">=", window_start),
+                ("write_date", "<=", window_end),
+            ], order="id desc", limit=10)
+
         if not cards:
             _logger.info(
                 "pos_forum_qz_print: sin cupón de próxima compra para orden %s "
