@@ -30,6 +30,18 @@
             <field name="type">sale</field>
         </record>
 
+        <!-- Método contable Fenicio.
+             Necesario para que el inverse de payment.provider.journal_id pueda
+             crear/actualizar el account.payment.method.line asociado al
+             provider. Sin este registro, _ensure_payment_method_line hace
+             return temprano y el cambio de diario NO se persiste — el compute
+             al releer hace fallback al primer bank journal de la company. -->
+        <record id="account_payment_method_fenicio" model="account.payment.method">
+            <field name="name">Fenicio</field>
+            <field name="code">fenicio</field>
+            <field name="payment_type">inbound</field>
+        </record>
+
         <!-- Proveedor de pago Fenicio (debe ir antes que los métodos) -->
         <record id="payment_provider_fenicio" model="payment.provider">
             <field name="name">Fenicio</field>

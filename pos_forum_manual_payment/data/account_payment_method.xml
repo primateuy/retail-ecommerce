@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Métodos contables para proveedores de pago en Forum.
+
+    Sin estos registros, el inverse de `payment.provider.journal_id` (definido
+    en el módulo core `account_payment`) hace `return` temprano porque
+    `_ensure_payment_method_line` no encuentra un `account.payment.method` con
+    el mismo `code` que el provider. Como consecuencia, los cambios de diario
+    en el proveedor NO se persisten — el compute al releer hace fallback al
+    primer bank journal de la company, dando la ilusión de "no se guarda el
+    cambio".
+
+    Los codes 'none' y 'custom' son los más problemáticos: el core de Odoo
+    explícitamente NO los crea automáticamente (`_setup_payment_method` los
+    excluye en línea 112 de account_payment/models/payment_provider.py).
+    Pero en Forum hay proveedores reales con esos codes (ej. "Fenicio"
+    id=18 con code='none', "Pay in Store" id=26 con code='custom') que SÍ
+    necesitan poder cambiar de diario.
+
+    `noupdate="1"` para que se creen una sola vez y no se sobreescriban si
+    el usuario los modifica desde la UI.
+-->
+<odoo noupdate="1">
+    <data>
+
+        <record id="account_payment_method_forum_manual" model="account.payment.method">
+            <field name="name">FORUM Manual POS</field>
+            <field name="code">forum_manual</field>
+            <field name="payment_type">inbound</field>
+        </record>
+
+        <record id="account_payment_method_none" model="account.payment.method">
+            <field name="name">Genérico</field>
+            <field name="code">none</field>
+            <field name="payment_type">inbound</field>
+        </record>
+
+        <record id="account_payment_method_custom" model="account.payment.method">
+            <field name="name">Personalizado</field>
+            <field name="code">custom</field>
+            <field name="payment_type">inbound</field>
+        </record>
+
+    </data>
+</odoo>

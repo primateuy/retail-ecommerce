@@ -18,6 +18,7 @@
     ],
     "data": [
         "security/ir.model.access.csv",
+        "data/account_payment_method.xml",
         "views/manual_payment_request_field_views.xml",
         "views/manual_payment_field_config_views.xml",
         "views/payment_provider_views.xml",

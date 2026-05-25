@@ -32,6 +32,11 @@ def post_init_hook(env):
     2) Asigna un diario por defecto (banco/caja) para la compañía.
     3) Completa número de comercio por defecto si está vacío.
     4) Asocia POS permitidos para que quede utilizable desde el inicio.
+
+    NOTA: el `account.payment.method` con code='forum_manual' (crítico para
+    que el inverse de `payment.provider.journal_id` persista los cambios) se
+    crea desde `data/account_payment_method.xml`, NO desde acá. El data file
+    se carga tanto en install como en update; este hook solo en install.
     """
     try:
         _logger.info("Iniciando post-instalación de POS pagos manuales FORUM")
