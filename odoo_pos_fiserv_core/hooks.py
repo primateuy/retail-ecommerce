@@ -7,6 +7,12 @@ Hooks de instalación del módulo odoo_pos_fiserv_core.
   Sin esto, instalar core sobre una BD con el módulo viejo produce duplicados
   (violación de claves únicas en account.payment.method, payment.provider, etc.).
 - ``post_init_hook``: completa proveedor, diario y método Card tras cargar el XML.
+  Itera **todas las compañías** y aplica la misma lógica que la migración
+  17.0.2.0.11, para que instalación fresca y update produzcan idéntico estado.
+
+El helper ``_setup_fiserv_journal_for_company`` queda expuesto para que las
+migraciones posteriores (>=17.0.2.0.16) lo reutilicen en vez de duplicar la
+lógica de creación/normalización de diario y líneas Fiserv.
 """
 
 import logging
@@ -67,7 +73,7 @@ def post_init_hook(env):
     try:
         _logger.info("Post-instalación odoo_pos_fiserv_core: inicio")
         _ensure_fiserv_provider(env)
-        _ensure_fiserv_journal(env)
+        _ensure_fiserv_journals_all_companies(env)
         _link_card_payment_method_to_fiserv(env)
         _logger.info("Post-instalación odoo_pos_fiserv_core: completada")
     except Exception as exc:
@@ -110,85 +116,217 @@ def _ensure_fiserv_provider(env):
         _logger.error("_ensure_fiserv_provider: %s", exc, exc_info=True)
 
 
-def _ensure_fiserv_journal(env):
+def _patch_account_account_create_asset_default(cr):
     """
-    Garantiza el diario Fiserv (code FSVR) y que tenga líneas de método de pago
-    inbound/outbound asociadas al ``account.payment.method`` Fiserv.
+    Si ``account_account.create_asset`` es NOT NULL sin default, ponele ``'no'``.
 
-    En Odoo 17 las líneas se manejan vía ``inbound_payment_method_line_ids`` /
-    ``outbound_payment_method_line_ids`` (modelo ``account.payment.method.line``).
+    Necesario en BDs con ``account_asset`` enterprise: el INSERT interno que Odoo
+    hace al crear un diario tipo bank no pasa este campo y rompe el create.
+    Idempotente: no toca registros existentes, sólo evita rompimiento futuro.
     """
-    try:
-        journal = env["account.journal"].search(
-            [("code", "=", "FSVR"), ("company_id", "=", env.company.id)],
+    cr.execute("""
+        SELECT column_default, is_nullable
+          FROM information_schema.columns
+         WHERE table_name = 'account_account'
+           AND column_name = 'create_asset'
+    """)
+    row = cr.fetchone()
+    if not row:
+        return
+    column_default, is_nullable = row
+    if column_default or is_nullable == 'YES':
+        return
+    cr.execute("""
+        ALTER TABLE account_account
+        ALTER COLUMN create_asset SET DEFAULT 'no'
+    """)
+    _logger.info(
+        "Fiserv hooks: aplicado DEFAULT 'no' a account_account.create_asset"
+    )
+
+
+def _find_existing_fiserv_journal(env, company, provider, inbound_method):
+    """
+    Devuelve el diario que ya tenga una línea Fiserv inbound integrada (con
+    ``payment_provider_id`` apuntando al provider Fiserv) en la compañía,
+    sea cual sea su ``code``. Si no encuentra, devuelve un recordset vacío.
+
+    Reutilizar el diario pre-existente evita violar
+    ``_check_payment_method_line_ids_multiplicity`` (Odoo 17): para métodos
+    electrónicos sólo puede existir UNA línea por
+    (compañía, payment_method, payment_provider).
+    """
+    line = env['account.payment.method.line'].sudo().search([
+        ('payment_method_id', '=', inbound_method.id),
+        ('payment_provider_id', '=', provider.id),
+        ('journal_id.company_id', '=', company.id),
+    ], limit=1)
+    return line.journal_id if line else env['account.journal'].sudo()
+
+
+def _setup_fiserv_journal_for_company(env, company, provider, inbound_method,
+                                       outbound_method, uyu):
+    """
+    Garantiza diario Fiserv + líneas inbound/outbound para una compañía.
+
+    Estrategia (idéntica a la migración 17.0.2.0.11):
+      1. Reutiliza el diario que ya tenga línea Fiserv integrada (cualquier code).
+      2. Si no, busca por ``code='FSVR'``.
+      3. Si tampoco, lo crea como tipo ``bank`` (moneda UYU si existe).
+      4. Normaliza el ``code`` del diario a ``'FSVR'`` (decisión del cliente).
+      5. Crea las líneas inbound y outbound si faltan, con
+         ``payment_provider_id`` seteado.
+      6. Rellena ``payment_provider_id`` en líneas Fiserv pre-existentes que
+         hayan quedado vacías (residuo del bug histórico de 2.0.7).
+      7. Registra ``odoo_pos_fiserv_core.account_journal_fiserv`` apuntando al
+         diario resultante para que ``env.ref()`` funcione.
+
+    Devuelve el ``account.journal`` configurado.
+    """
+    line_model = env['account.payment.method.line'].sudo()
+    journal_model = env['account.journal'].sudo()
+
+    # 1) Reutilizar diario Fiserv pre-existente (con cualquier code).
+    journal = _find_existing_fiserv_journal(env, company, provider, inbound_method)
+
+    # 2) Fallback al diario con code='FSVR'.
+    if not journal:
+        journal = journal_model.search(
+            [('code', '=', 'FSVR'), ('company_id', '=', company.id)],
             limit=1,
         )
-        account_pm = env["account.payment.method"].search(
-            [("code", "=", "fiserv"), ("payment_type", "=", "inbound")],
-            limit=1,
+
+    # 3) Sigue sin haber: crear uno nuevo limpio.
+    if not journal:
+        journal_vals = {
+            'name': 'Fiserv ITD',
+            'code': 'FSVR',
+            'type': 'bank',
+            'company_id': company.id,
+        }
+        if uyu:
+            journal_vals['currency_id'] = uyu.id
+        journal = journal_model.create(journal_vals)
+        _logger.info(
+            "Fiserv setup: diario FSVR creado (compañía %s)", company.name,
         )
-        account_pm_out = env["account.payment.method"].search(
-            [("code", "=", "fiserv"), ("payment_type", "=", "outbound")],
-            limit=1,
-        )
+
+    # 4) Normalización pedida por el cliente: code uniforme 'FSVR'.
+    if journal.code != 'FSVR':
+        old_code = journal.code
+        conflict = journal_model.search([
+            ('code', '=', 'FSVR'),
+            ('company_id', '=', company.id),
+            ('id', '!=', journal.id),
+        ], limit=1)
+        if conflict:
+            _logger.warning(
+                "Fiserv setup: no normalizo code de diario %s -> 'FSVR' "
+                "(compañía %s) porque ya existe otro diario FSVR (id=%s)",
+                old_code, company.name, conflict.id,
+            )
+        else:
+            journal.code = 'FSVR'
+            _logger.info(
+                "Fiserv setup: diario %s renombrado de '%s' a 'FSVR' (compañía %s)",
+                journal.id, old_code, company.name,
+            )
+
+    # 5) Asegurar líneas inbound/outbound con payment_provider_id.
+    for direction, account_pm in (
+        ('inbound', inbound_method),
+        ('outbound', outbound_method),
+    ):
         if not account_pm:
-            _logger.warning("No existe account.payment.method fiserv inbound")
-            return
-        if not journal:
-            # Crear el diario bancario Fiserv FSVR.
-            # Antes se omitía esta creación por temor a colisiones con módulos
-            # Enterprise (activos), pero la versión meta vieja sí lo creaba sin
-            # problemas. Sin journal, las account.payment.method.line nunca se
-            # crean y el form de account.payment no muestra el método saliente
-            # Fiserv → falla "Crear transacción" con UserError de proveedor.
-            uyu = env.ref("base.UYU", raise_if_not_found=False)
-            journal_vals = {
-                "name": "Fiserv ITD",
-                "code": "FSVR",
-                "type": "bank",
-                "company_id": env.company.id,
-            }
-            if uyu:
-                journal_vals["currency_id"] = uyu.id
-            journal = env["account.journal"].create(journal_vals)
-            _logger.info("Diario Fiserv FSVR creado en post_init")
-        provider = env["payment.provider"].search([("code", "=", "fiserv")], limit=1)
-        _ensure_journal_payment_method_line(env, journal, account_pm, "inbound", provider)
-        if account_pm_out:
-            _ensure_journal_payment_method_line(env, journal, account_pm_out, "outbound", provider)
-        _register_irmodel_data(env, "account_journal_fiserv", journal)
+            _logger.warning(
+                "Fiserv setup: account.payment.method 'fiserv' %s no existe; salto",
+                direction,
+            )
+            continue
+        line = line_model.search([
+            ('journal_id', '=', journal.id),
+            ('payment_method_id', '=', account_pm.id),
+        ], limit=1)
+        if not line:
+            line_model.create({
+                'name': account_pm.name,
+                'payment_method_id': account_pm.id,
+                'journal_id': journal.id,
+                'payment_provider_id': provider.id,
+            })
+            _logger.info(
+                "Fiserv setup: línea %s creada en diario FSVR (compañía %s)",
+                direction, company.name,
+            )
+        elif not line.payment_provider_id:
+            line.payment_provider_id = provider.id
+            _logger.info(
+                "Fiserv setup: payment_provider_id seteado en línea %s (id=%s)",
+                direction, line.id,
+            )
+
+    # 6) Registrar xml_id para que env.ref() funcione.
+    _register_irmodel_data(env, 'account_journal_fiserv', journal)
+
+    return journal
+
+
+def setup_fiserv_journals_all_companies(env):
+    """
+    Punto de entrada compartido por ``post_init_hook`` y migraciones.
+
+    Aplica el patch de ``account_account.create_asset`` y, por cada compañía,
+    ejecuta ``_setup_fiserv_journal_for_company`` dentro de un savepoint para
+    que un fallo en una compañía no aborte las demás.
+    """
+    _patch_account_account_create_asset_default(env.cr)
+
+    provider = env['payment.provider'].sudo().search(
+        [('code', '=', 'fiserv')], limit=1,
+    )
+    if not provider:
+        _logger.info(
+            "Fiserv setup: no hay payment.provider Fiserv; nada que configurar"
+        )
+        return
+
+    inbound_method = env['account.payment.method'].sudo().search(
+        [('code', '=', 'fiserv'), ('payment_type', '=', 'inbound')], limit=1,
+    )
+    outbound_method = env['account.payment.method'].sudo().search(
+        [('code', '=', 'fiserv'), ('payment_type', '=', 'outbound')], limit=1,
+    )
+    if not inbound_method:
+        _logger.warning(
+            "Fiserv setup: account.payment.method 'fiserv' inbound no existe; "
+            "abortando configuración de diarios"
+        )
+        return
+
+    uyu = env.ref('base.UYU', raise_if_not_found=False)
+
+    for company in env['res.company'].sudo().search([]):
+        env.cr.execute("SAVEPOINT fiserv_setup_company")
+        try:
+            _setup_fiserv_journal_for_company(
+                env, company, provider, inbound_method, outbound_method, uyu,
+            )
+            env.cr.execute("RELEASE SAVEPOINT fiserv_setup_company")
+        except Exception as exc:
+            env.cr.execute("ROLLBACK TO SAVEPOINT fiserv_setup_company")
+            _logger.warning(
+                "Fiserv setup (compañía %s): %s", company.name, exc,
+            )
+
+
+def _ensure_fiserv_journals_all_companies(env):
+    """Wrapper interno del hook con try/except defensivo."""
+    try:
+        setup_fiserv_journals_all_companies(env)
     except Exception as exc:
-        _logger.error("_ensure_fiserv_journal: %s", exc, exc_info=True)
-
-
-def _ensure_journal_payment_method_line(env, journal, account_pm, direction, provider=None):
-    """
-    Crea (si falta) una account.payment.method.line para el diario y el
-    account.payment.method indicado. ``direction`` = 'inbound' o 'outbound'.
-
-    Si se pasa ``provider`` (payment.provider Fiserv), se asegura que la línea
-    tenga ``payment_provider_id`` apuntando a él. Sin proveedor en la línea
-    saliente, el form de account.payment outbound no resuelve la integración
-    con Fiserv ITD y «Crear transacción» falla.
-    """
-    line_model = env["account.payment.method.line"]
-    domain = [
-        ("journal_id", "=", journal.id),
-        ("payment_method_id", "=", account_pm.id),
-    ]
-    existing = line_model.search(domain, limit=1)
-    if existing:
-        if provider and not existing.payment_provider_id:
-            existing.payment_provider_id = provider.id
-        return existing
-    vals = {
-        "name": account_pm.name,
-        "payment_method_id": account_pm.id,
-        "journal_id": journal.id,
-    }
-    if provider:
-        vals["payment_provider_id"] = provider.id
-    return line_model.create(vals)
+        _logger.error(
+            "_ensure_fiserv_journals_all_companies: %s", exc, exc_info=True,
+        )
 
 
 def _link_card_payment_method_to_fiserv(env):
