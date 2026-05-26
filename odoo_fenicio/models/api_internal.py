@@ -150,122 +150,30 @@ class ApiInternal(models.Model):
                             'presentaciones': [],
                         }
 
-                    listaVenta = empresa.fenicio_pricelist_venta_id
-                    listaPrecios = empresa.fenicio_pricelist_lista_id
-                    listaAlternativo = empresa.fenicio_pricelist_alternativo_id
-
+                    precioVenta, precioLista, precioAlternativo = variante._get_fenicio_prices(empresa)
 
                     if not presentacion_attrs:
-                        codigo = variante.default_code or ''
-                        nombre = variante.name
-                        sku = variante.default_code or ''
-                        stock = self._get_fenicio_stock(variante, token)
-
-                        precioVenta = 0.0
-                        precioLista = 0.0
-                        precioAlternativo = 0.0
-
-                        if listaVenta:
-                            try:
-                                precioVenta = listaVenta._get_product_price(
-                                    product=variante,
-                                    quantity=1.0,
-                                    partner=None,
-                                    uom_id=variante.uom_id.id
-                                )
-                            except Exception as e:
-                                precioVenta = variante.lst_price or 0.0
-
-                        if listaPrecios:
-                            try:
-                                precioLista = listaPrecios._get_product_price(
-                                    product=variante,
-                                    quantity=1.0,
-                                    partner=None,
-                                    uom_id=variante.uom_id.id
-                                )
-                            except Exception as e:
-                                precioLista = variante.lst_price or 0.0
-
-                        if listaAlternativo:
-                            try:
-                                precioAlternativo = listaAlternativo._get_product_price(
-                                    product=variante,
-                                    quantity=1.0,
-                                    partner=None,
-                                    uom_id=variante.uom_id.id
-                                )
-                            except Exception as e:
-                                precioAlternativo = variante.lst_price or 0.0
-
-                        variantes_map[codigo_variante]['presentaciones'].append(
-                            {
-                                'codigo': codigo,
-                                'nombre': nombre,
-                                'stock': stock,
-                                'sku': sku,
-                                'precioLista': {currency_code: precioLista},
-                                'precioVenta': {currency_code: precioVenta},
-                                'precioAlternativo': {currency_code: precioAlternativo}
-                            }
-                        )
+                        variantes_map[codigo_variante]['presentaciones'].append({
+                            'codigo': variante.default_code or '',
+                            'nombre': variante.name,
+                            'stock': self._get_fenicio_stock(variante, token),
+                            'sku': variante.default_code or '',
+                            'precioLista': {currency_code: precioLista},
+                            'precioVenta': {currency_code: precioVenta},
+                            'precioAlternativo': {currency_code: precioAlternativo},
+                        })
                     else:
                         for pres_attr_val in presentacion_attrs:
-                            codigo = pres_attr_val.product_attribute_value_id.fenicio_attribute_value_code if pres_attr_val.product_attribute_value_id.fenicio_attribute_value_code else '000'
-                            nombre = pres_attr_val.product_attribute_value_id.name
-                            sku = variante.default_code or ''
-                            stock = self._get_fenicio_stock(variante, token)
-
-                            precioVenta = 0.0
-                            precioLista = 0.0
-                            precioAlternativo = 0.0
-
-                            if listaVenta:
-                                try:
-                                    precioVenta = listaVenta._get_product_price(
-                                        product=variante,
-                                        quantity=1.0,
-                                        partner=None,
-                                        uom_id=variante.uom_id.id
-                                    )
-
-                                except Exception as e:
-                                    precioVenta = variante.lst_price or 0.0
-
-                            if listaPrecios:
-                                try:
-                                    precioLista = listaPrecios._get_product_price(
-                                        product=variante,
-                                        quantity=1.0,
-                                        partner=None,
-                                        uom_id=variante.uom_id.id
-                                    )
-
-                                except Exception as e:
-                                    precioLista = variante.lst_price or 0.0
-
-                            if listaAlternativo:
-                                try:
-                                    precioAlternativo = listaAlternativo._get_product_price(
-                                        product=variante,
-                                        quantity=1.0,
-                                        partner=None,
-                                        uom_id=variante.uom_id.id
-                                    )
-                                except Exception as e:
-                                    precioAlternativo = variante.lst_price or 0.0
-
-                            variantes_map[codigo_variante]['presentaciones'].append(
-                                {
-                                    'codigo': codigo,
-                                    'nombre': nombre,
-                                    'stock': stock,
-                                    'sku': sku,
-                                    'precioLista': {currency_code: precioLista},
-                                    'precioVenta': {currency_code: precioVenta},
-                                    'precioAlternativo': {currency_code: precioAlternativo}
-                                }
-                            )
+                            codigo = pres_attr_val.product_attribute_value_id.fenicio_attribute_value_code or '000'
+                            variantes_map[codigo_variante]['presentaciones'].append({
+                                'codigo': codigo,
+                                'nombre': pres_attr_val.product_attribute_value_id.name,
+                                'stock': self._get_fenicio_stock(variante, token),
+                                'sku': variante.default_code or '',
+                                'precioLista': {currency_code: precioLista},
+                                'precioVenta': {currency_code: precioVenta},
+                                'precioAlternativo': {currency_code: precioAlternativo},
+                            })
 
                 for variante_data in variantes_map.values():
                     vals['variantes'].append(variante_data)
@@ -353,48 +261,7 @@ class ApiInternal(models.Model):
 
         # Obtener listas de precio del sitio web
         website = self.verificar_token(token)
-        listaVenta = website.fenicio_pricelist_venta_id
-        listaPrecios = website.fenicio_pricelist_lista_id
-        listaAlternativo = website.fenicio_pricelist_alternativo_id
-
-        # Obtener precio de lista
-        precio_lista = 0.0
-        if listaPrecios:
-            try:
-                precio_lista = listaPrecios._get_product_price(
-                    product=product_id,
-                    quantity=1.0,
-                    partner=None,
-                    uom_id=product_id.uom_id.id
-                )
-            except Exception as e:
-                precio_lista = product_id.lst_price or 0.0
-
-        # Obtener precio de venta
-        precio_venta = 0.0
-        if listaVenta:
-            try:
-                precio_venta = listaVenta._get_product_price(
-                    product=product_id,
-                    quantity=1.0,
-                    partner=None,
-                    uom_id=product_id.uom_id.id
-                )
-            except Exception as e:
-                precio_venta = product_id.lst_price or 0.0
-
-        # Obtener precio alternativo
-        precio_alternativo = 0.0
-        if listaAlternativo:
-            try:
-                precio_alternativo = listaAlternativo._get_product_price(
-                    product=product_id,
-                    quantity=1.0,
-                    partner=None,
-                    uom_id=product_id.uom_id.id
-                )
-            except Exception as e:
-                precio_alternativo = product_id.lst_price or 0.0
+        precio_venta, precio_lista, precio_alternativo = product_id._get_fenicio_prices(website)
 
         identificadores = []
         for identificador in product_id.indentificadores_ids:

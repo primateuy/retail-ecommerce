@@ -1,0 +1,218 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- List view -->
+    <record id="fenicio_catalog_line_view_list" model="ir.ui.view">
+        <field name="name">fenicio.catalog.line.list</field>
+        <field name="model">fenicio.catalog.line</field>
+        <field name="arch" type="xml">
+            <tree string="Catálogo Fenicio">
+                <field name="producto_nombre" string="Producto"/>
+                <field name="variante_nombre" string="Variante"/>
+                <field name="sku"/>
+                <field name="stock"/>
+                <field name="precio_lista" string="P. Lista"/>
+                <field name="precio_venta" string="P. Venta"/>
+                <field name="odoo_product_id" string="Producto Odoo"/>
+                <field name="ultima_sincronizacion" string="Ultima Sync"/>
+            </tree>
+        </field>
+    </record>
+
+    <!-- Form view (lectura, no edición manual) -->
+    <record id="fenicio_catalog_line_view_form" model="ir.ui.view">
+        <field name="name">fenicio.catalog.line.form</field>
+        <field name="model">fenicio.catalog.line</field>
+        <field name="arch" type="xml">
+            <form string="Línea Catálogo Fenicio">
+                <sheet>
+                    <group string="Producto">
+                        <group>
+                            <field name="producto_codigo"/>
+                            <field name="producto_nombre"/>
+                            <field name="prioridad"/>
+                            <field name="moneda"/>
+                            <field name="impuesto"/>
+                        </group>
+                        <group>
+                            <field name="atributos_producto" widget="text"/>
+                        </group>
+                    </group>
+                    <group string="Variante">
+                        <group>
+                            <field name="variante_codigo"/>
+                            <field name="variante_nombre"/>
+                        </group>
+                        <group>
+                            <field name="atributos_variante" widget="text"/>
+                        </group>
+                    </group>
+                    <group string="Presentación">
+                        <group>
+                            <field name="presentacion_codigo"/>
+                            <field name="presentacion_nombre"/>
+                            <field name="sku"/>
+                            <field name="stock"/>
+                        </group>
+                        <group>
+                            <field name="precio_lista"/>
+                            <field name="precio_venta"/>
+                            <field name="precio_alternativo"/>
+                        </group>
+                    </group>
+                    <group string="Vínculo Odoo">
+                        <field name="odoo_product_id"/>
+                        <field name="ultima_sincronizacion"/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <!-- Search view -->
+    <record id="fenicio_catalog_line_view_search" model="ir.ui.view">
+        <field name="name">fenicio.catalog.line.search</field>
+        <field name="model">fenicio.catalog.line</field>
+        <field name="arch" type="xml">
+            <search string="Buscar en catálogo Fenicio">
+                <field name="producto_nombre" string="Producto"/>
+                <field name="variante_nombre" string="Variante"/>
+                <field name="sku" string="SKU"/>
+                <field name="presentacion_codigo" string="Código Presentación"/>
+                <separator/>
+                <filter name="sin_odoo" string="Sin producto Odoo"
+                        domain="[('odoo_product_id', '=', False)]"/>
+                <filter name="con_odoo" string="Con producto Odoo"
+                        domain="[('odoo_product_id', '!=', False)]"/>
+                <filter name="sin_stock" string="Sin stock"
+                        domain="[('stock', '=', 0)]"/>
+                <group expand="0" string="Agrupar por">
+                    <filter name="by_product" string="Producto"
+                            context="{'group_by': 'producto_nombre'}"/>
+                    <filter name="by_moneda" string="Moneda"
+                            context="{'group_by': 'moneda'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <!-- Sync wizard: vista principal (sin JSON de prueba) -->
+    <record id="fenicio_catalog_sync_view_form" model="ir.ui.view">
+        <field name="name">fenicio.catalog.sync.form</field>
+        <field name="model">fenicio.catalog.sync</field>
+        <field name="arch" type="xml">
+            <form string="Sincronizar Catálogo Fenicio">
+                <sheet>
+                    <field name="state" invisible="1"/>
+                    <field name="not_found_line_ids" invisible="1"/>
+                    <group invisible="state == 'draft'">
+                        <group string="Resultado">
+                            <field name="total_creados" readonly="1"/>
+                            <field name="total_actualizados" readonly="1"/>
+                            <field name="total_odoo" readonly="1"/>
+                        </group>
+                    </group>
+                    <group string="SKUs no encontrados en Odoo"
+                           invisible="not not_found_line_ids">
+                        <field name="not_found_line_ids" nolabel="1" readonly="1">
+                            <tree>
+                                <field name="producto_nombre" string="Producto"/>
+                                <field name="variante_nombre" string="Variante"/>
+                                <field name="sku" string="SKU"/>
+                                <field name="precio_venta" string="P. Venta"/>
+                            </tree>
+                        </field>
+                    </group>
+                    <footer>
+                        <button name="action_sync"
+                                string="Sincronizar desde Fenicio"
+                                type="object"
+                                class="btn-primary"
+                                invisible="state == 'done'"/>
+                        <button name="action_sync"
+                                string="Sincronizar de nuevo"
+                                type="object"
+                                class="btn-secondary"
+                                invisible="state == 'draft'"/>
+                        <button name="action_update_odoo"
+                                string="Actualizar Productos Odoo"
+                                type="object"
+                                class="btn-secondary"/>
+                        <button name="action_create_missing"
+                                string="Crear productos faltantes en Odoo"
+                                type="object"
+                                class="btn-primary"
+                                invisible="not not_found_line_ids"/>
+                        <button name="action_open_catalog"
+                                string="Ver Catálogo"
+                                type="object"
+                                class="btn-secondary"
+                                invisible="state == 'draft'"/>
+                        <button string="Cerrar" class="btn-secondary" special="cancel"/>
+                    </footer>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <!-- Sync wizard: vista de prueba (solo JSON + botón test) -->
+    <record id="fenicio_catalog_sync_test_view_form" model="ir.ui.view">
+        <field name="name">fenicio.catalog.sync.test.form</field>
+        <field name="model">fenicio.catalog.sync</field>
+        <field name="arch" type="xml">
+            <form string="Sincronización manual">
+                <sheet>
+                    <field name="state" invisible="1"/>
+                    <group string="JSON de prueba" col="1">
+                        <field name="test_json" nolabel="1" widget="text"
+                               style="width: 100%; min-height: 200px;"
+                               placeholder="Pegá aquí el JSON del endpoint /API_V1/catalogo"/>
+                    </group>
+                    <group invisible="state == 'draft'">
+                        <group string="Resultado">
+                            <field name="total_creados" readonly="1"/>
+                            <field name="total_actualizados" readonly="1"/>
+                        </group>
+                    </group>
+                    <footer>
+                        <button name="action_sync_test"
+                                string="Sincronización manual"
+                                type="object"
+                                class="btn-primary"/>
+                        <button name="action_open_catalog"
+                                string="Ver Catálogo"
+                                type="object"
+                                class="btn-secondary"
+                                invisible="state == 'draft'"/>
+                        <button string="Cerrar" class="btn-secondary" special="cancel"/>
+                    </footer>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <!-- Acciones del wizard -->
+    <record id="fenicio_catalog_sync_action" model="ir.actions.act_window">
+        <field name="name">Sincronizar Catálogo</field>
+        <field name="res_model">fenicio.catalog.sync</field>
+        <field name="view_mode">form</field>
+        <field name="view_id" ref="fenicio_catalog_sync_view_form"/>
+        <field name="target">new</field>
+    </record>
+
+    <record id="fenicio_catalog_sync_test_action" model="ir.actions.act_window">
+        <field name="name">Sincronización manual</field>
+        <field name="res_model">fenicio.catalog.sync</field>
+        <field name="view_mode">form</field>
+        <field name="view_id" ref="fenicio_catalog_sync_test_view_form"/>
+        <field name="target">new</field>
+    </record>
+
+    <!-- Catalog list action -->
+    <record id="fenicio_catalog_line_action" model="ir.actions.act_window">
+        <field name="name">Catálogo Fenicio</field>
+        <field name="res_model">fenicio.catalog.line</field>
+        <field name="view_mode">tree,form</field>
+        <field name="search_view_id" ref="fenicio_catalog_line_view_search"/>
+    </record>
+
+</odoo>
