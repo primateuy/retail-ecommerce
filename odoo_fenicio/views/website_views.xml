@@ -7,14 +7,43 @@
         <field name="arch" type="xml">
             <xpath expr="//notebook" position="inside">
                 <page string="Fenicio" name="fenicio">
-                    <group string="Configuración de Fenicio">
-                        <field name="fenicio_token" password="True"/>
-                        <field name="fenicio_pricelist_venta_id"/>
-                        <field name="fenicio_pricelist_lista_id"/>
-                        <field name="fenicio_pricelist_alternativo_id"/>
-                        <field name="fenicio_sale_order_type_id"/>
-                        <field name="fenicio_cantidad_stock_bydefault"/>
-                        <field name="fenicio_stock_location_ids" widget="many2many_tags"/>
+                    <group string="Configuración">
+                        <group>
+                            <field name="fenicio_catalog_url" placeholder="https://example.com/"/>
+                            <field name="fenicio_token" password="True"/>
+                            <field name="fenicio_sale_order_type_id"/>
+                            <field name="fenicio_cantidad_stock_bydefault"/>
+                        </group>
+                        <group>
+                            <field name="fenicio_pricelist_venta_id"/>
+                            <field name="fenicio_pricelist_lista_id"/>
+                            <field name="fenicio_pricelist_alternativo_id"/>
+                            <field name="fenicio_stock_location_ids" widget="many2many_tags"/>
+                        </group>
+                    </group>
+                    <group string="Catálogo" col="1">
+                        <div class="d-flex gap-2 flex-wrap mt-1 mb-2">
+                            <button name="action_open_catalog_sync"
+                                    string="Sincronizar Catálogo"
+                                    type="object"
+                                    class="btn btn-primary"/>
+                            <button name="action_open_catalog_test"
+                                    string="Sincronización manual"
+                                    type="object"
+                                    class="btn btn-secondary"/>
+                            <button name="action_open_catalog_list"
+                                    string="Ver Catálogo"
+                                    type="object"
+                                    class="btn btn-secondary"/>
+                            <button name="action_open_catalog_export"
+                                    string="Exportar a Excel"
+                                    type="object"
+                                    class="btn btn-secondary"/>
+                            <button name="action_open_logs"
+                                    string="Ver Logs"
+                                    type="object"
+                                    class="btn btn-secondary"/>
+                        </div>
                     </group>
                 </page>
             </xpath>

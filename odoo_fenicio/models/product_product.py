@@ -84,6 +84,21 @@ class ProductProduct(models.Model):
     _inherit = 'product.product'
 
     fenicio_sale_price = fields.Float('Precio Venta Fenicio')
+    fenicio_precio_venta = fields.Float(
+        'Precio Venta Fenicio (directo)',
+        help='Si está definido (> 0) tiene prioridad sobre la lista de precios de venta configurada en Fenicio.',
+        digits=(12, 2),
+    )
+    fenicio_precio_lista = fields.Float(
+        'Precio Lista Fenicio (directo)',
+        help='Si está definido (> 0) tiene prioridad sobre la lista de precios lista configurada en Fenicio.',
+        digits=(12, 2),
+    )
+    fenicio_precio_alternativo = fields.Float(
+        'Precio Alternativo Fenicio (directo)',
+        help='Si está definido (> 0) tiene prioridad sobre la lista de precios alternativo configurada en Fenicio.',
+        digits=(12, 2),
+    )
     listaPrecios = fields.Many2one('product.pricelist', string='Lista de Precios')
     precios_fenicio_ids = fields.One2many('fenicio.presentacion.price', 'product_id', 'Precios Fenicio')
     indentificadores_ids = fields.One2many('product.identificadores', 'product_id', 'Identificadores')
@@ -107,6 +122,31 @@ class ProductProduct(models.Model):
                 if len(row_ids) == 2:
                     raise ValidationError(f'Ya existe un producto con el SKU {rec.default_code}')
                 
+
+    def _get_fenicio_prices(self, website):
+        """Devuelve (precioVenta, precioLista, precioAlternativo) con prioridad:
+        1. Campo directo en la variante (si > 0)
+        2. Lista de precios configurada en el sitio web Fenicio
+        """
+        self.ensure_one()
+
+        def _from_pricelist(pricelist):
+            if not pricelist:
+                return 0.0
+            try:
+                return pricelist._get_product_price(
+                    product=self,
+                    quantity=1.0,
+                    partner=None,
+                    uom_id=self.uom_id.id,
+                )
+            except Exception:
+                return self.lst_price or 0.0
+
+        precio_venta = self.fenicio_precio_venta or _from_pricelist(website.fenicio_pricelist_venta_id)
+        precio_lista = self.fenicio_precio_lista or _from_pricelist(website.fenicio_pricelist_lista_id)
+        precio_alternativo = self.fenicio_precio_alternativo or _from_pricelist(website.fenicio_pricelist_alternativo_id)
+        return precio_venta, precio_lista, precio_alternativo
 
     def _get_primer_impuesto_iva(self):
         """Obtener el primer impuesto IVA de venta del producto"""

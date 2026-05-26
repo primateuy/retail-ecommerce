@@ -8,3 +8,6 @@ access_guia_talles_user,guia.talles.user,model_guia_talles,base.group_user,1,1,1
 product_pricelist_relation,product.pricelist.relation,model_product_pricelist_relation,base.group_user,1,1,1,1
 product_product_pricelist_relation,product.product.pricelist.relation,model_product_product_pricelist_relation,base.group_user,1,1,1,1
 fenicio_log,fenicio.log,model_fenicio_log,base.group_user,1,1,1,1
+fenicio_catalog_export,fenicio.catalog.export,model_fenicio_catalog_export,base.group_user,1,1,1,1
+fenicio_catalog_line,fenicio.catalog.line,model_fenicio_catalog_line,base.group_user,1,1,1,1
+fenicio_catalog_sync,fenicio.catalog.sync,model_fenicio_catalog_sync,base.group_user,1,1,1,1

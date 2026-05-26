@@ -99,26 +99,5 @@
             <field name="context">{'module': 'odoo_fenicio'}</field>
         </record>
 
-        <menuitem id="fenicio_menu_root"
-                  name="Fenicio"
-                  sequence="90"
-                  web_icon="odoo_fenicio,static/description/icon.png"/>
-
-        <menuitem id="fenicio_menu_logs"
-                  name="Logs de Integración"
-                  parent="fenicio_menu_root"
-                  action="fenicio_log_action"
-                  sequence="10"/>
-
-        <menuitem id="fenicio_menu_config"
-                  name="Configuración"
-                  parent="fenicio_menu_root"
-                  sequence="100"/>
-
-        <menuitem id="fenicio_menu_settings"
-                  name="Ajustes"
-                  parent="fenicio_menu_config"
-                  action="res_config_settings_action_fenicio"
-                  sequence="1"/>
     </data>
 </odoo>
