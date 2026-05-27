@@ -63,57 +63,123 @@ class PaymentProvider(models.Model):
 
     def _ensure_payment_method_line(self, allow_create=True):
         """
-        Mantiene **ambas** líneas de método de pago Fiserv en el diario del proveedor.
+        Gestiona las líneas de método Fiserv (inbound + outbound) del proveedor.
 
-        Odoo nativo (``account_payment``) asume un único método de pago por
-        proveedor: al cambiar ``journal_id`` solo arrastra una línea
-        (``account_payment/models/payment_provider.py``). Fiserv define dos
-        ``account.payment.method`` con ``code='fiserv'`` —inbound (cobros) y
-        outbound (devoluciones por terminal)— y el hook de instalación pone
-        ``payment_provider_id`` en las dos. Sin sincronizar, al cambiar el
-        diario del proveedor la línea que el core no movió queda huérfana en el
-        diario viejo y, por ser método 'electronic' (un diario por proveedor),
-        deja de ofrecerse en el diario nuevo.
+        Para Fiserv **no** delegamos en el core. El core (``account_payment``)
+        asume **una sola** línea por proveedor: al cambiar ``journal_id`` mueve
+        esa única línea con ``limit=1`` y, si el diario destino ya tiene una
+        línea Fiserv (residuo, intento previo) o hay dos direcciones, choca con
+        ``_check_payment_method_line_ids_multiplicity`` (dos líneas mismo
+        tipo+nombre en un diario; y, para métodos 'electronic', un diario por
+        proveedor). Como Fiserv define dos ``account.payment.method`` con
+        ``code='fiserv'`` (inbound=cobros, outbound=devoluciones por terminal),
+        ese supuesto no aplica.
 
-        Tras el manejo nativo, reasignamos las dos líneas Fiserv al diario
-        actual de forma idempotente: no importa cuál movió el core.
-        """
-        res = super()._ensure_payment_method_line(allow_create=allow_create)
-        if self.id and self._get_code() == 'fiserv':
-            self._fiserv_sync_payment_method_lines_to_journal(allow_create=allow_create)
-        return res
-
-    def _fiserv_sync_payment_method_lines_to_journal(self, allow_create=True):
-        """
-        Coloca todas las líneas de método Fiserv del proveedor en su diario actual.
-
-        - Sin diario en el proveedor: elimina las líneas Fiserv (no deben quedar
-          colgadas, igual que hace el core con la inbound).
-        - Con diario: mueve la línea existente o la crea si falta (cuando
-          ``allow_create``), para inbound y outbound.
+        Garantía de este override: por cada método Fiserv queda **exactamente
+        una** línea, en el diario actual del proveedor, con ``payment_provider_id``
+        y el nombre del proveedor. Cualquier duplicado se fusiona (repuntando los
+        pagos que lo referencien) en vez de crear una segunda línea y chocar.
         """
         self.ensure_one()
+        if not self.id or self._get_code() != 'fiserv':
+            return super()._ensure_payment_method_line(allow_create=allow_create)
+        self._fiserv_ensure_payment_method_lines(allow_create=allow_create)
+
+    def _fiserv_ensure_payment_method_lines(self, allow_create=True):
+        """
+        Deja una única línea por método Fiserv en el diario actual del proveedor.
+
+        Principio (igual que el core y el hook): la línea del **propio proveedor**
+        se **mueve**, nunca se borra —Odoo impide borrar líneas ligadas a un
+        provider enabled/test—. Lo que se borra es la línea residual/ajena que
+        estorbe en el diario destino. Para el caso raro de dos líneas propias se
+        desactiva el provider temporalmente (ver ``_fiserv_remove_lines``).
+        """
+        if self.env.context.get('fiserv_skip_line_sync'):
+            return
+        self.ensure_one()
         line_model = self.env['account.payment.method.line'].sudo()
+        # ``journal_id`` es computed/inverse NO almacenado: capturarlo UNA vez;
+        # releerlo tras modificar líneas devuelve valores inconsistentes.
+        target_journal = self.journal_id
         methods = self.env['account.payment.method'].sudo().search([('code', '=', 'fiserv')])
         for method in methods:
-            line = line_model.search([
-                ('payment_provider_id', '=', self.id),
+            ours = line_model.search([
                 ('payment_method_id', '=', method.id),
-            ], limit=1)
-            if not self.journal_id:
-                if line:
-                    line.unlink()
+                ('payment_provider_id', '=', self.id),
+            ])
+
+            if not target_journal:
+                # Proveedor sin diario: no deben quedar sus líneas (paridad core).
+                self._fiserv_remove_lines(ours, line_model.browse())
                 continue
-            if line:
-                if line.journal_id != self.journal_id:
-                    line.journal_id = self.journal_id
-            elif allow_create:
-                line_model.create({
-                    'name': method.name,
-                    'payment_method_id': method.id,
-                    'journal_id': self.journal_id.id,
-                    'payment_provider_id': self.id,
-                })
+
+            # Líneas del mismo método que estorban en el diario destino y NO son
+            # del proveedor (residuos sin proveedor, u otro proveedor).
+            conflicts_on_target = line_model.search([
+                ('payment_method_id', '=', method.id),
+                ('journal_id', '=', target_journal.id),
+                ('payment_provider_id', '!=', self.id),
+            ])
+
+            if ours:
+                # Conservar (MOVER) una línea del proveedor; preferir la que ya
+                # esté en el diario destino.
+                survivor = ours.filtered(lambda l: l.journal_id.id == target_journal.id)[:1] or ours[:1]
+                # Quitar lo que estorbe: conflictos en destino + líneas propias extra.
+                self._fiserv_remove_lines((ours - survivor) | conflicts_on_target, survivor)
+                vals = {}
+                if survivor.journal_id.id != target_journal.id:
+                    vals['journal_id'] = target_journal.id
+                if survivor.name != self.name:
+                    vals['name'] = self.name
+                if vals:
+                    survivor.write(vals)
+            else:
+                # El proveedor no tiene línea propia: adoptar una preexistente del
+                # diario destino, o crearla.
+                survivor = conflicts_on_target[:1]
+                if survivor:
+                    self._fiserv_remove_lines(conflicts_on_target - survivor, survivor)
+                    survivor.write({'payment_provider_id': self.id, 'name': self.name})
+                elif allow_create:
+                    line_model.create({
+                        'name': self.name,
+                        'payment_method_id': method.id,
+                        'journal_id': target_journal.id,
+                        'payment_provider_id': self.id,
+                    })
+
+    def _fiserv_remove_lines(self, lines, survivor):
+        """
+        Repunta los pagos de ``lines`` hacia ``survivor`` y elimina ``lines``.
+
+        Las líneas propias se **desligan** del proveedor antes de borrar
+        (``payment_provider_id = False``): así (1) salen del conteo de la
+        constraint de unicidad cross-diario —que no filtra por estado del
+        provider— y (2) dejan de estar bloqueadas para borrado (Odoo impide
+        borrar líneas ligadas a un provider enabled/test). Best-effort: si algo
+        no se puede borrar, se loguea y se sigue (no se aborta el save).
+        """
+        lines = lines.exists()
+        if not lines:
+            return
+        if survivor:
+            pays = self.env['account.payment'].sudo().search([
+                ('payment_method_line_id', 'in', lines.ids),
+            ])
+            if pays:
+                pays.write({'payment_method_line_id': survivor.id})
+        ours = lines.filtered(lambda line: line.payment_provider_id.id == self.id)
+        if ours:
+            ours.write({'payment_provider_id': False})
+        try:
+            lines.unlink()
+        except Exception as exc:  # noqa: BLE001 - best-effort, no abortar el save
+            _logger.warning(
+                'Fiserv: no se pudieron eliminar líneas de método %s (%s); '
+                'revisar manualmente.', lines.ids, exc,
+            )
 
     def get_formatted_timestamp(self):
         """
