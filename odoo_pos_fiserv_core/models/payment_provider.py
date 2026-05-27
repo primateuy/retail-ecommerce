@@ -61,6 +61,60 @@ class PaymentProvider(models.Model):
         string='Terminales (PosID)',
     )
 
+    def _ensure_payment_method_line(self, allow_create=True):
+        """
+        Mantiene **ambas** líneas de método de pago Fiserv en el diario del proveedor.
+
+        Odoo nativo (``account_payment``) asume un único método de pago por
+        proveedor: al cambiar ``journal_id`` solo arrastra una línea
+        (``account_payment/models/payment_provider.py``). Fiserv define dos
+        ``account.payment.method`` con ``code='fiserv'`` —inbound (cobros) y
+        outbound (devoluciones por terminal)— y el hook de instalación pone
+        ``payment_provider_id`` en las dos. Sin sincronizar, al cambiar el
+        diario del proveedor la línea que el core no movió queda huérfana en el
+        diario viejo y, por ser método 'electronic' (un diario por proveedor),
+        deja de ofrecerse en el diario nuevo.
+
+        Tras el manejo nativo, reasignamos las dos líneas Fiserv al diario
+        actual de forma idempotente: no importa cuál movió el core.
+        """
+        res = super()._ensure_payment_method_line(allow_create=allow_create)
+        if self.id and self._get_code() == 'fiserv':
+            self._fiserv_sync_payment_method_lines_to_journal(allow_create=allow_create)
+        return res
+
+    def _fiserv_sync_payment_method_lines_to_journal(self, allow_create=True):
+        """
+        Coloca todas las líneas de método Fiserv del proveedor en su diario actual.
+
+        - Sin diario en el proveedor: elimina las líneas Fiserv (no deben quedar
+          colgadas, igual que hace el core con la inbound).
+        - Con diario: mueve la línea existente o la crea si falta (cuando
+          ``allow_create``), para inbound y outbound.
+        """
+        self.ensure_one()
+        line_model = self.env['account.payment.method.line'].sudo()
+        methods = self.env['account.payment.method'].sudo().search([('code', '=', 'fiserv')])
+        for method in methods:
+            line = line_model.search([
+                ('payment_provider_id', '=', self.id),
+                ('payment_method_id', '=', method.id),
+            ], limit=1)
+            if not self.journal_id:
+                if line:
+                    line.unlink()
+                continue
+            if line:
+                if line.journal_id != self.journal_id:
+                    line.journal_id = self.journal_id
+            elif allow_create:
+                line_model.create({
+                    'name': method.name,
+                    'payment_method_id': method.id,
+                    'journal_id': self.journal_id.id,
+                    'payment_provider_id': self.id,
+                })
+
     def get_formatted_timestamp(self):
         """
         Marca de tiempo ITD (misma lógica que ``pos.payment.method``).
