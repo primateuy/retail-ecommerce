@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates id="pos_cfc_contingencia.templates" xml:space="preserve">
+
+    <t t-inherit="point_of_sale.PaymentScreen" t-inherit-mode="extension" owl="1">
+        <xpath expr="//div[hasclass('payment-screen')]" position="inside">
+            <div t-if="cfcState.isCfc" class="cfc-banner">
+                <div class="cfc-banner-title">
+                    <i class="fa fa-exclamation-triangle"/> PDV de Contingencia (CFC)
+                </div>
+                <t t-if="cfcState.hasCae">
+                    <div class="cfc-banner-row">
+                        <span class="cfc-label">CAE activo:</span>
+                        <strong t-esc="cfcState.nroCae"/>
+                    </div>
+                    <div class="cfc-banner-row">
+                        <span class="cfc-label">Rango habilitado:</span>
+                        <span><t t-esc="cfcState.rangoInicial"/> — <t t-esc="cfcState.rangoFinal"/></span>
+                    </div>
+                    <div class="cfc-banner-row">
+                        <span class="cfc-label">Folios disponibles:</span>
+                        <strong t-esc="cfcState.foliosDisponibles"/>
+                    </div>
+                    <div t-if="cfcState.warningVencimiento" class="cfc-banner-warn">
+                        ⚠ Atención: el CAE vence el <t t-esc="cfcState.fechaVencimiento"/>
+                    </div>
+                    <div class="cfc-banner-mode">
+                        Modo de envío: <strong><t t-esc="cfcState.envioOnline ? 'Online' : 'Batch (diferido)'"/></strong>
+                    </div>
+                </t>
+                <t t-else="">
+                    <div class="cfc-banner-error">
+                        ⚠ No hay un CAE activo configurado. Contacte al administrador.
+                    </div>
+                </t>
+            </div>
+        </xpath>
+    </t>
+
+</templates>

@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="pos_config_view_form_cfc_contingencia" model="ir.ui.view">
+        <field name="name">pos.config.form.cfc.contingencia</field>
+        <field name="model">pos.config</field>
+        <field name="inherit_id" ref="point_of_sale.pos_config_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//sheet" position="inside">
+                <group string="Contingencia CFC" name="contingencia_cfc_group">
+                    <field name="envio_cfc_online"/>
+                    <p colspan="2" class="text-muted">
+                        Si está activo: al confirmar la orden Odoo intenta firmar el CFC con
+                        UCFE en el momento. Si está inactivo (modo batch, por defecto): la
+                        factura queda pendiente y el cron de l10n_uy_cfc_efac la envía en su
+                        próxima corrida (cada 15 min). En ambos modos, si UCFE no responde,
+                        la operativa del cajero no se interrumpe.
+                    </p>
+                </group>
+            </xpath>
+        </field>
+    </record>
+
+</odoo>

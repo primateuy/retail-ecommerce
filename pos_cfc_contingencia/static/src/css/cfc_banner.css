@@ -1,0 +1,51 @@
+.cfc-banner {
+    margin: 12px;
+    padding: 14px 18px;
+    background-color: #fff3cd;
+    border: 1px solid #ffd75e;
+    border-left: 6px solid #f0ad4e;
+    border-radius: 6px;
+    color: #6b4f00;
+    font-size: 14px;
+}
+
+.cfc-banner-title {
+    font-weight: 600;
+    font-size: 15px;
+    margin-bottom: 8px;
+    color: #8a4b00;
+}
+
+.cfc-banner-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 2px 0;
+}
+
+.cfc-banner-row .cfc-label {
+    color: #6b4f00;
+    margin-right: 12px;
+}
+
+.cfc-banner-warn {
+    margin-top: 8px;
+    padding: 6px 8px;
+    background-color: #f8d7da;
+    border-radius: 4px;
+    color: #842029;
+    font-weight: 500;
+}
+
+.cfc-banner-mode {
+    margin-top: 8px;
+    font-size: 13px;
+    color: #5a4500;
+}
+
+.cfc-banner-error {
+    padding: 6px 8px;
+    background-color: #f8d7da;
+    border-radius: 4px;
+    color: #842029;
+    font-weight: 600;
+}
