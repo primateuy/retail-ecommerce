@@ -199,7 +199,7 @@ class PosOrder(models.Model):
             window_start = order.date_order - timedelta(minutes=2)
             window_end = order.date_order + timedelta(minutes=10)
             cards = Card.sudo().search([
-                ("partner_id", "=", order.partner_id.id),
+                ("earned_partner_id", "=", order.partner_id.id),
                 ("program_id.applies_on", "=", "future"),
                 ("program_id.program_type", "not in", ["gift_card", "ewallet"]),
                 ("write_date", ">=", window_start),
