@@ -107,6 +107,11 @@ patch(Order.prototype, {
         if (!cfg?.forum_birthday_promo_active) {
             return;
         }
+        console.log("[bday] scheduleSync called, running=", this._forumBirthdaySyncRunning, "cooldown=", !!this._forumBirthdaySyncCooldown, "hasTimer=", !!this._forumBirthdaySyncTimer, new Error().stack.split("\n")[2]);
+        if (this._forumBirthdaySyncRunning || this._forumBirthdaySyncCooldown) {
+            console.log("[bday] scheduleSync BLOCKED by running/cooldown flag");
+            return;
+        }
         if (this._forumBirthdaySyncTimer) {
             clearTimeout(this._forumBirthdaySyncTimer);
         }
@@ -121,10 +126,14 @@ patch(Order.prototype, {
      */
     async _forumBirthdaySyncExecute() {
         const cfg = this.pos?.config;
+        console.log("[bday] execute called, running=", this._forumBirthdaySyncRunning);
         if (!cfg?.forum_birthday_promo_active || this._forumBirthdaySyncRunning) {
+            console.log("[bday] execute ABORTED active=", cfg?.forum_birthday_promo_active, "running=", this._forumBirthdaySyncRunning);
             return;
         }
         this._forumBirthdaySyncRunning = true;
+        // Preserve the cashier's current selection so the sync doesn't hijack it.
+        const savedSelectedLine = this.selected_orderline;
         try {
             const forumRewardId = cfg.forum_birthday_reward_id?.[0];
             for (const line of [...this.get_orderlines()]) {
@@ -132,6 +141,7 @@ patch(Order.prototype, {
                     line.forum_birthday_line ||
                     (forumRewardId && line.reward_id === forumRewardId);
                 if (isForumLine) {
+                    console.log("[bday] removing old birthday line");
                     this._unlinkOrderline(line);
                 }
             }
@@ -139,22 +149,27 @@ patch(Order.prototype, {
             const hasBirthRef =
                 partner && (partner.birthdate_date || partner.birthdate);
             if (!hasBirthRef) {
+                console.log("[bday] no birthdate, exit");
                 return;
             }
             const productId = cfg.forum_birthday_product_id?.[0];
             const product = productId ? this.pos.db.get_product_by_id(productId) : null;
             if (!product) {
+                console.log("[bday] no product, exit");
                 return;
             }
             const rewardId = cfg.forum_birthday_reward_id?.[0];
             if (!rewardId) {
+                console.log("[bday] no rewardId, exit");
                 return;
             }
             const orm = this.pos.env.services.orm;
+            console.log("[bday] calling eligibility RPC");
             const elig = await orm.call("pos.session", "forum_birthday_check_eligibility", [
                 [this.pos.pos_session.id],
                 partner.id,
             ]);
+            console.log("[bday] eligibility result=", elig, "running=", this._forumBirthdaySyncRunning);
             if (!elig?.eligible) {
                 return;
             }
@@ -162,15 +177,15 @@ patch(Order.prototype, {
             if (percent <= 0) {
                 return;
             }
-            // Bloque: base del % = total con impuestos de líneas vendibles (no rewards / devoluciones).
             let base = 0;
             for (const line of this.get_orderlines()) {
-                if (line.is_reward_line || line.refunded_orderline_id) {
+                if (line.is_reward_line || line.refunded_orderline_id || line.forum_birthday_line) {
                     continue;
                 }
                 base += forumBirthdayLinePromoBaseAmount(line);
             }
             base = round_pr(base, this.pos.currency.rounding);
+            console.log("[bday] base=", base, "percent=", percent);
             if (base <= 0) {
                 return;
             }
@@ -178,13 +193,14 @@ patch(Order.prototype, {
             if (discountAmount <= 0) {
                 return;
             }
+            console.log("[bday] adding line discountAmount=", discountAmount);
             this._forumBirthdaySuppressLoyaltyRewards = true;
             try {
                 await this.add_product(product, {
                     quantity: 1,
                     price: -discountAmount,
                     merge: false,
-                    is_reward_line: true,
+                    is_reward_line: false,
                     reward_id: rewardId,
                     reward_identifier_code: random5Chars(),
                     points_cost: 0,
@@ -193,8 +209,27 @@ patch(Order.prototype, {
             } finally {
                 this._forumBirthdaySuppressLoyaltyRewards = false;
             }
+            console.log("[bday] line added, calling _updateRewards, running=", this._forumBirthdaySyncRunning);
+            await this._updateRewards();
+            console.log("[bday] _updateRewards done, running=", this._forumBirthdaySyncRunning);
+            // Restore the cashier's selection — add_product selects the birthday
+            // line, which would deselect whatever the cashier had chosen.
+            if (savedSelectedLine && this.get_orderlines().includes(savedSelectedLine)) {
+                this.select_orderline(savedSelectedLine);
+            }
         } finally {
+            console.log("[bday] execute FINALLY, setting running=false");
             this._forumBirthdaySyncRunning = false;
+            // The reactive system (Owl) fires _updateRewardLines via microtasks
+            // after the async function settles. All microtasks are guaranteed to
+            // drain before the next macrotask (setTimeout), so holding this flag
+            // true until setTimeout(0) fires absorbs the entire reactive burst
+            // and prevents a new sync cycle.
+            this._forumBirthdaySyncCooldown = true;
+            setTimeout(() => {
+                this._forumBirthdaySyncCooldown = false;
+                console.log("[bday] cooldown cleared");
+            }, 0);
         }
     },
 });
