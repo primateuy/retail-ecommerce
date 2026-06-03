@@ -189,21 +189,28 @@ class PosOrder(models.Model):
             and c.program_id.program_type not in ("gift_card", "ewallet")
         )
 
+        # Códigos de cupones canjeados en esta orden (presentes en líneas de recompensa).
+        # Se usan para excluir tarjetas consumidas que llegan en loyalty_card_ids.
+        consumed_codes = []
+        if "coupon_id" in self.env["pos.order.line"]._fields:
+            consumed_codes = [
+                c.code
+                for c in order.lines.mapped("coupon_id").filtered(bool)
+                if c.code
+            ]
+
         # Bloque: fallback por ventana de tiempo (write_date). Cubre source_pos_order_id=NULL
         # y el caso donde Odoo actualiza una tarjeta existente en lugar de crear una nueva
         # (el socio ya tiene un cupón pendiente del mismo programa). Se ejecuta DESPUÉS del
         # filtro para no bloquearse por tarjetas de otros tipos (loyalty/both) que llegan
         # en loyalty_card_ids desde el cliente.
-        if not cards and order.partner_id and order.date_order:
-            from datetime import timedelta
-            window_start = order.date_order - timedelta(minutes=2)
-            window_end = order.date_order + timedelta(minutes=10)
             cards = Card.sudo().search([
                 ("earned_partner_id", "=", order.partner_id.id),
                 ("program_id.applies_on", "=", "future"),
                 ("program_id.program_type", "not in", ["gift_card", "ewallet"]),
-                ("write_date", ">=", window_start),
-                ("write_date", "<=", window_end),
+                ("code", "not in", consumed_codes),
+                ("points", ">", 0),
+                ("source_pos_order_id", "=", order.id),
             ], order="id desc", limit=10)
 
         if not cards:
