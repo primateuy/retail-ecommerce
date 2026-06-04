@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+
+    <t t-inherit="point_of_sale.PaymentScreenPaymentLines" t-inherit-mode="extension">
+        <xpath expr="//t[@t-elif=&quot;line.payment_status == 'waitingCard'&quot;]" position="replace">
+            <t t-elif="line.payment_status == 'waitingCard'"/>
+        </xpath>
+        <xpath expr="//div[@title='Force Done']" position="attributes">
+            <attribute name="t-if">false</attribute>
+        </xpath>
+    </t>
+</templates>
