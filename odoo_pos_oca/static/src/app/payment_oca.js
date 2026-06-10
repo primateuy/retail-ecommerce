@@ -89,13 +89,18 @@ export class PaymentOCA extends PaymentInterface {
             }
         });
 
-        if (line.amount <= 0 && !has_refunded_line) {
-            this._show_error('El monto del pago debe ser mayor a 0.0');
+        // El sentido de la transacción lo define el signo del monto, no la presencia
+        // de líneas reembolsadas: en un cambio (devolución + artículo más caro) hay
+        // líneas reembolsadas pero el cliente paga la diferencia (es una compra).
+        var is_refund = line.amount < 0;
+
+        if (line.amount === 0) {
+            this._show_error('El monto del pago no puede ser 0.0');
             return Promise.resolve();
         }
 
-        if (line.amount >= 0 && has_refunded_line) {
-            this._show_error('El monto del pago debe ser menor a 0.0');
+        if (is_refund && !has_refunded_line) {
+            this._show_error('El monto del pago debe ser mayor a 0.0');
             return Promise.resolve();
         }
 
@@ -137,7 +142,7 @@ export class PaymentOCA extends PaymentInterface {
         console.log('OCA Payment Data being sent:', JSON.stringify(data, null, 2));
         console.log('InvoiceNumber sent:', data.InvoiceNumber);
 
-        if (has_refunded_line) {
+        if (is_refund) {
             var odoo_backend_response = await this.env.services.orm.silent.call(
                 "pos.payment.method",
                 "get_ticket_number",
@@ -153,7 +158,7 @@ export class PaymentOCA extends PaymentInterface {
             data.Acquirer = odoo_backend_response.Acquirer;
         }
 
-        return this.enviar_pago(data, has_refunded_line).then((data) => {
+        return this.enviar_pago(data, is_refund).then((data) => {
             return this.handle_response_enviar_pago(data);
         });
     }
