@@ -1,34 +1,6 @@
 <odoo noupdate="1">
     <data>
 
-        <record id="account_999001" model="account.account">
-            <field name="code">99906</field>
-            <field name="name">Fenicio Profit Account</field>
-            <field name="account_type">income_other</field>
-            <field name="reconcile">False</field>
-        </record>
-
-        <record id="account_999002" model="account.account">
-            <field name="code">99907</field>
-            <field name="name">Fenicio Loss Account</field>
-            <field name="account_type">expense</field>
-            <field name="reconcile">False</field>
-        </record>
-
-        <record id="account_journal_fenicio" model="account.journal">
-            <field name="name">Fenicio</field>
-            <field name="code">feni</field>
-            <field name="type">bank</field>
-            <field name="profit_account_id" ref="account_999001"/>
-            <field name="loss_account_id" ref="account_999002"/>
-            <field name="payment_sequence">true</field>
-        </record>
-
-        <record id="account_journal_fenicio_venta" model="account.journal">
-            <field name="name">Fenicio</field>
-            <field name="code">fenv</field>
-            <field name="type">sale</field>
-        </record>
 
         <!-- Método contable Fenicio.
              Necesario para que el inverse de payment.provider.journal_id pueda
