@@ -269,17 +269,22 @@ patch(PaymentOCA.prototype, {
             }
         });
 
-        if (line.amount <= 0 && !has_refunded_line) {
+        // El sentido de la transacción lo define el signo del monto, no la presencia
+        // de líneas reembolsadas: en un cambio (devolución + artículo más caro) hay
+        // líneas reembolsadas pero el cliente paga la diferencia (es una compra).
+        var is_refund = line.amount < 0;
+
+        if (line.amount === 0) {
+            this._show_error('El monto del pago no puede ser 0.0');
+            return Promise.resolve();
+        }
+
+        if (is_refund && !has_refunded_line) {
             this._show_error('El monto del pago debe ser mayor a 0.0');
             return Promise.resolve();
         }
 
-        if (line.amount >= 0 && has_refunded_line) {
-            this._show_error('El monto del pago debe ser menor a 0.0');
-            return Promise.resolve();
-        }
-
-        if (!has_refunded_line) {
+        if (!is_refund) {
             await this._syncOcaCartLoyaltyProgramsToSession(order);
         }
 
@@ -316,7 +321,7 @@ patch(PaymentOCA.prototype, {
 
         const loyaltyIdsForPayload =
             this._collectAppliedLoyaltyProgramIdsFromPosOrder(order);
-        if (loyaltyIdsForPayload.length && !has_refunded_line) {
+        if (loyaltyIdsForPayload.length && !is_refund) {
             data.OcaAppliedLoyaltyProgramIds = loyaltyIdsForPayload.join(",");
             console.info(
                 "[OCA_PROMOS] payload enviar_pago incluye OcaAppliedLoyaltyProgramIds=%s (si el conector lo conserva)",
@@ -325,7 +330,7 @@ patch(PaymentOCA.prototype, {
         } else {
             console.info(
                 "[OCA_PROMOS] sin OcaAppliedLoyaltyProgramIds en payload (vacío o reembolso) | reembolso=%s",
-                has_refunded_line
+                is_refund
             );
         }
 
@@ -335,7 +340,7 @@ patch(PaymentOCA.prototype, {
 
         console.log('OCA Payment Data (backend agregará NeedToReadCard si hay promociones):', JSON.stringify(data, null, 2));
 
-        if (has_refunded_line) {
+        if (is_refund) {
             var odoo_backend_response = await this.env.services.orm.silent.call(
                 "pos.payment.method",
                 "get_ticket_number",
@@ -352,7 +357,7 @@ patch(PaymentOCA.prototype, {
             // NO agregar NeedToReadCard aquí, el backend lo maneja
         }
 
-        return this.enviar_pago(data, has_refunded_line).then((data) => {
+        return this.enviar_pago(data, is_refund).then((data) => {
             return this.handle_response_enviar_pago(data);
         });
     },
