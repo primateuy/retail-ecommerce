@@ -389,17 +389,14 @@ patch(PartnerDetailsEdit.prototype, {
                     identTypeId,
                 ]);
             } else {
-                // Alta de cliente: el backend crea el partner con el VAT y el
-                // tipo de identificacion, ejecuta la consulta DGI y devuelve
-                // los campos + id. Asociamos ese id al formulario para que el
-                // guardado posterior haga update y no cree un partner adicional.
+                // Alta de cliente: el backend ejecuta la consulta DGI sobre un
+                // partner temporal que se revierte (savepoint) y devuelve solo
+                // los campos, sin id. El partner real se crea una unica vez al
+                // guardar el formulario; consultar y cancelar no persiste nada.
                 data = await this.orm.call("res.partner", "pos_consultar_rut_preview", [
                     this.changes.vat,
                     identTypeId,
                 ]);
-                if (data && data.id) {
-                    this.props.partner.id = data.id;
-                }
             }
         } catch (error) {
             // Mostrar el error tal cual viene de DGI/backend

@@ -6,6 +6,14 @@ from odoo.exceptions import UserError, ValidationError
 from odoo.tools import email_re
 
 
+class _PosRutPreviewRollback(Exception):
+    """Excepcion interna de control de flujo para la consulta RUT del POS.
+
+    Se lanza luego de capturar los datos DGI para revertir el savepoint y
+    descartar el partner temporal. Nunca se propaga al usuario.
+    """
+
+
 class ResPartner(models.Model):
     _inherit = "res.partner"
 
@@ -120,11 +128,11 @@ class ResPartner(models.Model):
         Consulta DGI desde el alta de cliente del POS (cuando aun no hay id).
 
         ``get_partner_dgi_data`` requiere un registro persistido porque al final
-        hace ``partner.write(...)``. Por eso se crea un partner minimo con el VAT
-        y se ejecuta la consulta sobre ese registro. El id devuelto se asocia al
-        formulario del POS para que el guardado posterior haga update y no cree
-        un partner adicional. Si DGI falla, el RPC hace rollback y el partner no
-        queda huerfano.
+        hace ``partner.write(...)``. Por eso se crea un partner minimo dentro de
+        un savepoint que SIEMPRE se revierte: los datos consultados viajan al
+        formulario del POS y el partner real se crea una unica vez cuando el
+        cajero confirma el guardado (``create_from_ui``). Asi la consulta no
+        deja contactos huerfanos en el backend si el alta se cancela.
 
         Args:
             vat (str): Numero de documento a consultar.
@@ -133,7 +141,7 @@ class ResPartner(models.Model):
                 valide el documento contra el tipo correcto y no asuma CI.
 
         Returns:
-            dict: Campos del partner (incluye ``id``) para el POS.
+            dict: Campos del partner (sin ``id``) para el POS.
         """
         # Validar numero de documento
         if not vat:
@@ -151,13 +159,23 @@ class ResPartner(models.Model):
         if identification_type_id:
             vals["l10n_latam_identification_type_id"] = identification_type_id
 
-        partner = Partner.with_context(from_pos=True).create(vals)
+        data = {}
+        try:
+            with self.env.cr.savepoint():
+                partner = Partner.with_context(from_pos=True).create(vals)
+                # Ejecutar consulta DGI sobre el partner temporal
+                partner.get_partner_dgi_data()
+                data = partner.read(self._POS_RUT_FIELDS)[0]
+                # Revertir el savepoint: la consulta es solo lectura para el
+                # POS y el partner temporal no debe quedar persistido.
+                raise _PosRutPreviewRollback()
+        except _PosRutPreviewRollback:
+            # Descartar cache que quedo apuntando al partner revertido
+            self.env.invalidate_all()
 
-        # Ejecutar consulta DGI sobre el partner creado
-        partner.get_partner_dgi_data()
-
-        # Retornar campos (incluye id) para refrescar el formulario del POS
-        return partner.read(self._POS_RUT_FIELDS)[0]
+        # Sin ``id``: el POS crea el partner una sola vez al guardar
+        data.pop("id", None)
+        return data
 
     @api.model
     def create_from_pos(self, vals):
