@@ -57,6 +57,13 @@ class PosPaymentMethod(models.Model):
             "manuales, según el proveedor y la tabla de configuración."
         ),
     )
+    no_print_voucher = fields.Boolean(
+        string="No imprimir voucher",
+        help=(
+            "Si está activo, los pagos realizados con este método no generarán "
+            "voucher en el recibo del POS, aunque tengan transacción OCA asociada."
+        ),
+    )
 
     @api.depends(
         "manual_transaction_enabled",

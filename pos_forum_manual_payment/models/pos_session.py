@@ -32,6 +32,7 @@ class PosSession(models.Model):
             "manual_provider_id",
             "manual_create_checks",
             "manual_payment_popup_config",
+            "no_print_voucher",
         ]
         for field_name in fields_to_add:
             if field_name not in result["search_params"]["fields"]:

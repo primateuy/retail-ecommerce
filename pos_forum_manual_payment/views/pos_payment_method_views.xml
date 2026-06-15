@@ -11,6 +11,7 @@
                     <field name="manual_transaction_enabled"/>
                     <field name="manual_provider_id" invisible="not manual_transaction_enabled"/>
                     <field name="manual_create_checks"/>
+                    <field name="no_print_voucher"/>
                 </group>
             </xpath>
         </field>

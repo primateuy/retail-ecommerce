@@ -9,6 +9,7 @@ campos adicionales y métodos de creación y actualización.
 
 from odoo import fields, models, api
 from odoo.exceptions import ValidationError
+from odoo.tools import formatLang
 import logging
 import json
 import uuid
@@ -159,7 +160,21 @@ class PaymentTransaction(models.Model):
         string='Nombre del Emisor',
         help='Nombre del emisor de la tarjeta'
     )
-    
+
+    emv_application_name = fields.Char(
+        string='Aplicativo EMV',
+        help='Nombre legible del aplicativo EMV (ej. "VISA DEBITO"). OCA lo '
+        'devuelve en el campo EmvApplicationId (semántica invertida). Se '
+        'imprime en el voucher cuando se usa tarjeta EMV.',
+    )
+
+    emv_application_id = fields.Char(
+        string='AID EMV',
+        help='Identificador del aplicativo EMV / AID (ej. "A0000000031010"). '
+        'OCA lo devuelve en el campo EmvApplicationName (semántica invertida). '
+        'Se imprime en el voucher.',
+    )
+
     installments = fields.Integer(
         string='Cantidad de Cuotas',
         help='Número de cuotas de la transacción'
@@ -196,7 +211,115 @@ class PaymentTransaction(models.Model):
             if value >= 1:
                 return value
         return None
-    
+
+    # --- Devolución de impuestos (voucher tarjeta) -------------------------
+    # Anexo 3 POSLink v135: código TaxRefund de la respuesta → ley aplicada.
+    _OCA_TAX_REFUND_LAWS = {
+        '1': 'IVA-Ley 19210',
+        '2': 'IMESI-Ley 18083',
+        '3': 'AFAM-Ley 18910',
+        '4': 'IVA-Ley 17934',
+        '5': 'IRPF-Ley 18999',
+    }
+
+    tax_refund_amount = fields.Float(
+        string='Dev. Impuestos (TaxAmount)',
+        digits=(12, 2),
+        help='Monto de devolución de IVA según la ley aplicada, devuelto por '
+             'OCA en el campo TaxAmount de la respuesta. Lo imprime el voucher.',
+    )
+
+    tax_refund_code = fields.Char(
+        string='Ley Devolución (TaxRefund)',
+        help='Código de ley devuelto por OCA en el campo TaxRefund de la '
+             'respuesta (Anexo 3 POSLink v135). Vacío si no hubo devolución.',
+    )
+
+    taxable_amount = fields.Float(
+        string='Monto Gravado (TaxableAmount)',
+        digits=(12, 2),
+        help='Monto gravado enviado por la caja en TaxableAmount al registrar '
+             'la venta. El voucher lo imprime como Imp.Gravado.',
+    )
+
+    @staticmethod
+    def _oca_parse_money(raw):
+        """Importe POSLink → pesos: centavos sin separador ('120050') o decimal ('0.00')."""
+        if raw in (None, '', False):
+            return 0.0
+        text = str(raw).strip().replace(',', '.')
+        try:
+            val = float(text)
+        except (TypeError, ValueError):
+            return 0.0
+        if not val:
+            return 0.0
+        return val if '.' in text else val / 100.0
+
+    def _oca_extract_tax_vals(self, values):
+        """Extrae devolución de impuestos de un dict POSLink (respuesta o payload).
+
+        TaxAmount = monto de devolución; TaxRefund = código de ley (Anexo 3);
+        TaxableAmount = monto gravado enviado por la caja (los loops de polling
+        lo inyectan en la respuesta final porque el pinpad no lo devuelve).
+
+        Returns:
+            dict: Solo las keys con valor útil (apto para update_vals/create vals).
+        """
+        vals = {}
+        if not isinstance(values, dict):
+            return vals
+        refund = self._oca_parse_money(values.get('TaxAmount'))
+        if refund:
+            vals['tax_refund_amount'] = refund
+        code = str(values.get('TaxRefund') or '').strip()
+        if code and code != '0':
+            vals['tax_refund_code'] = code
+        taxable = self._oca_parse_money(values.get('TaxableAmount'))
+        if taxable:
+            vals['taxable_amount'] = taxable
+        return vals
+
+    def get_oca_tax_refund_law_label(self):
+        """Leyenda de la ley para el voucher (ej. 'IVA-Ley 19210'), '' si no mapea."""
+        self.ensure_one()
+        return self._OCA_TAX_REFUND_LAWS.get((self.tax_refund_code or '').strip(), '')
+
+    @staticmethod
+    def _oca_extract_emv_vals(response):
+        """Extrae datos EMV de la respuesta OCA (nombre y AID del aplicativo).
+
+        OCA invierte la semántica respecto al nombre de los campos (verificado
+        contra respuestas reales y contra el VoucherPrintInfoXML que devuelve el
+        propio terminal): ``EmvApplicationName`` trae el AID (ej.
+        'A0000000031010') y ``EmvApplicationId`` trae el nombre legible (ej.
+        'VISA DEBITO'). Por eso el mapeo a nuestros campos va cruzado.
+
+        Returns:
+            dict: Solo las keys con valor útil (apto para update_vals/create vals).
+        """
+        vals = {}
+        if not isinstance(response, dict):
+            return vals
+        aid = (response.get('EmvApplicationName') or '').strip()
+        if aid:
+            vals['emv_application_id'] = aid
+        name = (response.get('EmvApplicationId') or '').strip()
+        if name:
+            vals['emv_application_name'] = name
+        return vals
+
+    def format_amount(self, amount):
+        """Formatea un importe con locale para el voucher QWeb.
+
+        ``formatLang`` no está en el contexto QWeb de los reportes (solo existe
+        como función Python), por lo que el template no puede llamarla directo.
+        Este método la expone como helper del registro para usar en el voucher.
+        """
+        self.ensure_one()
+        return formatLang(self.env, amount or 0.0, digits=2)
+    # -----------------------------------------------------------------------
+
     acquirer = fields.Char(
         string='Adquirente',
         help='Proveedor de pago (Acquirer)'
@@ -392,6 +515,15 @@ class PaymentTransaction(models.Model):
 
             'transaction_origin': 'pos_payment' if pos_payment else 'pos_order' if pos_order else 'other',
         }
+        # Devolución de impuestos: monto/ley desde la respuesta; el gravado
+        # (TaxableAmount) viene del payload que envió la caja.
+        transaction_vals.update(self._oca_extract_tax_vals(oca_response))
+        transaction_vals.update(self._oca_extract_emv_vals(oca_response))
+        taxable_sent = self._oca_parse_money(
+            pos_data.get('TaxableAmount') if isinstance(pos_data, dict) else None
+        )
+        if taxable_sent and not transaction_vals.get('taxable_amount'):
+            transaction_vals['taxable_amount'] = taxable_sent
         # Campos de relación POS: solo si odoo_pos_oca los aportó. Sin POS
         # instalado, pos_order/pos_payment serán siempre None y este bloque no
         # entra; se mantiene la verificación `'X' in self._fields` por defensa.
@@ -691,6 +823,11 @@ class PaymentTransaction(models.Model):
         if oca_response.get('Merchant'):
             update_vals['merchant_number'] = oca_response['Merchant']
 
+        # Devolución de impuestos: TaxAmount/TaxRefund de la respuesta y el
+        # TaxableAmount que el loop de polling inyecta desde el payload de la caja.
+        update_vals.update(self._oca_extract_tax_vals(oca_response))
+        update_vals.update(self._oca_extract_emv_vals(oca_response))
+
         # Cuotas: el payload inicial va con Quotas=0 para que el pinpad pida
         # al cliente cuántas cuotas. POSLink no es consistente entre versiones
         # con la key de respuesta — _oca_extract_installments cubre Quota,
@@ -798,6 +935,10 @@ class PaymentTransaction(models.Model):
 
             'transaction_origin': 'pos_payment' if pos_payment else 'pos_order' if pos_order else 'other',
         }
+        # Devolución de impuestos (TaxAmount/TaxRefund/TaxableAmount del dict
+        # final enriquecido por el loop de polling).
+        transaction_vals.update(self._oca_extract_tax_vals(oca_response))
+        transaction_vals.update(self._oca_extract_emv_vals(oca_response))
         # Campos de relación POS: solo si odoo_pos_oca los aportó. Sin POS
         # instalado, pos_order/pos_payment serán siempre None y este bloque no
         # entra; se mantiene la verificación `'X' in self._fields` por defensa.
@@ -910,7 +1051,9 @@ class PaymentTransaction(models.Model):
         """
         if not isinstance(oca_response, dict):
             return self._get_issuer_name(oca_response)
-        emv_name = (oca_response.get('EmvApplicationName') or '').strip()
+        # OCA devuelve el nombre legible (ej. 'VISA DEBITO') en EmvApplicationId;
+        # EmvApplicationName trae el AID, que no sirve como nombre de emisor.
+        emv_name = (oca_response.get('EmvApplicationId') or '').strip()
         if emv_name:
             return emv_name
         return self._get_issuer_name(oca_response.get('Issuer'))

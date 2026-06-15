@@ -10,7 +10,7 @@
             <field name="type">qweb</field>
             <field name="arch" type="xml">
                 <t t-name="odoo_pos_oca.oca_card_voucher_snippet">
-                    <!-- Bloque: variables de apoyo (etiqueta copia, orden POS, máscara tarjeta). -->
+                    <!-- Bloque: variables de apoyo (etiqueta copia, orden POS, datos calculados). -->
                     <t t-set="cl" t-value="copy_label or 'COPIA EMPRESA'"/>
                     <t t-set="order" t-value="tx.pos_order_id"/>
                     <t t-set="branch_partner"
@@ -18,106 +18,154 @@
                     <t t-set="card_masked"
                        t-value="(tx.card_bin or '******') + '******' + (tx.card_last_four or '****')"/>
                     <t t-set="voucher_ref" t-value="tx.ticket_number or tx.reference or ''"/>
+                    <!-- Devolución de impuestos: el monto vuelve en TaxAmount y la ley
+                         aplicada en TaxRefund (Anexo 3 POSLink v135). El flag depende del
+                         monto devuelto por OCA, no del tipo de tarjeta. -->
+                    <t t-set="has_tax_refund" t-value="(tx.tax_refund_amount or 0) > 0"/>
+                    <!-- Leyenda de la ley aplicada (ej. 'IVA-Ley 19210'); fallback para
+                         transacciones previas sin código TaxRefund almacenado. -->
+                    <t t-set="tax_law_label" t-value="tx.get_oca_tax_refund_law_label() or 'IVA-Ley 19210'"/>
+                    <t t-set="tipo_label" t-value="'Online DEBITO' if has_tax_refund else 'Online CREDITO'"/>
+                    <!-- Importe gravado: TaxableAmount que la caja envió en la venta; para
+                         transacciones previas sin el dato, aproximación Amount / 1.22. -->
+                    <t t-set="gravado" t-value="tx.taxable_amount or round((tx.amount or 0.0) / 1.22, 2)"/>
+                    <t t-set="pago" t-value="(tx.amount or 0.0) - (tx.tax_refund_amount or 0.0)"/>
+                    <!-- AID EMV: usar el AID real devuelto por OCA (campo
+                         emv_application_id); si no vino, caer al AID por marca. -->
+                    <t t-set="issuer_lower" t-value="(tx.issuer_name or '').lower()"/>
+                    <t t-set="aid_by_brand" t-value="'A0000000041010' if 'master' in issuer_lower else ('A0000000031010' if 'visa' in issuer_lower else '')"/>
+                    <t t-set="aid" t-value="tx.emv_application_id or aid_by_brand"/>
+                    <!-- Nombre legible del aplicativo EMV (ej. 'VISA DEBITO'). -->
+                    <t t-set="emv_app_name" t-value="tx.emv_application_name or ''"/>
+                    <t t-set="issuer_aid_label" t-value="(('Debit ' if has_tax_refund else '') + (tx.issuer_name or 'TARJETA'))"/>
+                    <t t-set="dgi_code" t-value="tx.provider_id.oca_dgi_code or ''"/>
 
                     <div class="oca-thermal-voucher"
                          style="font-family: 'Courier New', Courier, monospace; font-size: 13px; line-height: 1.4; max-width: 80mm; margin: 0 auto; color: #000; padding: 4px 0;">
 
-                        <!-- Bloque: cabecera (fecha/hora, marca OCA, tipo de operación, comercio) -->
+                        <!-- Bloque: encabezado de sucursal (nombre, dirección, ciudad, teléfono) -->
+                        <div style="text-align:center; font-weight:bold; margin-bottom:2px;">
+                            <span t-if="order and order.config_id" t-field="order.config_id.name"/>
+                        </div>
+                        <div style="text-align:center; margin-bottom:1px;">
+                            <span t-if="branch_partner and branch_partner.street" t-field="branch_partner.street"/>
+                        </div>
+                        <div style="text-align:center; margin-bottom:1px;">
+                            <span t-if="branch_partner and branch_partner.city" t-field="branch_partner.city"/>
+                        </div>
+                        <div style="text-align:center; margin-bottom:8px;">
+                            <span t-if="branch_partner and branch_partner.phone">Telefonos <span t-field="branch_partner.phone"/></span>
+                        </div>
+
+                        <!-- Bloque: ref voucher + fecha/hora (izquierda / derecha) -->
                         <!-- No usar widget "time" con t-field sobre Datetime: en 17.x dispara conversor incorrecto. -->
+                        <div style="display:flex; justify-content:space-between; margin-bottom:1px;">
+                            <span>Voucher de Tarjeta</span>
+                            <span t-if="voucher_ref" t-esc="voucher_ref"/>
+                        </div>
                         <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
                             <span t-if="tx.create_date" t-out="context_timestamp(tx.create_date).strftime('%d/%m/%Y')"/>
-                            <span t-if="tx.create_date" t-out="context_timestamp(tx.create_date).strftime('%H:%M')"/>
-                        </div>
-                        <div style="text-align:center; font-weight:bold; font-size:15px; margin-bottom:4px;">
-                            OCA Comercios
-                        </div>
-                        <div style="text-align:center; margin-bottom:2px;">
-                            <span t-esc="tx.issuer_name or 'TARJETA'"/> ONLINE
-                        </div>
-                        <div style="text-align:center; font-weight:bold; font-size:14px; margin-bottom:8px;">
-                            <span t-if="order and order.company_id" t-field="order.company_id.name"/>
-                            <span t-if="not order or not order.company_id" t-field="tx.company_id.name"/>
+                            <span t-if="tx.create_date" t-out="context_timestamp(tx.create_date).strftime('%H:%M:%S')"/>
                         </div>
 
-                        <!-- Bloque: sucursal / RUT (dos columnas como en vouchers reales) -->
-                        <div style="display:flex; justify-content:space-between; gap:8px; margin-bottom:8px;">
-                            <div style="flex:1;">
-                                <span t-if="branch_partner and branch_partner.street" t-field="branch_partner.street"/>
-                            </div>
-                            <div style="text-align:right; flex:1;">
-                                <span t-if="branch_partner and branch_partner.vat">RUT <span t-field="branch_partner.vat"/></span>
-                            </div>
-                        </div>
+                        <div style="border-top:1px solid #000; margin-bottom:6px;"></div>
 
-                        <!-- Bloque: título sección “Voucher de Tarjeta” (últimas imágenes de referencia) -->
-                        <div style="text-align:center; font-weight:bold; margin-bottom:8px;">
-                            Voucher de Tarjeta <span t-if="voucher_ref" t-esc="voucher_ref"/>
+                        <!-- Bloque: datos de la transacción -->
+                        <div style="text-align:center; font-weight:bold; margin-bottom:2px;">
+                            Nuevo Voucher
                         </div>
-
-                        <!-- Bloque: filas izquierda / derecha -->
-                        <div style="display:flex; justify-content:space-between; margin-bottom:2px;">
-                            <span>TARJETA: <span t-esc="tx.issuer_name or '-'"/></span>
-                            <span>Online <span t-esc="tx.acquirer or 'OCA'"/></span>
+                        <div style="text-align:center; font-weight:bold; margin-bottom:6px;">
+                            <span t-esc="tx.emv_application_name or tx.issuer_name or tipo_label"/>
                         </div>
                         <div style="display:flex; justify-content:space-between; margin-bottom:2px;">
-                            <span>Comercio: <span t-esc="tx.merchant_number or '-'"/></span>
-                            <span>Terminal: <span t-esc="tx.pos_id or '-'"/></span>
-                        </div>
-                        <div style="display:flex; justify-content:space-between; margin-bottom:2px;">
-                            <span>Operacion: Venta</span>
-                            <span t-if="tx.create_date" t-out="context_timestamp(tx.create_date).strftime('%d/%m/%Y %H:%M:%S')"/>
-                        </div>
-                        <div style="display:flex; justify-content:space-between; margin-bottom:2px;">
-                            <span>Producto: <span t-esc="tx.acquirer or '-'"/></span>
-                            <span>Ticket: <span t-esc="tx.ticket_number or '-'"/></span>
-                        </div>
-                        <div style="display:flex; justify-content:space-between; margin-bottom:2px;">
-                            <span>LOTE: <span t-esc="tx.batch_number or '-'"/></span>
-                            <span>Ingreso: NFC</span>
-                        </div>
-                        <div style="display:flex; justify-content:space-between; margin-bottom:2px;">
-                            <span>Tarjeta: <span t-esc="card_masked"/></span>
+                            <span>Tipo: <span t-esc="tipo_label"/></span>
                             <span>Exp: xx/xx</span>
                         </div>
                         <div style="display:flex; justify-content:space-between; margin-bottom:2px;">
-                            <span>Cuotas: <span t-esc="tx.installments or 0"/></span>
-                            <span>Plan: <span t-esc="tx.issuer_code or '0'"/></span>
+                            <span>Operacion: Venta</span>
+                            <span>o.Doc: <span t-esc="tx.oca_transaction_id or '-'"/></span>
                         </div>
-                        <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
-                            <span>Autorizacion: <span t-esc="tx.authorization_code or '-'"/></span>
-                            <span>No.FACT: <span t-esc="tx.invoice_number or '-'"/></span>
+                        <div style="display:flex; justify-content:space-between; margin-bottom:2px;">
+                            <span>Comercio: <span t-esc="tx.merchant_number or '-'"/></span>
+                            <span>Term: <span t-esc="tx.pos_id or '-'"/></span>
                         </div>
-
-                        <!-- Bloque: importe / total destacado -->
-                        <div style="display:flex; justify-content:space-between; font-weight:bold; margin:6px 0 4px 0;">
-                            <span>IMPORTE</span>
-                            <span t-field="tx.amount" t-options='{"widget":"monetary","display_currency": tx.currency_id}'/>
-                        </div>
-                        <div style="display:flex; justify-content:space-between; font-weight:bold; font-size:15px; margin-bottom:8px;">
-                            <span>TOTAL A PAGAR</span>
-                            <span t-field="tx.amount" t-options='{"widget":"monetary","display_currency": tx.currency_id}'/>
+                        <div style="display:flex; justify-content:space-between; margin-bottom:2px;">
+                            <span>Lote: <span t-esc="tx.batch_number or '-'"/></span>
+                            <span>Ticket: <span t-esc="tx.ticket_number or '-'"/></span>
                         </div>
                         <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
-                            <span t-if="order and order.partner_id" t-field="order.partner_id.name"/>
+                            <span>Tarjeta: <span t-esc="card_masked"/></span>
+                            <span>NFC</span>
+                        </div>
+                        <div style="display:flex; justify-content:space-between; margin-bottom:2px;">
+                            <span>Plan: <span t-esc="tx.issuer_code or '0'"/></span>
+                            <span>Cuotas: <span t-esc="tx.installments or 0"/></span>
+                        </div>
+                        <div style="margin-bottom:8px;">
+                            <span>Autorizacion: <span t-esc="tx.authorization_code or '-'"/></span>
                         </div>
 
-                        <div style="text-align:center; font-size:11px; margin:6px 0;">
-                            NO REQUIERE PIN NI OTROS DATOS
-                        </div>
-                        <div style="text-align:center; font-size:11px; margin-bottom:4px;">
-                            NO APLICA Ley
-                        </div>
-                        <div style="text-align:center; font-size:11px; margin-bottom:6px;">
-                            Adq: <span t-esc="tx.acquirer or '-'"/>
-                        </div>
-                        <div style="font-size:11px; margin-bottom:8px; text-align:center;">
-                            Aplica dev. IVA-Ley 19210 Sin nro. factura no aplica ley
-                        </div>
-                        <div style="text-align:center; font-size:12px; font-weight:bold; margin-bottom:10px;">
-                            MUCHAS GRACIAS
+                        <!-- Bloque: AID + nombre aplicativo EMV (formato voucher OCA:
+                             AID a la izquierda, nombre legible a la derecha). -->
+                        <div t-if="aid or emv_app_name" style="display:flex; justify-content:space-between; margin-bottom:4px;">
+                            <span t-esc="aid"/>
+                            <span t-esc="emv_app_name or issuer_aid_label"/>
                         </div>
 
-                        <!-- Bloque: pie copia empresa (barra negra; sustituye “copia cliente”) -->
+                        <!-- Bloque: importe / devolución IVA / pago -->
+                        <div style="display:flex; justify-content:space-between; font-weight:bold; margin-bottom:2px;">
+                            <span>Importe $</span>
+                            <span t-esc="tx.format_amount(tx.amount)"/>
+                        </div>
+                        <t t-if="has_tax_refund">
+                            <div style="display:flex; justify-content:space-between; margin-bottom:2px;">
+                                <span>Dev. <t t-esc="tax_law_label"/></span>
+                                <span t-esc="tx.format_amount(tx.tax_refund_amount)"/>
+                            </div>
+                            <div style="display:flex; justify-content:space-between; font-weight:bold; margin-bottom:2px;">
+                                <span>Pago</span>
+                                <span t-esc="tx.format_amount(pago)"/>
+                            </div>
+                            <div style="display:flex; justify-content:space-between; margin-bottom:2px;">
+                                <span>DGI</span>
+                                <span t-if="dgi_code" t-esc="dgi_code"/>
+                            </div>
+                            <div style="text-align:center; font-size:11px;">
+                                Aplica dev. <t t-esc="tax_law_label"/>
+                            </div>
+                            <div style="text-align:center; font-size:11px; margin-bottom:8px;">
+                                Sin nro. factura no apli
+                            </div>
+                        </t>
+
+                        <!-- Bloque: importes fiscales (factura / gravado) -->
+                        <div style="display:flex; justify-content:space-between; margin-top:8px;">
+                            <span>Imp.Factura</span>
+                            <span t-esc="tx.format_amount(tx.amount)"/>
+                        </div>
+                        <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
+                            <span>Imp.Gravado TRX</span>
+                            <span t-esc="tx.format_amount(gravado)"/>
+                        </div>
+
+                        <div style="text-align:center; font-weight:bold; margin-bottom:4px;">
+                            *** COMPRA ***
+                        </div>
+
+                        <!-- Bloque: conformidad + campos de firma -->
+                        <div style="margin-bottom:2px;">
+                            Conforme por: $ <span t-esc="int(round(tx.amount or 0))"/>
+                        </div>
+                        <div style="margin-bottom:10px;">
+                            Conforme con la cantidad indicada que debo y pagare al
+                            portador del presente contra su presentacion.
+                        </div>
+                        <div style="margin-bottom:8px;">Nombre: _____________________</div>
+                        <div style="margin-bottom:8px;">Telefono: ___________________</div>
+                        <div style="margin-bottom:8px;">C.I.: _______________________</div>
+                        <div style="margin-bottom:10px;">Firma: ______________________</div>
+
+                        <!-- Bloque: pie copia empresa (barra negra). -->
                         <div style="background:#000; color:#fff; text-align:center; font-weight:bold; padding:6px 4px; margin-top:4px; letter-spacing:0.5px;">
                             *** <span t-esc="cl"/> ***
                         </div>

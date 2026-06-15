@@ -77,25 +77,23 @@ patch(ReceiptScreen.prototype, {
         // Bloque: voucher OCA (id backend y/o referencia si aún no hay server_id).
         let ocaVoucher = {};
         try {
-            ocaVoucher =
-                (await orm.call("pos.order", "get_oca_voucher_dict_for_pos_receipt", [
-                    orderServerId || false,
-                    orderReference || false,
-                ])) || {};
-            if (!ocaVoucher || typeof ocaVoucher !== "object") {
-                ocaVoucher = {};
-            }
+            const rawVouchers = await orm.call("pos.order", "get_oca_voucher_dict_for_pos_receipt", [
+                orderServerId || false,
+                orderReference || false,
+            ]);
+            ocaVouchers = Array.isArray(rawVouchers)
+                ? rawVouchers
+                : (rawVouchers && typeof rawVouchers === "object" && Object.keys(rawVouchers).length
+                    ? [rawVouchers]
+                    : []);
         } catch (e) {
             console.warn(`${OCA_VOUCHER_LOG} printReceipt RPC error`, e);
         }
 
         console.info(
             `${OCA_VOUCHER_LOG} printReceipt antes de printer.print | orderServerId=${orderServerId} ` +
-                `orderReference=${JSON.stringify(orderReference)} | oca_keys=${Object.keys(
-                    ocaVoucher
-                ).join(",")} | show_client_copy=${ocaVoucher.show_client_copy} | payload=${JSON.stringify(
-                    ocaVoucher
-                )}`
+                `orderReference=${JSON.stringify(orderReference)} | oca_vouchers_count=${ocaVouchers.length} | ` +
+                `tickets=${JSON.stringify(ocaVouchers.map(v => v.ticket_number))}`
         );
 
         // Obtener datos del CFE para incluirlos en el recibo impreso.
@@ -132,7 +130,8 @@ patch(ReceiptScreen.prototype, {
             ...baseReceiptData,
             ...(receiptServerData || {}),
             isBill: this.isBill,
-            oca_voucher: ocaVoucher,
+            oca_voucher: ocaVouchers[0] || {},
+            oca_vouchers: ocaVouchers,
             cfe_data: cfeData,
         };
         if (!receiptServerData?.orderlines?.length) {

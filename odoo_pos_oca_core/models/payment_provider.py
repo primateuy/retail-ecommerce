@@ -63,6 +63,12 @@ class PaymentProvider(models.Model):
         help='Identificador de sucursal POSLink (texto, hasta 100 caracteres). '
         'Si está vacío, se usa ``codigo_sucursal`` convertido a string.',
     )
+    oca_dgi_code = fields.Char(
+        string='Código DGI (Ley 19210)',
+        help='Código de comercio ante DGI para la devolución de IVA '
+        '(Ley 19210). Se imprime en el voucher de tarjeta cuando hay '
+        'devolución de impuestos.',
+    )
     # is_multiple / multiple_pos_ids / multiple.pos.config viven en
     # ``odoo_pos_oca_multiple`` (tab "Configuración Multiple POS"). El core no
     # los define; los módulos que necesitan multi-POS (odoo_pos_oca_backend,

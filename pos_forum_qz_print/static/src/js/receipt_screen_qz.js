@@ -57,16 +57,18 @@ patch(ReceiptScreen.prototype, {
      */
     async _qzBuildReceiptHtml() {
         const ord = this.pos.get_order();
-        let ocaVoucherForReceipt = {};
+
+        let ocaVouchersForReceipt = [];
         try {
-            ocaVoucherForReceipt =
-                (await this.orm.call("pos.order", "get_oca_voucher_dict_for_pos_receipt", [
-                    ord.server_id || false,
-                    ord.pos_reference || ord.name || false,
-                ])) || {};
-            if (!ocaVoucherForReceipt || typeof ocaVoucherForReceipt !== "object") {
-                ocaVoucherForReceipt = {};
-            }
+            const rawVouchers = await this.orm.call("pos.order", "get_oca_voucher_dict_for_pos_receipt", [
+                ord.server_id || false,
+                ord.pos_reference || ord.name || false,
+            ]);
+            ocaVouchersForReceipt = Array.isArray(rawVouchers)
+                ? rawVouchers
+                : (rawVouchers && typeof rawVouchers === "object" && Object.keys(rawVouchers).length
+                    ? [rawVouchers]
+                    : []);
         } catch (e) {
             console.warn(`${OCA_VOUCHER_LOG} _qzBuildReceiptHtml voucher dict`, e);
         }
@@ -74,7 +76,8 @@ patch(ReceiptScreen.prototype, {
             data: {
                 ...ord.export_for_printing(),
                 isBill: this.isBill,
-                oca_voucher: ocaVoucherForReceipt,
+                oca_voucher: ocaVouchersForReceipt[0] || {},
+                oca_vouchers: ocaVouchersForReceipt,
             },
             formatCurrency: this.env.utils.formatCurrency,
         });
@@ -389,16 +392,18 @@ patch(ReceiptScreen.prototype, {
             const order = this.pos.get_order();
             const base = order.export_for_printing();
             const orderRef = order.pos_reference || order.name || "";
-            let ocaVoucher = {};
+            let ocaVouchers = [];
             try {
-                ocaVoucher =
-                    (await this.env.services.orm.call("pos.order", "get_oca_voucher_dict_for_pos_receipt", [
-                        order.server_id || false,
-                        orderRef || false,
-                    ])) || {};
-                if (!ocaVoucher || typeof ocaVoucher !== "object") {
-                    ocaVoucher = {};
-                }
+                const rawVouchers = await this.env.services.orm.call(
+                    "pos.order",
+                    "get_oca_voucher_dict_for_pos_receipt",
+                    [order.server_id || false, orderRef || false]
+                );
+                ocaVouchers = Array.isArray(rawVouchers)
+                    ? rawVouchers
+                    : (rawVouchers && typeof rawVouchers === "object" && Object.keys(rawVouchers).length
+                        ? [rawVouchers]
+                        : []);
             } catch (e) {
                 console.warn(`${OCA_VOUCHER_LOG} printReceipt(QZ) voucher RPC error`, e);
             }
@@ -406,7 +411,8 @@ patch(ReceiptScreen.prototype, {
                 data: {
                     ...base,
                     isBill: this.isBill,
-                    oca_voucher: ocaVoucher,
+                    oca_voucher: ocaVouchers[0] || {},
+                    oca_vouchers: ocaVouchers,
                 },
                 formatCurrency: this.env.utils.formatCurrency,
             });
