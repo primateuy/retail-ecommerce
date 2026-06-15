@@ -36,6 +36,7 @@ patch(OrderReceipt.prototype, {
             cfeData: {},
             receiptData: null,
             ocaVoucher: {},
+            ocaVouchers: [],
             snapshotSeller: currentOrder?.employee_id?.name || '',
         });
 
@@ -171,26 +172,29 @@ patch(OrderReceipt.prototype, {
 
         // Bloque: datos del voucher OCA para el recibo «FORUM» (copia cliente en el ticket de compra).
         try {
-            const ocaVoucher = await this.orm.call(
+            const rawVouchers = await this.orm.call(
                 "pos.order",
                 "get_oca_voucher_dict_for_pos_receipt",
                 [orderServerId || false, orderReference || false],
             );
-            this.state.ocaVoucher =
-                ocaVoucher && typeof ocaVoucher === "object" ? ocaVoucher : {};
-            // Log: trazar respuesta RPC para ver si el backend devuelve {} (sin transacción) o datos.
+            // El backend devuelve una lista; normalizar por si viene un dict legacy.
+            const ocaVouchersList = Array.isArray(rawVouchers)
+                ? rawVouchers
+                : (rawVouchers && typeof rawVouchers === "object" && Object.keys(rawVouchers).length
+                    ? [rawVouchers]
+                    : []);
+            this.state.ocaVouchers = ocaVouchersList;
+            this.state.ocaVoucher = ocaVouchersList[0] || {};
             console.info(
                 `${OCA_VOUCHER_LOG} _loadReceiptData RPC OK | orderServerId=${orderServerId} ` +
-                    `orderReference=${JSON.stringify(orderReference)} | keys=${Object.keys(
-                        this.state.ocaVoucher
-                    ).join(",")} | has_voucher=${this.state.ocaVoucher.has_voucher} ` +
-                    `show_client_copy=${this.state.ocaVoucher.show_client_copy} | payload=${JSON.stringify(
-                        this.state.ocaVoucher
-                    )}`
+                    `orderReference=${JSON.stringify(orderReference)} | ` +
+                    `oca_vouchers_count=${ocaVouchersList.length} | ` +
+                    `tickets=${JSON.stringify(ocaVouchersList.map(v => v.ticket_number))}`
             );
         } catch (e) {
             console.warn(`${OCA_VOUCHER_LOG} _loadReceiptData RPC error`, e);
             this.state.ocaVoucher = {};
+            this.state.ocaVouchers = [];
         }
     },
 
@@ -310,6 +314,7 @@ patch(OrderReceipt.prototype, {
         const receiptPaymentlines = normalizedPaymentlines;
 
         // Bloque: voucher OCA — marcar show_client_copy si hay datos (evita t-if que falle con JSON).
+        // oca_voucher: primer elemento (backward compat); oca_vouchers: lista completa.
         const mergedOcaVoucher = {
             ...(this.props.data?.oca_voucher || {}),
             ...(this.state.ocaVoucher || {}),
@@ -323,10 +328,15 @@ patch(OrderReceipt.prototype, {
         ) {
             mergedOcaVoucher.show_client_copy = true;
         }
+        const ocaVouchers = this.props.data?.oca_vouchers?.length
+            ? this.props.data.oca_vouchers
+            : (this.state.ocaVouchers?.length
+                ? this.state.ocaVouchers
+                : (mergedOcaVoucher.show_client_copy ? [mergedOcaVoucher] : []));
 
-        // Log: comprobar si props.data lleva oca_voucher al diseño QWeb del recibo (condición t-if).
+        // Log: comprobar si props.data lleva oca_vouchers al diseño QWeb del recibo.
         console.info(
-            `${OCA_VOUCHER_LOG} templateProps | mergedKeys=${Object.keys(mergedOcaVoucher).length} ` +
+            `${OCA_VOUCHER_LOG} templateProps | oca_vouchers_count=${ocaVouchers.length} ` +
                 `show_client_copy=${mergedOcaVoucher.show_client_copy} | fromProps=${JSON.stringify(
                     this.props.data?.oca_voucher || {}
                 )} | fromState=${JSON.stringify(this.state.ocaVoucher || {})}`
@@ -358,6 +368,7 @@ patch(OrderReceipt.prototype, {
                 adenda_data: adendaData,
                 cfe_data: cfeData,
                 oca_voucher: mergedOcaVoucher,
+                oca_vouchers: ocaVouchers,
                 receipt_logo: receiptLogo,
                 total_received: totalReceived,
                 currency_name: receiptData?.currency_name || this.props.data?.currency_name || this.pos?.currency?.name || this.pos?.config?.currency_id?.name || '',

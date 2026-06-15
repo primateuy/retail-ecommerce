@@ -374,7 +374,13 @@ class PosPaymentMethod(models.Model):
         # Guardar el ID del payment method antes de crear el nuevo cursor
         # para usarlo dentro del nuevo entorno
         payment_method_id = self.id
-        
+
+        # El monto gravado (TaxableAmount) que envió la caja en la venta: la
+        # respuesta del Query no lo devuelve, y el ``data`` original se pisa
+        # abajo con el payload del Query. Se conserva para inyectarlo en el
+        # resultado final (lo usa el voucher como Imp.Gravado).
+        taxable_amount_sent = data.get('TaxableAmount')
+
         # Nuevo cursor y entorno para evitar problemas de ORM compartido
         with self.pool.cursor() as new_cr:
             env = api.Environment(new_cr, SUPERUSER_ID, {})
@@ -405,7 +411,9 @@ class PosPaymentMethod(models.Model):
                 'Quota', 'Quotas', 'Installments', 'installments',
                 'Ticket', 'Batch', 'AuthorizationCode', 'Merchant',
                 'CardNumber', 'Issuer', 'Acquirer', 'PosID',
-                'EmvApplicationName', 'TransactionDate', 'TransactionHour',
+                'EmvApplicationName', 'EmvApplicationId',
+                'TransactionDate', 'TransactionHour',
+                'TaxRefund', 'TaxAmount',
             )
 
             while True:
@@ -493,6 +501,12 @@ class PosPaymentMethod(models.Model):
                 )
                 if is_empty:
                     result[key] = val
+
+            # Monto gravado enviado por la caja: el voucher lo imprime como
+            # Imp.Gravado y el pinpad no lo retorna en la respuesta.
+            if taxable_amount_sent and not result.get('TaxableAmount'):
+                result['TaxableAmount'] = taxable_amount_sent
+
             _logger.info(
                 'OCA Query loop final result tras merge (tx=%s):\n%s',
                 transaction_id, pprint.pformat(result),

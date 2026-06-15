@@ -538,6 +538,17 @@ class PosPaymentMethod(models.Model):
             promotion_processed = False  # Flag para evitar procesar múltiples veces
             saved_promotion_info = None  # Variable para preservar promotion_info
 
+            # TaxRefund/TaxAmount (devolución) y EmvApplicationName/Id (datos EMV
+            # del voucher) pueden llegar en una iteración intermedia del Query y
+            # faltar en la final; se acumulan para que el voucher no los pierda.
+            # TaxableAmount no vuelve del pinpad: se conserva el último enviado
+            # por la caja (el de la venta, o el recalculado en el Confirm con promo).
+            accumulated_voucher_fields = {}
+            _VOUCHER_MERGEABLE_KEYS = (
+                'TaxRefund', 'TaxAmount', 'EmvApplicationName', 'EmvApplicationId',
+            )
+            last_taxable_sent = data.get('TaxableAmount')
+
             def _get_quota_value():
                 """
                 Cuotas para processConfirmFinancialPurchase: nunca 0 (OCA puede devolver EXCEDE CUOTAS).
@@ -579,6 +590,14 @@ class PosPaymentMethod(models.Model):
                 try:
                     result = env['pos.payment.method'].processFinancialPurchaseQuery(query_data, base_url_endpoint)
                     _logger.info('Result Promociones: %s', pprint.pformat(result))
+
+                    for voucher_key in _VOUCHER_MERGEABLE_KEYS:
+                        voucher_val = result.get(voucher_key)
+                        if voucher_val in (None, '', False):
+                            continue
+                        if str(voucher_val).strip() in ('', '0', '0.00'):
+                            continue
+                        accumulated_voucher_fields[voucher_key] = voucher_val
 
                     response_code = result['ResponseCode']
                     rt = result['RemainingExpirationTime'] if 'RemainingExpirationTime' in result else False
@@ -783,6 +802,8 @@ class PosPaymentMethod(models.Model):
                                         _logger.info('TransactionId original que se está confirmando: %s', transaction_id)
                                         confirm_response = payment_method.processConfirmFinancialPurchase(confirm_data, pos_session_id)
                                         _logger.info('Respuesta de processConfirmFinancialPurchase: %s', pprint.pformat(confirm_response))
+                                        # El Confirm con promoción modifica el gravado: es el que vale para el voucher.
+                                        last_taxable_sent = confirm_data.get('TaxableAmount') or last_taxable_sent
                                         # Almacenar información de promoción independientemente del resultado
                                         saved_promotion_info = {
                                             'promotion_id': promotion.id,
@@ -925,6 +946,17 @@ class PosPaymentMethod(models.Model):
             if saved_promotion_info and 'promotion_info' not in result:
                 result['promotion_info'] = saved_promotion_info
                 _logger.info('Restaurando promotion_info en resultado final antes de actualizar transacción')
+
+            # Completar TaxRefund/TaxAmount y datos EMV desde iteraciones
+            # intermedias si la última respuesta no los trae, e inyectar el
+            # TaxableAmount enviado por la caja (no vuelve del pinpad). Los usa
+            # el voucher de tarjeta.
+            for voucher_key, voucher_val in accumulated_voucher_fields.items():
+                current = result.get(voucher_key)
+                if current in (None, '', False) or str(current).strip() in ('', '0', '0.00'):
+                    result[voucher_key] = voucher_val
+            if last_taxable_sent and not result.get('TaxableAmount'):
+                result['TaxableAmount'] = last_taxable_sent
             
             # Mensaje legible según códigos POSLink v135 (Anexos 1 y 2) para usuario y transacción
             result['msg'] = env['payment.transaction'].get_oca_display_message(result)

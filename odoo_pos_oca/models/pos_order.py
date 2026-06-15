@@ -75,16 +75,9 @@ class PosOrder(models.Model):
                 raise UserError(_("No se encontró la orden para imprimir el voucher OCA."))
             return ''
 
-        # Bloque: localizar la transacción OCA más reciente asociada a la orden.
-        transaction = self.env['payment.transaction'].sudo().search(
-            [
-                ('pos_order_id', '=', order.id),
-                ('provider_id.code', '=', 'oca'),
-            ],
-            order='id desc',
-            limit=1,
-        )
-        if not transaction:
+        # Bloque: localizar TODAS las transacciones OCA de la orden.
+        transactions = self._find_all_payment_transactions_for_pos_receipt(order)
+        if not transactions:
             _logger.warning(
                 "Voucher OCA: no hay transacción OCA asociada a la orden | order=%s (id=%s)",
                 order.name,
@@ -96,7 +89,7 @@ class PosOrder(models.Model):
                 )
             return ''
 
-        # Bloque: obtener acción de reporte y renderizar QWeb HTML del voucher.
+        # Bloque: obtener acción de reporte y renderizar QWeb HTML de todos los vouchers.
         report_action = self.env.ref(
             'odoo_pos_oca.action_report_payment_transaction_oca_voucher',
             raise_if_not_found=False,
@@ -108,13 +101,13 @@ class PosOrder(models.Model):
             return ''
 
         html_result, _mime = self.env['ir.actions.report'].sudo()._render_qweb_html(
-            report_action.report_name, transaction.ids
+            report_action.report_name, transactions.ids
         )
         html_str = html_result.decode('utf-8') if isinstance(html_result, bytes) else str(html_result)
         _logger.info(
-            "Voucher OCA: HTML generado correctamente | order=%s | tx=%s | html_len=%s",
+            "Voucher OCA: HTML generado correctamente | order=%s | txs=%s | html_len=%s",
             order.name,
-            transaction.reference or transaction.id,
+            transactions.ids,
             len(html_str),
         )
         return html_str
@@ -140,8 +133,8 @@ class PosOrder(models.Model):
         order = self.browse(order_id)
         if not order.exists():
             return {}
-        transaction = self._find_payment_transaction_for_pos_receipt(order)
-        if not transaction or not transaction.provider_id or transaction.provider_id.code != 'oca':
+        transactions = self._find_all_payment_transactions_for_pos_receipt(order)
+        if not transactions:
             return {}
         report = self.env.ref(
             'odoo_pos_oca.action_report_payment_transaction_oca_voucher',
@@ -150,9 +143,45 @@ class PosOrder(models.Model):
         if not report:
             return {}
         return {
-            'doc_ids': transaction.ids,
+            'doc_ids': transactions.ids,
             'report_xml_id': 'odoo_pos_oca.action_report_payment_transaction_oca_voucher',
         }
+
+    def _filter_printable_voucher_transactions(self, order, transactions):
+        """Excluye transacciones cuyo método de pago POS tiene no_print_voucher activo."""
+        excluded_tx_ids = {
+            pay.payment_transaction_id.id
+            for pay in order.payment_ids
+            if pay.payment_transaction_id
+            and getattr(pay.payment_method_id, 'no_print_voucher', False)
+        }
+        if not excluded_tx_ids:
+            return transactions
+        return transactions.filtered(lambda tx: tx.id not in excluded_tx_ids)
+
+    def _find_all_payment_transactions_for_pos_receipt(self, order):
+        """Localiza TODAS las transacciones OCA de la orden para el recibo multi-voucher."""
+        PaymentTransaction = self.env['payment.transaction'].sudo()
+        transactions = PaymentTransaction.search(
+            [('pos_order_id', '=', order.id), ('provider_id.code', '=', 'oca')],
+            order='id asc',
+        )
+        if transactions:
+            return self._filter_printable_voucher_transactions(order, transactions)
+        seen = set()
+        tx_ids = []
+        for pay in order.payment_ids:
+            if pay.payment_transaction_id and pay.payment_transaction_id.id not in seen:
+                seen.add(pay.payment_transaction_id.id)
+                tx_ids.append(pay.payment_transaction_id.id)
+        if tx_ids:
+            return self._filter_printable_voucher_transactions(
+                order, PaymentTransaction.browse(tx_ids)
+            )
+        return self._filter_printable_voucher_transactions(
+            order,
+            PaymentTransaction.search([('pos_order_id', '=', order.id)], order='id asc'),
+        )
 
     def _find_payment_transaction_for_pos_receipt(self, order):
         """
@@ -223,15 +252,15 @@ class PosOrder(models.Model):
                 pos_reference,
             )
             return {}
-        transaction = self._find_payment_transaction_for_pos_receipt(order)
-        if not transaction:
+        transactions = self._find_all_payment_transactions_for_pos_receipt(order)
+        if not transactions:
             _logger.warning(
                 "Voucher recibo POS: sin payment.transaction | orden=%s (id=%s) | pagos=%s",
                 order.name,
                 order.id,
                 len(order.payment_ids),
             )
-            return {}
+            return []
         # Bloque: sucursal / RUT (misma prioridad que en reportes QWeb).
         branch_partner = False
         if (
@@ -245,50 +274,55 @@ class PosOrder(models.Model):
             branch_partner = order.config_id.company_id.partner_id
         elif order.company_id and order.company_id.partner_id:
             branch_partner = order.company_id.partner_id
-        # Bloque: máscara de tarjeta y fechas en zona horaria del usuario.
-        card_bin = transaction.card_bin or ''
-        card_last = transaction.card_last_four or ''
-        card_masked = f'{card_bin}******{card_last}' if (card_bin or card_last) else '************'
-        # Bloque: fechas en TZ del usuario (usar fields.Datetime.context_timestamp: pos.order no siempre expone context_timestamp).
-        create_local = False
-        if transaction.create_date:
-            create_local = fields.Datetime.context_timestamp(order, transaction.create_date)
-        date_str = create_local.strftime('%d/%m/%Y') if create_local else ''
-        time_str = create_local.strftime('%H:%M') if create_local else ''
-        datetime_str = create_local.strftime('%d/%m/%Y %H:%M:%S') if create_local else ''
-        result = {
-            'has_voucher': True,
-            'show_client_copy': True,
-            'issuer_name': transaction.issuer_name or '',
-            'acquirer': transaction.acquirer or '',
-            'merchant_number': transaction.merchant_number or '',
-            'pos_id': transaction.pos_id or '',
-            'ticket_number': transaction.ticket_number or '',
-            'batch_number': transaction.batch_number or '',
-            'authorization_code': transaction.authorization_code or '',
-            'invoice_number': transaction.invoice_number or '',
-            'installments': transaction.installments or 0,
-            'issuer_code': transaction.issuer_code or '',
-            'card_masked': card_masked,
-            'amount': transaction.amount,
-            'date_str': date_str,
-            'time_str': time_str,
-            'datetime_str': datetime_str,
-            'partner_name': order.partner_id.name or '',
-            'company_name': order.company_id.name or '',
-            'branch_street': branch_partner.street or '' if branch_partner else '',
-            'branch_vat': branch_partner.vat or '' if branch_partner else '',
-            'voucher_ref': transaction.ticket_number or transaction.reference or '',
-        }
+        results = []
+        for transaction in transactions:
+            # Bloque: máscara de tarjeta y fechas en zona horaria del usuario.
+            card_bin = transaction.card_bin or ''
+            card_last = transaction.card_last_four or ''
+            card_masked = f'{card_bin}******{card_last}' if (card_bin or card_last) else '************'
+            create_local = False
+            if transaction.create_date:
+                create_local = fields.Datetime.context_timestamp(order, transaction.create_date)
+            date_str = create_local.strftime('%d/%m/%Y') if create_local else ''
+            time_str = create_local.strftime('%H:%M') if create_local else ''
+            datetime_str = create_local.strftime('%d/%m/%Y %H:%M:%S') if create_local else ''
+            results.append({
+                'has_voucher': True,
+                'show_client_copy': True,
+                'issuer_name': transaction.issuer_name or '',
+                'acquirer': transaction.acquirer or '',
+                'merchant_number': transaction.merchant_number or '',
+                'pos_id': transaction.pos_id or '',
+                'ticket_number': transaction.ticket_number or '',
+                'batch_number': transaction.batch_number or '',
+                'authorization_code': transaction.authorization_code or '',
+                'invoice_number': transaction.invoice_number or '',
+                'installments': transaction.installments or 0,
+                'issuer_code': transaction.issuer_code or '',
+                'card_masked': card_masked,
+                'amount': transaction.amount,
+                'tax_refund_amount': transaction.tax_refund_amount or 0.0,
+                # Importe gravado: el ticket OCA lo expone como Amount / 1.22 (IVA 22% UY).
+                'taxable_amount': round((transaction.amount or 0.0) / 1.22, 2),
+                # Código DGI del comercio (Ley 19210); vacío si no está configurado.
+                'dgi_code': transaction.provider_id.oca_dgi_code or '',
+                'date_str': date_str,
+                'time_str': time_str,
+                'datetime_str': datetime_str,
+                'partner_name': order.partner_id.name or '',
+                'company_name': order.company_id.name or '',
+                'branch_street': branch_partner.street or '' if branch_partner else '',
+                'branch_vat': branch_partner.vat or '' if branch_partner else '',
+                'voucher_ref': transaction.ticket_number or transaction.reference or '',
+            })
         _logger.info(
-            "Voucher recibo POS: OK | orden=%s (id=%s) | tx_id=%s | ticket=%s | show_client_copy=%s",
+            "Voucher recibo POS: OK | orden=%s (id=%s) | %d vouchers | tickets=%s",
             order.name,
             order.id,
-            transaction.id,
-            result.get('ticket_number'),
-            result.get('show_client_copy'),
+            len(results),
+            [r.get('ticket_number') for r in results],
         )
-        return result
+        return results
 
     @api.model
     def get_oca_voucher_transaction_id_for_pos_print(self, order_id=False, pos_reference=False):
