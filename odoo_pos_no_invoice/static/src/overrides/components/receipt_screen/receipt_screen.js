@@ -75,7 +75,7 @@ patch(ReceiptScreen.prototype, {
         }
 
         // Bloque: voucher OCA (id backend y/o referencia si aún no hay server_id).
-        let ocaVoucher = {};
+        let ocaVouchers = [];
         try {
             ocaVoucher =
                 (await orm.call("pos.order", "get_oca_voucher_dict_for_pos_receipt", [
