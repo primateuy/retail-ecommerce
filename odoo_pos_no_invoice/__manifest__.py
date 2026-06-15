@@ -21,6 +21,7 @@
         # OrderReceipt (CFE + voucher OCA) sobrescriba al de custom_receipts_for_pos.
         'point_of_sale._assets_pos': [
             'odoo_pos_no_invoice/static/src/overrides/xml/ticket_screen_buttons.xml',
+            'odoo_pos_no_invoice/static/src/overrides/xml/receipt_screen_templates.xml',
             'odoo_pos_no_invoice/static/src/overrides/components/payment_screen/payment_screen.js',
             'odoo_pos_no_invoice/static/src/overrides/components/receipt_screen/receipt_screen.js',
             'odoo_pos_no_invoice/static/src/overrides/printer/pos_printer_service.js',

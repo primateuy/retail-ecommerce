@@ -184,7 +184,41 @@ patch(ReceiptScreen.prototype, {
         return Array.isArray(fid) ? fid[0] : fid;
     },
 
+    /**
+     * Rutina completa: boleta + ticket de cambio + voucher Fiserv + cupón de lealtad.
+     *
+     * Encadena en un solo clic las cuatro impresiones del flujo de caja. Cada paso
+     * se ejecuta de forma aislada: si uno falla, no interrumpe a los siguientes
+     * (cada método maneja y notifica sus propios errores). Los pasos de voucher y
+     * cupón retornan temprano sin error cuando no aplican a la venta.
+     */
     async fiservPrintChangeTicketRoutine() {
+        if (!this._fiservHasChangeTicketReportConfigured()) {
+            this.env.services.notification.add(
+                "No hay reporte de ticket de cambio configurado en el POS.",
+                {type: "warning"}
+            );
+            return;
+        }
+        // Boleta de venta (incluye get_receipt_data_from_invoice_or_order).
+        try {
+            await this.printReceipt();
+        } catch (error) {
+            console.error("fiservPrintChangeTicketRoutine: boleta:", error);
+            this.env.services.notification.add(
+                `Error al imprimir la boleta: ${error?.message || String(error)}`,
+                {type: "danger"}
+            );
+        }
+        await this.fiservPrintChangeTicketDocumentOnly();
+        await this.fiservPrintVoucherOnly();
+        await this.fiservPrintLoyaltyCouponCode();
+    },
+
+    /**
+     * Solo el documento de ticket de cambio Fiserv (PDF del reporte configurado).
+     */
+    async fiservPrintChangeTicketDocumentOnly() {
         try {
             if (!this._fiservHasChangeTicketReportConfigured()) {
                 this.env.services.notification.add(
@@ -233,16 +267,12 @@ patch(ReceiptScreen.prototype, {
             await this.report.doAction(reportXmlId, [orderId]);
             this.env.services.notification.add("Ticket de cambio (PDF) generado.", {type: "success"});
         } catch (error) {
-            console.error("fiservPrintChangeTicketRoutine:", error);
+            console.error("fiservPrintChangeTicketDocumentOnly:", error);
             this.env.services.notification.add(
                 `Error: ${error?.message || error?.toString() || String(error)}`,
                 {type: "danger"}
             );
         }
-    },
-
-    async fiservPrintChangeTicketDocumentOnly() {
-        return this.fiservPrintChangeTicketRoutine();
     },
 
     async fiservPrintVoucherOnly() {
