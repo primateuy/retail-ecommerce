@@ -1,6 +1,6 @@
 /** @odoo-module **/
 
-import { Order } from "@point_of_sale/app/store/models";
+import { Order, Orderline } from "@point_of_sale/app/store/models";
 import { patch } from "@web/core/utils/patch";
 import { random5Chars } from "@point_of_sale/utils";
 import { roundPrecision as round_pr } from "@web/core/utils/numbers";
@@ -20,6 +20,28 @@ function forumBirthdayLinePromoBaseAmount(line) {
         return line.get_price_with_tax();
     }
     return line.get_price_without_tax();
+}
+
+/**
+ * Indica si una línea es la línea técnica de descuento de cumpleaños.
+ *
+ * Se basa primero en el producto configurado (`forum_birthday_product_id`), que
+ * sobrevive a la serialización de la orden, y además en los marcadores en memoria
+ * por compatibilidad. Así funciona también en órdenes restauradas desde
+ * localStorage, donde `forum_birthday_line` se pierde.
+ *
+ * @param {import("@point_of_sale/app/store/models").Orderline} line
+ * @returns {boolean}
+ */
+function isForumBirthdayLine(line) {
+    const cfg = line.pos?.config;
+    const birthdayProductId = cfg?.forum_birthday_product_id?.[0];
+    const forumRewardId = cfg?.forum_birthday_reward_id?.[0];
+    return Boolean(
+        line.forum_birthday_line ||
+        (birthdayProductId && line.get_product()?.id === birthdayProductId) ||
+        (forumRewardId && line.reward_id === forumRewardId)
+    );
 }
 
 /**
@@ -107,9 +129,7 @@ patch(Order.prototype, {
         if (!cfg?.forum_birthday_promo_active) {
             return;
         }
-        console.log("[bday] scheduleSync called, running=", this._forumBirthdaySyncRunning, "cooldown=", !!this._forumBirthdaySyncCooldown, "hasTimer=", !!this._forumBirthdaySyncTimer, new Error().stack.split("\n")[2]);
         if (this._forumBirthdaySyncRunning || this._forumBirthdaySyncCooldown) {
-            console.log("[bday] scheduleSync BLOCKED by running/cooldown flag");
             return;
         }
         if (this._forumBirthdaySyncTimer) {
@@ -126,9 +146,7 @@ patch(Order.prototype, {
      */
     async _forumBirthdaySyncExecute() {
         const cfg = this.pos?.config;
-        console.log("[bday] execute called, running=", this._forumBirthdaySyncRunning);
         if (!cfg?.forum_birthday_promo_active || this._forumBirthdaySyncRunning) {
-            console.log("[bday] execute ABORTED active=", cfg?.forum_birthday_promo_active, "running=", this._forumBirthdaySyncRunning);
             return;
         }
         this._forumBirthdaySyncRunning = true;
@@ -141,7 +159,6 @@ patch(Order.prototype, {
                     line.forum_birthday_line ||
                     (forumRewardId && line.reward_id === forumRewardId);
                 if (isForumLine) {
-                    console.log("[bday] removing old birthday line");
                     this._unlinkOrderline(line);
                 }
             }
@@ -149,27 +166,22 @@ patch(Order.prototype, {
             const hasBirthRef =
                 partner && (partner.birthdate_date || partner.birthdate);
             if (!hasBirthRef) {
-                console.log("[bday] no birthdate, exit");
                 return;
             }
             const productId = cfg.forum_birthday_product_id?.[0];
             const product = productId ? this.pos.db.get_product_by_id(productId) : null;
             if (!product) {
-                console.log("[bday] no product, exit");
                 return;
             }
             const rewardId = cfg.forum_birthday_reward_id?.[0];
             if (!rewardId) {
-                console.log("[bday] no rewardId, exit");
                 return;
             }
             const orm = this.pos.env.services.orm;
-            console.log("[bday] calling eligibility RPC");
             const elig = await orm.call("pos.session", "forum_birthday_check_eligibility", [
                 [this.pos.pos_session.id],
                 partner.id,
             ]);
-            console.log("[bday] eligibility result=", elig, "running=", this._forumBirthdaySyncRunning);
             if (!elig?.eligible) {
                 return;
             }
@@ -185,7 +197,6 @@ patch(Order.prototype, {
                 base += forumBirthdayLinePromoBaseAmount(line);
             }
             base = round_pr(base, this.pos.currency.rounding);
-            console.log("[bday] base=", base, "percent=", percent);
             if (base <= 0) {
                 return;
             }
@@ -193,7 +204,6 @@ patch(Order.prototype, {
             if (discountAmount <= 0) {
                 return;
             }
-            console.log("[bday] adding line discountAmount=", discountAmount);
             this._forumBirthdaySuppressLoyaltyRewards = true;
             try {
                 await this.add_product(product, {
@@ -209,16 +219,13 @@ patch(Order.prototype, {
             } finally {
                 this._forumBirthdaySuppressLoyaltyRewards = false;
             }
-            console.log("[bday] line added, calling _updateRewards, running=", this._forumBirthdaySyncRunning);
             await this._updateRewards();
-            console.log("[bday] _updateRewards done, running=", this._forumBirthdaySyncRunning);
             // Restore the cashier's selection — add_product selects the birthday
             // line, which would deselect whatever the cashier had chosen.
             if (savedSelectedLine && this.get_orderlines().includes(savedSelectedLine)) {
                 this.select_orderline(savedSelectedLine);
             }
         } finally {
-            console.log("[bday] execute FINALLY, setting running=false");
             this._forumBirthdaySyncRunning = false;
             // The reactive system (Owl) fires _updateRewardLines via microtasks
             // after the async function settles. All microtasks are guaranteed to
@@ -228,8 +235,32 @@ patch(Order.prototype, {
             this._forumBirthdaySyncCooldown = true;
             setTimeout(() => {
                 this._forumBirthdaySyncCooldown = false;
-                console.log("[bday] cooldown cleared");
             }, 0);
         }
+    },
+});
+
+patch(Orderline.prototype, {
+    /**
+     * Excluye la línea de cumpleaños SOLO de los programas que disparan el loop.
+     *
+     * El motor estándar (`pointsForPrograms`) suma esta línea a `totalProductQty`
+     * para evaluar el `minimum_qty`. Como la línea se agrega/quita en cada sync,
+     * eso hace oscilar la elegibilidad de las promos de `cambio_precio`
+     * (`pricelist_change`/`fixed_price`) y dispara un loop infinito. La excluimos
+     * solo de esos programas (lo que estabiliza `getClaimableRewards` y corta el
+     * loop), pero la dejamos contar en los programas normales de puntos para que
+     * el descuento reste de la base (puntos sobre el neto).
+     */
+    ignoreLoyaltyPoints({ program } = {}) {
+        if (isForumBirthdayLine(this)) {
+            const hasCustomPriceReward = program?.rewards?.some(
+                (r) => r.reward_type === "pricelist_change" || r.reward_type === "fixed_price"
+            );
+            if (hasCustomPriceReward) {
+                return true;
+            }
+        }
+        return super.ignoreLoyaltyPoints(...arguments);
     },
 });
