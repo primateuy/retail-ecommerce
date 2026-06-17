@@ -1,0 +1,171 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!--
+        Marcas (sellos) por código de issuer para el proveedor OCA.
+        Fuente: Especificaciones POSLink v135, "15. Anexo 4: Códigos de emisores (issuers)".
+        Cada marca es una payment.method hija de `payment_method_oca`, con `code` = código de
+        issuer (2 dígitos, 0 adelante). El resolver `_resolve_oca_issuer_display` la usa por código.
+        noupdate="1": son defaults sembrados; las ediciones manuales se conservan en -u.
+        Donde el Anexo repetía un código con variantes (07, 52, 55) se unificó a la marca principal.
+    -->
+    <data noupdate="1">
+
+        <record id="brand_oca_02" model="payment.method">
+            <field name="name">American Express</field>
+            <field name="code">02</field>
+            <field name="primary_payment_method_id" ref="payment_method_oca"/>
+            <field name="active">True</field>
+        </record>
+        <record id="brand_oca_04" model="payment.method">
+            <field name="name">Créditos Directos</field>
+            <field name="code">04</field>
+            <field name="primary_payment_method_id" ref="payment_method_oca"/>
+            <field name="active">True</field>
+        </record>
+        <record id="brand_oca_05" model="payment.method">
+            <field name="name">Cabal</field>
+            <field name="code">05</field>
+            <field name="primary_payment_method_id" ref="payment_method_oca"/>
+            <field name="active">True</field>
+        </record>
+        <record id="brand_oca_07" model="payment.method">
+            <field name="name">Cabal Débito</field>
+            <field name="code">07</field>
+            <field name="primary_payment_method_id" ref="payment_method_oca"/>
+            <field name="active">True</field>
+        </record>
+        <record id="brand_oca_08" model="payment.method">
+            <field name="name">Diners</field>
+            <field name="code">08</field>
+            <field name="primary_payment_method_id" ref="payment_method_oca"/>
+            <field name="active">True</field>
+        </record>
+        <record id="brand_oca_10" model="payment.method">
+            <field name="name">Edenred</field>
+            <field name="code">10</field>
+            <field name="primary_payment_method_id" ref="payment_method_oca"/>
+            <field name="active">True</field>
+        </record>
+        <record id="brand_oca_11" model="payment.method">
+            <field name="name">Visa Débito BPS Prestaciones</field>
+            <field name="code">11</field>
+            <field name="primary_payment_method_id" ref="payment_method_oca"/>
+            <field name="active">True</field>
+        </record>
+        <record id="brand_oca_13" model="payment.method">
+            <field name="name">Líder</field>
+            <field name="code">13</field>
+            <field name="primary_payment_method_id" ref="payment_method_oca"/>
+            <field name="active">True</field>
+        </record>
+        <record id="brand_oca_14" model="payment.method">
+            <field name="name">Líder BPS</field>
+            <field name="code">14</field>
+            <field name="primary_payment_method_id" ref="payment_method_oca"/>
+            <field name="active">True</field>
+        </record>
+        <record id="brand_oca_15" model="payment.method">
+            <field name="name">Maestro</field>
+            <field name="code">15</field>
+            <field name="primary_payment_method_id" ref="payment_method_oca"/>
+            <field name="active">True</field>
+        </record>
+        <record id="brand_oca_16" model="payment.method">
+            <field name="name">Maestro BPS</field>
+            <field name="code">16</field>
+            <field name="primary_payment_method_id" ref="payment_method_oca"/>
+            <field name="active">True</field>
+        </record>
+        <record id="brand_oca_19" model="payment.method">
+            <field name="name">Mides</field>
+            <field name="code">19</field>
+            <field name="primary_payment_method_id" ref="payment_method_oca"/>
+            <field name="active">True</field>
+        </record>
+        <record id="brand_oca_21" model="payment.method">
+            <field name="name">OCA</field>
+            <field name="code">21</field>
+            <field name="primary_payment_method_id" ref="payment_method_oca"/>
+            <field name="active">True</field>
+        </record>
+        <record id="brand_oca_24" model="payment.method">
+            <field name="name">Visa</field>
+            <field name="code">24</field>
+            <field name="primary_payment_method_id" ref="payment_method_oca"/>
+            <field name="active">True</field>
+        </record>
+        <record id="brand_oca_34" model="payment.method">
+            <field name="name">Visa Débito</field>
+            <field name="code">34</field>
+            <field name="primary_payment_method_id" ref="payment_method_oca"/>
+            <field name="active">True</field>
+        </record>
+        <record id="brand_oca_35" model="payment.method">
+            <field name="name">OCA BPS</field>
+            <field name="code">35</field>
+            <field name="primary_payment_method_id" ref="payment_method_oca"/>
+            <field name="active">True</field>
+        </record>
+        <record id="brand_oca_44" model="payment.method">
+            <field name="name">Visa Alimentación</field>
+            <field name="code">44</field>
+            <field name="primary_payment_method_id" ref="payment_method_oca"/>
+            <field name="active">True</field>
+        </record>
+        <record id="brand_oca_52" model="payment.method">
+            <field name="name">Mastercard</field>
+            <field name="code">52</field>
+            <field name="primary_payment_method_id" ref="payment_method_oca"/>
+            <field name="active">True</field>
+        </record>
+        <record id="brand_oca_54" model="payment.method">
+            <field name="name">Mastercard Prepaga</field>
+            <field name="code">54</field>
+            <field name="primary_payment_method_id" ref="payment_method_oca"/>
+            <field name="active">True</field>
+        </record>
+        <record id="brand_oca_55" model="payment.method">
+            <field name="name">Creditel</field>
+            <field name="code">55</field>
+            <field name="primary_payment_method_id" ref="payment_method_oca"/>
+            <field name="active">True</field>
+        </record>
+        <record id="brand_oca_59" model="payment.method">
+            <field name="name">Club del Este</field>
+            <field name="code">59</field>
+            <field name="primary_payment_method_id" ref="payment_method_oca"/>
+            <field name="active">True</field>
+        </record>
+        <record id="brand_oca_74" model="payment.method">
+            <field name="name">Anda</field>
+            <field name="code">74</field>
+            <field name="primary_payment_method_id" ref="payment_method_oca"/>
+            <field name="active">True</field>
+        </record>
+        <record id="brand_oca_75" model="payment.method">
+            <field name="name">Passcard</field>
+            <field name="code">75</field>
+            <field name="primary_payment_method_id" ref="payment_method_oca"/>
+            <field name="active">True</field>
+        </record>
+        <record id="brand_oca_86" model="payment.method">
+            <field name="name">Líder Sodexo</field>
+            <field name="code">86</field>
+            <field name="primary_payment_method_id" ref="payment_method_oca"/>
+            <field name="active">True</field>
+        </record>
+        <record id="brand_oca_97" model="payment.method">
+            <field name="name">Pago Después</field>
+            <field name="code">97</field>
+            <field name="primary_payment_method_id" ref="payment_method_oca"/>
+            <field name="active">True</field>
+        </record>
+        <record id="brand_oca_99" model="payment.method">
+            <field name="name">TOKE</field>
+            <field name="code">99</field>
+            <field name="primary_payment_method_id" ref="payment_method_oca"/>
+            <field name="active">True</field>
+        </record>
+
+    </data>
+</odoo>

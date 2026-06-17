@@ -1058,10 +1058,14 @@ class PaymentTransaction(models.Model):
     
     def _get_fiserv_card_brand_display_name(self, itd_response):
         """
-        Nombre de marca para mostrar: prioriza EMV (p. ej. Mastercard) sobre el código Issuer.
+        Nombre de marca (sello) para mostrar.
 
-        ITD suele enviar EmvApplicationName cuando la tarjeta pasó chip; el código Issuer
-        a veces no coincide con tablas locales y generaba textos genéricos tipo «Emisor 52».
+        Prioridad (decisión 2026-06-17):
+          1) Marca CONFIGURADA en el proveedor según el código de Issuer (Anexo 4 POSLink):
+             si existe una marca (payment.method hija de `payment_method_fiserv`) con ese
+             código, MANDA sobre todo lo demás.
+          2) Nombre EMV del pinpad (`EmvApplicationName`).
+          3) Fallback al mapeo histórico hardcodeado (`_get_fiserv_issuer_name`).
 
         Args:
             itd_response (dict): Respuesta completa del pinpad / ITD.
@@ -1069,12 +1073,44 @@ class PaymentTransaction(models.Model):
         Returns:
             str: Texto legible para issuer_name en payment.transaction.
         """
+        issuer_code = itd_response.get('Issuer') if isinstance(itd_response, dict) else itd_response
+        brand_name = self._brand_name_from_provider_code('odoo_pos_fiserv_core.payment_method_fiserv', issuer_code)
+        if brand_name:
+            return brand_name
         if not isinstance(itd_response, dict):
             return self._get_fiserv_issuer_name(itd_response)
         emv_name = (itd_response.get('EmvApplicationName') or '').strip()
         if emv_name:
             return emv_name
         return self._get_fiserv_issuer_name(itd_response.get('Issuer'))
+
+    def _normalize_issuer_code(self, issuer_code):
+        """Normaliza el código de issuer al formato del Anexo 4 (2 dígitos con 0 adelante;
+        ej. 2 -> '02'). Los no numéricos se devuelven como texto sin espacios."""
+        if issuer_code in (None, False, ''):
+            return ''
+        try:
+            return str(int(issuer_code)).zfill(2)
+        except (TypeError, ValueError):
+            return str(issuer_code).strip()
+
+    def _brand_name_from_provider_code(self, primary_method_xmlid, issuer_code):
+        """Devuelve el nombre de la marca (sello) CONFIGURADA en el proveedor para ese código.
+
+        Las marcas se modelan como `payment.method` hijas del método primario del proveedor
+        (`payment_method_fiserv`), con `code` = código de issuer del Anexo 4 de POSLink.
+        """
+        code = self._normalize_issuer_code(issuer_code)
+        if not code:
+            return ''
+        method = self.env.ref(primary_method_xmlid, raise_if_not_found=False)
+        if not method:
+            return ''
+        brand = self.env['payment.method'].search([
+            ('primary_payment_method_id', '=', method.id),
+            ('code', '=', code),
+        ], limit=1)
+        return brand.name if brand else ''
 
     def _get_fiserv_issuer_name(self, issuer_code):
         """

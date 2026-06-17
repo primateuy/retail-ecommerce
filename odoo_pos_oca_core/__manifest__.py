@@ -17,7 +17,7 @@ arrastra automáticamente desde ``odoo_pos_oca`` y ``odoo_pos_oca_backend``.
     "author": "PRIMATE",
     "website": "https://www.primate.com",
     "category": "Accounting/Payment",
-    "version": "17.0.2.2.0",
+    "version": "17.0.2.3.0",
     "depends": [
         "base",
         "bus",
@@ -29,6 +29,7 @@ arrastra automáticamente desde ``odoo_pos_oca`` y ``odoo_pos_oca_backend``.
     "data": [
         "security/ir.model.access.csv",
         "data/oca_installation_data.xml",
+        "data/oca_card_brands.xml",
         "views/payment_provider_views.xml",
         "views/payment_transaction_views.xml",
     ],
