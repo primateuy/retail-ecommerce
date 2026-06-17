@@ -14,78 +14,121 @@
         </template>
 
         <!--
-            Copia primaria de loyalty.loyalty_report: mismos textos y bloques que el estándar.
-            - Sin web.internal_layout (sustituido por forum_minimal_report_layout).
+            Ticket de cupón de próxima compra (80 mm térmico).
+            Layout propio (no hereda el reporte estándar en inglés):
             - Recuadro fiscal tipo ticket de cambio arriba.
-            - Centrado y tamaños razonables para 80 mm; barcode PNG embebido para QZ.
+            - Encabezado fijo en español con el descuento de la recompensa (placeholder {descuento}).
+            - Línea de alcance editable por programa (forum_receipt_scope).
+            - Barcode PNG embebido a todo el ancho, con quiet zone, para pistola láser.
         -->
-        <template id="loyalty_report_pos_thermal" inherit_id="loyalty.loyalty_report" primary="True">
-            <!-- Bloque: quitar internal_layout (cabecera PDF con fecha y numeración). -->
-            <xpath expr="//t[@t-call='web.internal_layout']" position="attributes">
-                <attribute name="t-call">pos_forum_qz_print.forum_minimal_report_layout</attribute>
-            </xpath>
-
-            <!-- Bloque: cabecera tipo ticket de cambio. -->
-            <xpath expr="//div[contains(@class,'card')][1]" position="before">
+        <!--
+            Se declara como <record> explícito (no <template>) para forzar
+            inherit_id=False: antes este id heredaba loyalty.loyalty_report y el
+            shorthand <template> no limpia el inherit_id viejo en la BD al actualizar.
+        -->
+        <record id="loyalty_report_pos_thermal" model="ir.ui.view">
+            <field name="name">loyalty_report_pos_thermal</field>
+            <field name="type">qweb</field>
+            <field name="key">pos_forum_qz_print.loyalty_report_pos_thermal</field>
+            <field name="inherit_id" eval="False"/>
+            <field name="arch" type="xml">
+                <t t-name="pos_forum_qz_print.loyalty_report_pos_thermal">
+            <t t-call="pos_forum_qz_print.forum_minimal_report_layout">
+                <!-- Datos de la sucursal/empresa para el recuadro fiscal. -->
                 <t t-set="pos_o" t-value="o.source_pos_order_id"/>
                 <t t-set="branch_partner"
                    t-value="(pos_o and (pos_o.config_id.picking_type_id.warehouse_id.partner_id if pos_o.config_id and pos_o.config_id.picking_type_id and pos_o.config_id.picking_type_id.warehouse_id and pos_o.config_id.picking_type_id.warehouse_id.partner_id else (pos_o.config_id.company_id.partner_id if pos_o.config_id and pos_o.config_id.company_id else pos_o.company_id.partner_id))) or (o.program_id.company_id.partner_id if o.program_id and o.program_id.company_id else False)"/>
                 <t t-set="comp" t-value="pos_o.company_id if pos_o else (o.program_id.company_id if o.program_id else o.env.company)"/>
-                <div style="border: 1px solid #000; padding: 8px 6px; text-align: center; margin-bottom: 10px; line-height: 1.35;">
-                    <div style="font-weight: bold; font-size: 11px;">
-                        <span t-field="comp.name"/>
-                    </div>
-                    <div t-if="branch_partner and branch_partner.vat">
-                        RUT: <span t-field="branch_partner.vat"/>
-                    </div>
-                    <div t-if="branch_partner and branch_partner.phone">
-                        Teléfono: <span t-field="branch_partner.phone"/>
-                    </div>
-                    <div t-if="branch_partner and (branch_partner.street or branch_partner.city)">
-                        <span t-if="branch_partner.street" t-field="branch_partner.street"/>
-                        <t t-if="branch_partner.street and branch_partner.city"> - </t>
-                        <span t-if="branch_partner.city" t-field="branch_partner.city"/>
-                    </div>
-                </div>
-            </xpath>
 
-            <!-- Bloque: ancho térmico en el contenedor interior. -->
-            <xpath expr="//div[contains(@class,'page')][1]" position="attributes">
-                <attribute name="style">max-width: 80mm; margin: 0 auto; padding: 4px 0; text-align: center;</attribute>
-            </xpath>
-
-            <!-- Bloque: fila Bootstrap a ancho completo y centrada. -->
-            <xpath expr="//div[contains(@class,'row') and contains(@class,'text-center')][1]" position="attributes">
-                <attribute name="style">width: 100%; margin: 0; text-align: center; display: block;</attribute>
-            </xpath>
-
-            <xpath expr="//div[contains(@class,'o_offer')][1]" position="attributes">
-                <attribute name="style">width: 100%; max-width: 100%; padding: 0; margin: 0 auto; text-align: center;</attribute>
-            </xpath>
-
-            <!-- Bloque: título grande más legible en rollo (mismo texto). -->
-            <xpath expr="//h1[contains(@class,'fw-bold')]" position="attributes">
-                <attribute name="style">font-size: 16px; font-weight: bold; margin: 8px 0; line-height: 1.2;</attribute>
-            </xpath>
-
-            <!-- Bloque: barcode embebido (QZ / impresión sin /report/barcode/). -->
-            <xpath expr="//span[@t-field='o.code'][contains(@t-options,'barcode')]" position="replace">
+                <!--
+                    Cuerpo del cupón. Estilo de tarjeta (eyebrow + título + descuento rojo +
+                    separadores dashed + caja roja FORUM + pie). CSS adaptado a wkhtmltopdf:
+                    sin -webkit-mask, sin radial-gradient, sin box-shadow ni flex (se usan
+                    text-align / inline-block / px), que el motor no soporta o renderiza mal.
+                -->
+                <t t-set="discount_display" t-value="o.program_id._forum_get_discount_display()"/>
+                <t t-set="scope_message" t-value="o.program_id._forum_render_receipt_scope(o)"/>
                 <t t-set="coupon_barcode_uri" t-value="o.get_pos_coupon_barcode_data_uri()"/>
-                <div t-if="coupon_barcode_uri" style="text-align: center; margin: 10px 0;">
-                    <img t-att-src="coupon_barcode_uri" alt="Code" style="max-width: 100%; height: auto;"/>
-                </div>
-                <div t-if="not coupon_barcode_uri" style="text-align: center;">
-                    <span t-field="o.code" t-options="{'widget': 'barcode', 'width': 600, 'height': 100}"/>
-                </div>
-            </xpath>
 
-            <!-- Bloque: pie: nombre de compañía del programa (evita widget contact con datos demo). -->
-            <xpath expr="//span[@t-field='o.program_id.company_id.partner_id']" position="replace">
-                <div class="text-center" style="font-size: 9px; margin-top: 6px;">
-                    <span t-field="o.program_id.company_id.name"/>
+                <div style="background: #ffffff; color: #1c1c1c; padding: 18px 14px 12px; text-align: center; font-family: Arial, Helvetica, sans-serif;">
+
+                    <!-- Eyebrow: nombre de la compañía. -->
+                    <div style="font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; color: #6b6b6b; margin-bottom: 4px;">
+                        FORUM INDUSTRIES CO.
+                    </div>
+
+
+                    <!-- Título. -->
+                    <div style="font-family: 'Arial Narrow', 'Oswald', Arial, sans-serif; font-weight: bold; font-size: 30px; margin: 0 0 16px; color: #1c1c1c;">¡Felicidades!</div>
+
+                    <!-- Frase de descuento (porcentaje dinámico en rojo grande). -->
+                    <div t-if="discount_display" style="font-size: 15px; line-height: 1.45; margin: 0 0 4px; font-weight: 500;">
+                        Te regalamos un
+                        <b style="font-size: 26px; color: #c1272d; font-weight: 800;" t-out="discount_display"/>
+                        de descuento en tu próxima compra
+                    </div>
+                    <div t-else="" style="font-size: 15px; line-height: 1.45; margin: 0 0 4px; font-weight: 500;">
+                        <t t-foreach="o.program_id.reward_ids" t-as="reward">
+                            <b t-out="reward.description"/>
+                            <br t-if="not reward_last"/>
+                        </t>
+                        <div>en tu próxima compra</div>
+                    </div>
+
+                    <!-- Línea de alcance editable (con placeholders resueltos). -->
+                    <div t-if="scope_message" style="font-style: italic; font-size: 13px; color: #6b6b6b; margin: 6px 8px 0;"
+                         t-out="scope_message"/>
+
+                    <!-- Separador troquelado. -->
+                    <div style="border-top: 1.5px dashed #cfcfcf; margin: 20px 0;"></div>
+
+                    <!--
+                        Barcode: mismo patrón que el ticket de cambio (odoo_pos_oca). wkhtmltopdf
+                        ignora width:100% en <img> y respeta el tamaño en px; como el barcode
+                        (400px) es más ancho que el área de 80mm, se posiciona absoluto y se centra
+                        sobre el ancho de página (left:50% + margin-left negativo de media imagen).
+                        El contenedor reserva la altura para no solapar lo que sigue.
+                    -->
+                    <div t-if="coupon_barcode_uri" style="position: relative; height: 80px; margin: 0 0 6px;">
+                        <img t-att-src="coupon_barcode_uri" alt="Código de barras del cupón"
+                             style="position: absolute; left: 50%; margin-left: -200px; width: 400px; height: 80px;"/>
+                    </div>
+                    <div t-else="" style="margin: 0 0 6px;">
+                        <span t-field="o.code" t-options="{'widget': 'barcode', 'width': 600, 'height': 160}"/>
+                    </div>
+
+                    <!-- Código legible. -->
+                    <div style="font-family: 'Courier New', monospace; font-size: 14px; letter-spacing: 0.06em; color: #1c1c1c;">
+                        <span t-out="o.code"/>
+                    </div>
+
+                    <!-- Separador troquelado. -->
+                    <div style="border-top: 1.5px dashed #cfcfcf; margin: 20px 0;"></div>
+
+                    <!-- Cierre + caja de marca. -->
+                    <div style="font-weight: 800; font-size: 15px; letter-spacing: 0.06em; margin-bottom: 14px;">Gracias</div>
+                    <div style="margin-bottom: 16px;">
+                        <div style="display: inline-block; background: #c1272d; color: #ffffff; width: 64px; height: 64px;">
+                            <div style="padding-top: 17px;">
+                                <div style="font-weight: 800; font-size: 13px; letter-spacing: 0.03em;">FORUM</div>
+                                <div style="font-size: 6px; letter-spacing: 0.04em; margin-top: 2px;">INDUSTRIES CO.</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Pie: vigencia (dinámica) + condiciones. -->
+                    <div style="border-top: 1.5px dashed #cfcfcf; padding-top: 12px; font-size: 11px; color: #6b6b6b; line-height: 1.6;">
+                        <t t-if="o.expiration_date">
+                            Válido hasta el
+                            <span t-field="o.expiration_date" t-options='{"format": "dd/MM/yyyy"}'/>
+                            · </t><br/>
+                        Presentar este cupón en caja
+                    </div>
                 </div>
-            </xpath>
-        </template>
+            </t>
+                </t>
+            </field>
+        </record>
 
         <template id="loyalty_report_pos_thermal_i18n">
             <t t-call="web.html_container">
