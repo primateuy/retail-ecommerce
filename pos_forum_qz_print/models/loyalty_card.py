@@ -26,8 +26,11 @@ class LoyaltyCard(models.Model):
         if not value:
             return False
         try:
+            # Mismos parámetros que el ticket de cambio (get_change_ticket_barcode_data_uri):
+            # PNG ancho/alta resolución que luego se muestra a 400x80 px posicionado
+            # absoluto sobre el ancho de página. Así sale igual de nítido.
             png = self.env["ir.actions.report"].barcode(
-                "Code128", value, width=280, height=72
+                "Code128", value, width=600, height=80
             )
         except Exception as err:
             _logger.debug(

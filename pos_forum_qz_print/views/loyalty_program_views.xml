@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+	<record id="loyalty_program_view_form_forum_receipt" model="ir.ui.view">
+		<field name="name">loyalty.program.form.forum.receipt</field>
+		<field name="model">loyalty.program</field>
+		<field name="inherit_id" ref="loyalty.loyalty_program_view_form"/>
+		<field name="arch" type="xml">
+			<xpath expr="//notebook/page[@name='communications']" position="after">
+				<page string="Ticket próxima compra"
+					name="forum_coupon_receipt"
+					invisible="applies_on == 'current' or program_type in ('gift_card', 'ewallet')">
+					<field name="forum_receipt_scope"
+						nolabel="1"
+						class="w-100 forum-receipt-scope"
+						placeholder="Ej: Válido en productos de la categoría Jardinería."/>
+					<div class="text-muted mt-2">
+						Placeholders disponibles:
+						<code>{descuento}</code> (porcentaje de la recompensa) ·
+						<code>{codigo}</code> (código del cupón).
+					</div>
+				</page>
+			</xpath>
+		</field>
+	</record>
+
+</odoo>
