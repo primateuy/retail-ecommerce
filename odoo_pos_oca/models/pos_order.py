@@ -354,8 +354,11 @@ class PosOrder(models.Model):
         if not value:
             return False
         try:
+            # PNG ancho/alta resolución: al estirarse a width:100% en el ticket
+            # mantiene nitidez (wkhtmltopdf escala con height:auto preservando
+            # la proporción ~5:1).
             png = self.env["ir.actions.report"].barcode(
-                "Code128", value, width=300, height=80
+                "Code128", value, width=600, height=80
             )
         except Exception as err:
             _logger.debug(
