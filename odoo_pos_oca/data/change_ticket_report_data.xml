@@ -212,7 +212,7 @@
                         <t t-set="cfe_joined" t-value="' '.join(cfe_parts) if cfe_parts else (cfe_serie_num or cfe_type_code or '')"/>
 
                         <!-- Diseño tipo ticket térmico (referencia retail Uruguay) -->
-                        <div class="page" style="max-width: 80mm; margin: 0 auto; padding: 8px 6px; font-family: Arial, Helvetica, sans-serif; font-size: 10px; color: #000; text-transform: uppercase;">
+                        <div class="page" style="max-width: 80mm; margin: 0 auto; padding: 8px 4px; font-family: Arial, Helvetica, sans-serif; font-size: 10px; color: #000; text-transform: uppercase;">
 
                             <!-- Bloque: marca / nombre comercial (sucursal o compañía) 
                             <div style="text-align:center; font-weight: bold; font-size: 18px; letter-spacing: 1px; margin-bottom: 10px;">
@@ -240,9 +240,6 @@
 
                             <!-- Bloque: metadatos CFE / factura / fecha (referencia ticket físico) -->
                             <div style="width: 100%; margin-bottom: 8px; font-size: 9px; overflow: hidden;">
-                                <div style="float: left; max-width: 55%;">
-                                    <span t-if="cfe_joined" t-esc="cfe_joined"/>
-                                </div>
                                 <div style="float: right; text-align: right; max-width: 45%;">
                                     <div t-if="o.account_move and o.account_move.name">
                                         <span t-field="o.account_move.name"/>
@@ -254,32 +251,39 @@
                             </div>
 
                             <div style="margin-bottom: 8px; font-size: 10px;">
-                                <strong>TICKET DE CAMBIO</strong> — <span t-esc="ticket_number"/>
+                                <strong>TICKET DE CAMBIO</strong> <span t-esc="ticket_number"/>
                             </div>
                             <div style="margin-bottom: 10px; font-size: 9px;">
                                 <span t-if="cfe_type_name">Tipo CFE: <span t-esc="cfe_type_name"/></span>
                                 <span t-if="cfe_serie_num"> | CFE: <span t-esc="cfe_serie_num"/></span>
                             </div>
 
-                            <!-- Bloque: vendedor (sin listado de productos ni precios en ticket de cambio) -->
+                            <!-- Bloque: vendedor (sin listado de productos ni precios en ticket de cambio).
+                                 Usa el vendedor de la orden (order_salesperson_id, módulo
+                                 pos_forum_salesperson_required), no el usuario que imprime/inició sesión.
+                                 Fallback a user_id cuando ese módulo no está instalado. -->
+                            <t t-set="ticket_vendor"
+                               t-value="o.order_salesperson_id.name if ('order_salesperson_id' in o._fields and o.order_salesperson_id) else (o.user_id.name if o.user_id else '')"/>
                             <div style="margin-bottom: 8px; font-size: 10px;">
-                                VENDEDOR: <span t-if="o.user_id" t-field="o.user_id.name"/>
+                                VENDEDOR: <span t-esc="ticket_vendor"/>
                             </div>
 
-                            <!-- Código de barras nº de orden (entre vendedor y PDV / sucursal) -->
-                            <div t-if="barcode_data_uri" style="text-align: center; margin: 10px 0 12px 0;">
+                            <!-- Código de barras nº de orden (entre vendedor y PDV / sucursal).
+                                 wkhtmltopdf ignora width:100% en <img> y respeta el tamaño en px;
+                                 además .page (80mm) es más angosto que el barcode deseado. Se posiciona
+                                 absoluto y se centra sobre el ancho de página (left:50% + margin-left
+                                 negativo de media imagen) para que ocupe ~600px sin que .page lo recorte.
+                                 El contenedor reserva la altura para no solapar lo que sigue. -->
+                            <div t-if="barcode_data_uri" style="position: relative; height: 80px; margin: 10px 0 16px 0;">
                                 <img t-att-src="barcode_data_uri" alt="Orden"
-                                     style="max-width: 100%; height: auto;"/>
-                                <div style="font-size: 9px; margin-top: 4px; text-transform: none;">
-                                    <span t-esc="order_number"/>
-                                </div>
+                                     style="position: absolute; left: 50%; margin-left: -200px; width: 400px; height: 80px;"/>
+                            </div>
+                            <div t-if="barcode_data_uri" style="text-align: center; font-size: 9px; margin-bottom: 8px; text-transform: none;">
+                                <span t-esc="order_number"/>
                             </div>
 
                             <!-- PDV / sucursal (debajo del código de barras) -->
                             <div style="margin-bottom: 12px; font-size: 10px; text-align: center; line-height: 1.35;">
-                                <div t-if="o.config_id">
-                                    <span>PDV — </span><span t-field="o.config_id.name"/>
-                                </div>
                                 <div t-if="o.config_id and o.config_id.picking_type_id and o.config_id.picking_type_id.warehouse_id"
                                      style="margin-top: 4px;">
                                     <span>SUCURSAL: </span>
@@ -295,13 +299,8 @@
                                 LOS CAMBIOS SE PODRAN REALIZAR DENTRO DE UN PLAZO DE 30 DIAS
                             </div>
 
-                            <!-- Nota HTML opcional desde configuración POS -->
-                            <div t-if="o.config_id and o.config_id.change_ticket_note" style="text-align: center; font-size: 9px; margin-top: 8px; text-transform: none;">
-                                <div t-field="o.config_id.change_ticket_note"/>
-                            </div>
-
                             <div style="text-align: center; font-size: 9px; margin-top: 12px; color: #555;">
-                                <span t-if="o.session_id">Sesión: <span t-field="o.session_id.name"/></span>
+                                <span t-if="o.session_id">Sesion: <span t-field="o.session_id.name"/></span>
                             </div>
                         </div>
                     </t>
