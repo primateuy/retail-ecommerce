@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates id="template" xml:space="preserve">
+
+    <!-- Renombrar el botón principal "Print Receipt" a "Imprimir Boleta".
+         El texto nativo es un nodo suelto tras el <i>, por lo que se reemplaza
+         el botón completo para que el rename sea predecible. -->
+    <t t-name="odoo_pos_no_invoice.ReceiptScreen" t-inherit="point_of_sale.ReceiptScreen" t-inherit-mode="extension" owl="1">
+        <xpath expr="//button[@t-on-click='printReceipt']" position="replace">
+            <button class="button print btn btn-lg btn-secondary w-100 py-3" t-on-click="printReceipt">
+                <i class="fa fa-print ms-2" t-ref="order-print-receipt-button"></i> Imprimir Boleta
+            </button>
+        </xpath>
+    </t>
+
+</templates>
