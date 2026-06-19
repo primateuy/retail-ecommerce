@@ -279,7 +279,8 @@ class PosOrder(models.Model):
             if tipo:
                 tipo_map = {
                     '101': 'eTicket',
-                    '111': 'eTicket',
+                    '102': 'eTicket',
+                    '111': 'eFactura',
                     '112': 'eFactura',
                     '113': 'eFactura Exportación',
                     '181': 'eRemito',
