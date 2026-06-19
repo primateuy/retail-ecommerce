@@ -9,6 +9,8 @@
                 <xpath expr="//sheet" position="inside">
                     <group name="fenicio_pago" string="Datos de Pago Fenicio" invisible="not fenicio_raw_pago">
                         <group>
+                            <field name="issuer_name"/>
+                            <field name="payment_method_id" string="Marca"/>
                             <field name="fenicio_numero_tarjeta"/>
                             <field name="fenicio_terminacion_tarjeta"/>
                             <field name="fenicio_bin"/>

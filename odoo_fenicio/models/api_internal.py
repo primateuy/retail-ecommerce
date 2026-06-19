@@ -550,6 +550,10 @@ class ApiInternal(models.Model):
             if picking_error:
                 raise UserError(picking_error)
 
+            # Pago(s) registrado(s) en este request, para linkearlos luego a la
+            # transacción de pago de Fenicio.
+            created_payment = self.env['account.payment']
+
             auto_invoice = self.env['ir.config_parameter'].sudo().get_param('sale.automatic_invoice')
             if auto_invoice and estado in ['PAGO_PENDIENTE', 'REQUIERE_APROBACION', 'APROBADA']:
 
@@ -578,12 +582,14 @@ class ApiInternal(models.Model):
                             )
                             continue
 
-                        invoice_id.create_payment_fenicio(json_data_pago, mode_update=(len(payment_ids) > 0), payment_ids=payment_ids)
+                        payment = invoice_id.create_payment_fenicio(json_data_pago, mode_update=(len(payment_ids) > 0), payment_ids=payment_ids)
+                        if payment:
+                            created_payment |= payment
 
             # La transacción de pago se crea siempre que el estado sea APROBADA,
             # independientemente de si se generó factura automática o no
             if estado == 'APROBADA' and 'pago' in json_data and json_data['pago']:
-                transaction_result = sale_order_id.create_payment_transaction(json_data)
+                transaction_result = sale_order_id.create_payment_transaction(json_data, payment_id=created_payment[:1])
                 if 'error' in transaction_result:
                     raise UserError(transaction_result['error'])
             

@@ -3,7 +3,7 @@
 
 
         <!-- Método contable Fenicio.
-             Necesario para que el inverse de payment.provider.journal_id pueda
+             Necesario para que si e inverse de payment.provider.journal_id pueda
              crear/actualizar el account.payment.method.line asociado al
              provider. Sin este registro, _ensure_payment_method_line hace
              return temprano y el cambio de diario NO se persiste — el compute

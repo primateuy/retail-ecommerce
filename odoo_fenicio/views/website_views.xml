@@ -12,6 +12,7 @@
                             <field name="fenicio_catalog_url" placeholder="https://example.com/"/>
                             <field name="fenicio_token" password="True"/>
                             <field name="fenicio_sale_order_type_id"/>
+                            <field name="fenicio_payment_journal_id"/>
                             <field name="fenicio_cantidad_stock_bydefault"/>
                         </group>
                         <group>

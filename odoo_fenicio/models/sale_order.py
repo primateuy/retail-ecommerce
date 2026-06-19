@@ -56,7 +56,7 @@ class SaleOrder(models.Model):
 
         self.write(vals)
 
-    def create_payment_transaction(self, json_data):
+    def create_payment_transaction(self, json_data, payment_id=False):
         try:
             self.ensure_one()
 
@@ -84,27 +84,22 @@ class SaleOrder(models.Model):
             if not currency:
                 currency = self.env['res.currency'].search([('name', '=', 'UYU')], limit=1)
             
-            payment_id = False
-            if self.invoice_ids:
+            # El pago ya registrado se recibe por parámetro (create_payment_fenicio).
+            # Si no se pasó, se busca entre los pagos conciliados de la factura,
+            # que es confiable a diferencia de buscar por 'ref'.
+            if not payment_id and self.invoice_ids:
                 invoice = self.invoice_ids[0]
-                
-                payment_id = self.env['account.payment'].search([
-                    ('ref', '=', invoice.name),
-                    ('company_id', '=', fenicio_compania.id)
-                ], limit=1)
+                payment_id = invoice._get_reconciled_payments().filtered(
+                    lambda p: p.company_id == fenicio_compania
+                )[:1]
 
-                
-            
-            codigo_pago = (json_data_pago.get('codigo') or '').lower()
+            codigo_pago = (json_data_pago.get('codigo') or '')
             payment_method = False
             if codigo_pago:
                 payment_method = self.env['payment.method'].search(
-                    [('code', '=', codigo_pago)], limit=1
+                    [('name', '=', codigo_pago)], limit=1
                 )
-            if not payment_method:
-                payment_method = self.env['payment.method'].search(
-                    [('code', '=', 'fenicio')], limit=1
-                )
+
 
             transaction = self.env['payment.transaction'].create({
                 'reference': id_externo,
@@ -113,7 +108,9 @@ class SaleOrder(models.Model):
                 'partner_id': self.partner_id.id,
                 'provider_id': provider.id,
                 'payment_method_id': payment_method.id if payment_method else False,
+                'issuer_name': codigo_pago,
                 'payment_id': payment_id.id if payment_id else False,
+                'invoice_ids': [(6, 0, self.invoice_ids.ids)] if self.invoice_ids else False,
                 'state': 'done' if json_data_pago.get('estado') in ['APROBADO', 'CANCELADO'] else 'pending',
                 'sale_order_ids': [(6, 0, [self.id])],
                 'fenicio_numero_tarjeta': json_data_pago.get('numeroTarjeta'),
@@ -128,6 +125,11 @@ class SaleOrder(models.Model):
                 'company_id': fenicio_compania.id,
             })
             
+            # Link inverso: el account.payment apunta a su transacción. No es
+            # automático con payment.transaction.payment_id.
+            if payment_id:
+                payment_id.payment_transaction_id = transaction
+
             return {'mensaje': 'Transacción de pago creada correctamente', 'transaccion': transaction.id}
             
         except Exception as e:

@@ -23,18 +23,24 @@ class AccountMove(models.Model):
                 payment_ids.cancel()
             return False
 
-        # El diario lo define el tipo de orden de venta; si no tiene, se usa el diario Fenicio (feni)
+        # El diario de pago se toma de la configuración del sitio Fenicio
+        # (Diario de Pago Fenicio). Si no está configurado, se usa el diario
+        # Fenicio por defecto (feni). No se usa el diario de la venta, que puede
+        # tener documentos fiscales activados y rompe el registro de pago.
         journal_id = False
         sale_order = self.line_ids.sale_line_ids.order_id[:1]
-        if sale_order and sale_order.type_id and sale_order.type_id.journal_id:
-            journal_id = sale_order.type_id.journal_id
+        if sale_order and sale_order.website_id.fenicio_payment_journal_id:
+            journal_id = sale_order.website_id.fenicio_payment_journal_id
         if not journal_id:
             journal_id = self.env['account.journal'].search([
                 ('code', '=', 'feni'),
                 ('company_id', '=', fenicio_compania.id)
             ], limit=1)
         if not journal_id:
-            raise UserError('No se encontró diario para registrar el pago Fenicio (feni)')
+            raise UserError(
+                'No se configuró un Diario de Pago Fenicio en el sitio web '
+                'ni se encontró el diario por defecto (feni).'
+            )
 
         payment_method_line = journal_id.inbound_payment_method_line_ids[:1]
         if not payment_method_line:
