@@ -18,6 +18,13 @@ class Website(models.Model):
     fenicio_pricelist_alternativo_id = fields.Many2one('product.pricelist', string='Lista de Precios Alternativo Fenicio')
     fenicio_cantidad_stock_bydefault = fields.Integer(string='Cantidad de Stock a mostrar por defecto')
     fenicio_sale_order_type_id = fields.Many2one('sale.order.type', string='Tipo de Orden de Venta Fenicio')
+    fenicio_payment_journal_id = fields.Many2one(
+        'account.journal',
+        string='Diario de Pago Fenicio',
+        domain="[('type', 'in', ('bank', 'cash'))]",
+        help='Diario usado para registrar los pagos de las órdenes Fenicio. '
+             'Debe ser de tipo Banco o Efectivo (sin documentos fiscales).',
+    )
 
     fenicio_stock_location_ids = fields.Many2many(
         'stock.location',
@@ -87,6 +94,16 @@ class Website(models.Model):
             'target': 'current',
             'domain': [('company_id', '=', self.company_id.id)],
         }
+
+    @api.constrains('fenicio_payment_journal_id')
+    def _check_fenicio_payment_journal_company(self):
+        for rec in self:
+            journal = rec.fenicio_payment_journal_id
+            if journal and rec.company_id and journal.company_id != rec.company_id:
+                raise ValidationError(
+                    "El Diario de Pago Fenicio debe pertenecer a la compañía del sitio web (%s)."
+                    % rec.company_id.name
+                )
 
     @api.constrains('fenicio_token')
     def _check_fenicio_token_unique(self):
