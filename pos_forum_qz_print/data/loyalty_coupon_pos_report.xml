@@ -63,9 +63,10 @@
 
                     <!-- Frase de descuento (porcentaje dinámico en rojo grande). -->
                     <div t-if="discount_display" style="font-size: 15px; line-height: 1.45; margin: 0 0 4px; font-weight: 500;">
-                        Te regalamos un
+                        Te regalamos un <br/>
                         <b style="font-size: 26px; color: #c1272d; font-weight: 800;" t-out="discount_display"/>
-                        de descuento en tu próxima compra
+                        <b style="font-size: 26px; color: #c1272d; font-weight: 800;">DE DESCUENTO</b>  <br/>
+                        en tu próxima compra
                     </div>
                     <div t-else="" style="font-size: 15px; line-height: 1.45; margin: 0 0 4px; font-weight: 500;">
                         <t t-foreach="o.program_id.reward_ids" t-as="reward">
