@@ -167,6 +167,17 @@ class ResPartner(models.Model):
                 'ultimo_envio': fields.Datetime.now(),
             })
 
+    def _tiene_deuda_vencida(self, company_id):
+        """Indica si el cliente tiene deuda vencida en la compañía dada.
+
+        Usa el mismo criterio que el aviso de account_invoice_overdue_warn
+        que se muestra en la ficha del cliente ("Este cliente tiene N
+        factura(s) vencida(s)..."), visible cuando overdue_invoice_count != 0.
+        """
+        self.ensure_one()
+        count, _amount = self._prepare_overdue_invoice_count_amount(company_id.id)
+        return count > 0
+
     def avanzar_proximo_envio(self):
         self.ensure_one()
         next_update = False
@@ -206,6 +217,16 @@ class ResPartner(models.Model):
             filter_partner_ids = partner_ids.filtered(lambda l: (company_id in l.only_company_ids) or len(l.only_company_ids) == 0)
 
             for partner_id in filter_partner_ids:
+                # No enviar a clientes sin deuda vencida (mismo indicador que
+                # el aviso mostrado en la ficha del cliente).
+                if not partner_id._tiene_deuda_vencida(company_id):
+                    _logger.info(
+                        'OMITIDO PARTNER %s en compañía %s: sin deuda vencida',
+                        partner_id.id, company_id.name,
+                    )
+                    partner_id.avanzar_proximo_envio()
+                    continue
+
                 if partner_id.enviar_estado_cuenta:
                     partner_id.enviar_correo(company_id, partner_id.planilla_estado_cuenta_id)
 

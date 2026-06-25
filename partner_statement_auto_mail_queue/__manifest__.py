@@ -6,7 +6,7 @@
     'website': 'https://www.andres.com',
     'category': 'Localization',
     'version': '17.0.0.1',
-    'depends': ['base', 'account', 'partner_statement'],
+    'depends': ['base', 'account', 'partner_statement', 'account_invoice_overdue_warn'],
     'data': [
         'views/res_partner_views.xml',
 
