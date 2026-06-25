@@ -5,7 +5,7 @@
     'author': 'ANDRES',
     'website': 'https://www.andres.com',
     'category': 'Localization',
-    'version': '17.0.0.0',
+    'version': '17.0.0.1',
     'depends': ['base', 'account', 'partner_statement'],
     'data': [
         'views/res_partner_views.xml',

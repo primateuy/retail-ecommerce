@@ -40,10 +40,10 @@ class ResPartner(models.Model):
     def get_base_config_json(self):
         self.ensure_one()
         return {
-            "show_aging_buckets": True,
+            "show_aging_buckets": False,
             "filter_non_due_partners": True,
             "account_type": 'asset_receivable',
-            "aging_type": 'days',
+            "aging_type": 'months',
             "filter_negative_balances": True,
         }
 
@@ -79,6 +79,8 @@ class ResPartner(models.Model):
             "date_end": fields.Date().today(),
             "is_activity": True,
             "partner_ids": [self.id],
+            "excluded_accounts_ids": [],
+            "show_only_overdue": False,
         })
         return base_data
 
@@ -98,6 +100,8 @@ class ResPartner(models.Model):
             "date_end": fields.Date().today(),
             "is_outstanding": True,
             "partner_ids": [self.id],
+            "excluded_accounts_ids": [],
+            "show_only_overdue": False,
         })
         return base_data
 
@@ -157,7 +161,7 @@ class ResPartner(models.Model):
             except Exception as e:
                 _logger.info('Error ENVIANDO REPORTE', e)
                 msg = f"Error enviando reporte: {str(e)}"
-                rec.message_post(msg)
+                rec.message_post(body=msg)
 
             rec.write({
                 'ultimo_envio': fields.Datetime.now(),
