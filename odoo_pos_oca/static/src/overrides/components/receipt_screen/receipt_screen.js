@@ -176,6 +176,17 @@ patch(ReceiptScreen.prototype, {
      * Rutina (sin QZ): PDF del ticket de cambio. Con QZ lo redefine pos_forum_qz_print.
      */
     async printChangeTicketRoutine() {
+        return this._printChangeTicketReportPdf();
+    },
+
+    /**
+     * Renderiza el PDF del reporte de ticket de cambio (flujo sin QZ).
+     *
+     * Aislado de `printChangeTicketRoutine` para que «Solo ticket de cambio»
+     * imprima siempre el documento del ticket y nunca dispare la rutina completa
+     * (que pos_forum_qz_print redefine como recibo + ticket + voucher + cupón).
+     */
+    async _printChangeTicketReportPdf() {
         try {
             if (!this.pos.config.change_ticket_report_id) {
                 this.env.services.notification.add(
@@ -253,7 +264,7 @@ patch(ReceiptScreen.prototype, {
      * Solo documento de ticket de cambio (PDF en flujo sin QZ).
      */
     async printChangeTicketDocumentOnly() {
-        return this.printChangeTicketRoutine();
+        return this._printChangeTicketReportPdf();
     },
 
     /**
@@ -274,18 +285,18 @@ patch(ReceiptScreen.prototype, {
                 });
                 return;
             }
-            const txId = await this.orm.call('pos.order', 'get_oca_voucher_transaction_id_for_pos_print', [
+            const txIds = await this.orm.call('pos.order', 'get_oca_voucher_transaction_ids_for_pos_print', [
                 orderId || false,
                 orderRef || false,
             ]);
-            if (!txId) {
+            if (!txIds || !txIds.length) {
                 this.env.services.notification.add(
                     "No hay transacción OCA / voucher para esta venta.",
                     { type: "info" }
                 );
                 return;
             }
-            await this.report.doAction("odoo_pos_oca.action_report_payment_transaction_oca_voucher", [txId]);
+            await this.report.doAction("odoo_pos_oca.action_report_payment_transaction_oca_voucher", txIds);
             this.env.services.notification.add("Voucher OCA (PDF) generado.", { type: "success" });
         } catch (error) {
             console.error("printOcaVoucherOnly:", error);

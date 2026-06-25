@@ -325,22 +325,58 @@ class PosOrder(models.Model):
         return results
 
     @api.model
+    def _resolve_order_for_voucher_print(self, order_id=False, pos_reference=False):
+        """Resuelve la ``pos.order`` para impresión de voucher por id o por referencia.
+
+        El POS puede invocar la impresión antes de tener el server_id sincronizado,
+        por eso se acepta también ``pos_reference`` (pos_reference o name).
+
+        Returns:
+            pos.order: recordset (vacío si no se encontró).
+        """
+        order = self.env['pos.order'].sudo().browse()
+        # order_id puede venir como referencia (string no numérico, p. ej.
+        # 'Orden 00456-002-0003') si el POS aún no resolvió el server_id. En ese
+        # caso se ignora como id y se usa como referencia para la búsqueda.
+        numeric_id = None
+        if order_id:
+            try:
+                numeric_id = int(order_id)
+            except (TypeError, ValueError):
+                if not pos_reference:
+                    pos_reference = order_id
+        if numeric_id:
+            order = self.sudo().browse(numeric_id)
+        if (not order or not order.exists()) and pos_reference:
+            order = self.sudo().search([('pos_reference', '=', pos_reference)], limit=1)
+            if not order:
+                order = self.sudo().search([('name', '=', pos_reference)], limit=1)
+        return order
+
     def get_oca_voucher_transaction_id_for_pos_print(self, order_id=False, pos_reference=False):
         """
         Devuelve el id de ``payment.transaction`` OCA asociado al recibo, o False.
         Usado desde el POS para imprimir solo el PDF/HTML del voucher sin duplicar lógica.
         """
-        order = self.sudo().browse(int(order_id)) if order_id else self.env['pos.order'].sudo().browse()
-        if order_id and not order.exists():
-            order = self.sudo().browse()
-        if (not order or not order.exists()) and pos_reference:
-            order = self.sudo().search([('pos_reference', '=', pos_reference)], limit=1)
-            if not order:
-                order = self.sudo().search([('name', '=', pos_reference)], limit=1)
+        order = self._resolve_order_for_voucher_print(order_id, pos_reference)
         if not order.exists():
             return False
         transaction = self._find_payment_transaction_for_pos_receipt(order)
         return transaction.id if transaction else False
+
+    def get_oca_voucher_transaction_ids_for_pos_print(self, order_id=False, pos_reference=False):
+        """
+        Devuelve los ids de TODAS las transacciones OCA del recibo (en orden), o [].
+
+        Variante multi-voucher de ``get_oca_voucher_transaction_id_for_pos_print``:
+        el botón "Imprimir voucher" debe traer todos los pagos con tarjeta de la
+        orden, no solo el último. Reutiliza la misma búsqueda que la rutina que
+        imprime todos los documentos (``_find_all_payment_transactions_for_pos_receipt``).
+        """
+        order = self._resolve_order_for_voucher_print(order_id, pos_reference)
+        if not order.exists():
+            return []
+        return self._find_all_payment_transactions_for_pos_receipt(order).ids
 
     def get_change_ticket_barcode_data_uri(self):
         """

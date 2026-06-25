@@ -293,7 +293,7 @@ patch(OrderReceipt.prototype, {
         const barcodeValue = this.props.data?.name || legalData.ticket_number || '';
         const baseUrl = this.props.data?.base_url || this.pos?.base_url || '';
         const barcodeSrc = barcodeValue
-            ? `${baseUrl}/report/barcode/Code128/${encodeURIComponent(barcodeValue)}?width=300&height=80`
+            ? `${baseUrl}/report/barcode/Code128/${encodeURIComponent(barcodeValue)}?width=600&height=80`
             : '';
 
         // Log para validar el contenido de CFE en el render del recibo.
