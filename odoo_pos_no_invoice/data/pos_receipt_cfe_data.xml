@@ -781,8 +781,8 @@
             <t t-if="props.data.barcode_src">
                 <div style="text-align:center; margin-top:10px; width:100%">
                     <img t-att-src="props.data.barcode_src"
-                         style="max-width:100%; height:auto"/>
-                    <div style="font-size:11px; margin-top:4px; width:100%">
+                         style="width:100%; height:auto"/>
+                    <div style="font-family:'Courier New',monospace; font-size:11px; letter-spacing:0.06em; margin-top:4px; width:100%">
                         <t t-esc="props.data.barcode_value"/>
                     </div>
                 </div>
@@ -810,102 +810,6 @@
                     </t>
                 </t>
             </div>
-
-            <!-- Voucher tarjeta OCA al final del recibo de compra (copia cliente) — itera todos los vouchers -->
-            <t t-foreach="props.data.oca_vouchers or []" t-as="oca_v" t-key="oca_v_index">
-                <t t-if="oca_v.show_client_copy">
-                <div style="font-family: 'Courier New', Courier, monospace; font-size: 13px; line-height: 1.4; border-top: 1px dashed #000; margin-top: 12px; padding-top: 10px; width:100%">
-                    <div style="display:flex; justify-content:space-between; margin-bottom:6px; width:100%">
-                        <span t-esc="oca_v.date_str"/>
-                        <span t-esc="oca_v.time_str"/>
-                    </div>
-                    <div style="text-align:center; font-weight:bold; font-size:15px; margin-bottom:4px; width:100%">OCA Comercios</div>
-                    <div style="text-align:center; margin-bottom:2px; width:100%">
-                        <t t-esc="oca_v.issuer_name || 'TARJETA'"/> ONLINE
-                    </div>
-                    <div style="text-align:center; font-weight:bold; font-size:14px; margin-bottom:8px; width:100%">
-                        <t t-esc="oca_v.company_name"/>
-                    </div>
-                    <div style="display:flex; justify-content:space-between; gap:8px; margin-bottom:8px; width:100%">
-                        <div style="flex:1; width:100%"><t t-esc="oca_v.branch_street"/></div>
-                        <div style="text-align:right; flex:1; width:100%">RUT <t t-esc="oca_v.branch_vat"/></div>
-                    </div>
-                    <div style="text-align:center; font-weight:bold; margin-bottom:8px; width:100%">
-                        Voucher de Tarjeta <t t-esc="oca_v.voucher_ref"/>
-                    </div>
-                    <div style="display:flex; justify-content:space-between; margin-bottom:2px; width:100%">
-                        <span>TARJETA: <t t-esc="oca_v.issuer_name"/></span>
-                        <span>Online <t t-esc="oca_v.acquirer || 'OCA'"/></span>
-                    </div>
-                    <div style="display:flex; justify-content:space-between; margin-bottom:2px; width:100%">
-                        <span>Comercio: <t t-esc="oca_v.merchant_number"/></span>
-                        <span>Terminal: <t t-esc="oca_v.pos_id"/></span>
-                    </div>
-                    <div style="display:flex; justify-content:space-between; margin-bottom:2px; width:100%">
-                        <span>Operacion: Venta</span>
-                        <span t-esc="oca_v.datetime_str"/>
-                    </div>
-                    <div style="display:flex; justify-content:space-between; margin-bottom:2px; width:100%">
-                        <span>Producto: <t t-esc="oca_v.acquirer"/></span>
-                        <span>Ticket: <t t-esc="oca_v.ticket_number"/></span>
-                    </div>
-                    <div style="display:flex; justify-content:space-between; margin-bottom:2px; width:100%">
-                        <span>LOTE: <t t-esc="oca_v.batch_number"/></span>
-                        <span>Ingreso: NFC</span>
-                    </div>
-                    <div style="display:flex; justify-content:space-between; margin-bottom:2px; width:100%">
-                        <span>Tarjeta: <t t-esc="oca_v.card_masked"/></span>
-                        <span>Exp: xx/xx</span>
-                    </div>
-                    <div style="display:flex; justify-content:space-between; margin-bottom:2px; width:100%">
-                        <span>Cuotas: <t t-esc="oca_v.installments"/></span>
-                        <span>Plan: <t t-esc="oca_v.issuer_code || '0'"/></span>
-                    </div>
-                    <div style="display:flex; justify-content:space-between; margin-bottom:8px; width:100%">
-                        <span>Autorizacion: <t t-esc="oca_v.authorization_code"/></span>
-                        <span>No.FACT: <t t-esc="oca_v.invoice_number"/></span>
-                    </div>
-                    <t t-if="oca_v.tax_refund_amount > 0">
-                        <div style="display:flex; justify-content:space-between; font-weight:bold; margin:6px 0 4px 0; width:100%">
-                            <span>TOTAL</span>
-                            <span t-if="typeof oca_v.amount === 'number'" t-esc="props.pos.env.utils.formatCurrency(oca_v.amount)"/>
-                        </div>
-                        <div style="display:flex; justify-content:space-between; font-weight:bold; margin-bottom:2px; width:100%">
-                            <span>Dev. IVA-Ley 19210</span>
-                            <span t-esc="props.pos.env.utils.formatCurrency(oca_v.tax_refund_amount)"/>
-                        </div>
-                        <div style="display:flex; justify-content:space-between; font-weight:bold; font-size:15px; margin-bottom:8px; width:100%">
-                            <span>Pago</span>
-                            <span t-esc="props.pos.env.utils.formatCurrency(oca_v.amount - oca_v.tax_refund_amount)"/>
-                        </div>
-                    </t>
-                    <t t-else="">
-                        <div style="display:flex; justify-content:space-between; font-weight:bold; margin:6px 0 4px 0; width:100%">
-                            <span>IMPORTE</span>
-                            <span t-if="typeof oca_v.amount === 'number'" t-esc="props.pos.env.utils.formatCurrency(oca_v.amount)"/>
-                        </div>
-                        <div style="display:flex; justify-content:space-between; font-weight:bold; font-size:15px; margin-bottom:8px; width:100%">
-                            <span>TOTAL A PAGAR</span>
-                            <span t-if="typeof oca_v.amount === 'number'" t-esc="props.pos.env.utils.formatCurrency(oca_v.amount)"/>
-                        </div>
-                    </t>
-                    <div style="margin-bottom:6px; width:100%"><t t-esc="oca_v.partner_name"/></div>
-                    <div style="text-align:center; font-size:11px; margin:6px 0; width:100%">NO REQUIERE PIN NI OTROS DATOS</div>
-                    <t t-if="oca_v.tax_refund_amount > 0">
-                        <div style="text-align:center; font-size:11px; width:100%">APLICA Ley 19210</div>
-                    </t>
-                    <t t-else="">
-                        <div style="text-align:center; font-size:11px; width:100%">NO APLICA Ley</div>
-                    </t>
-                    <div style="text-align:center; font-size:11px; margin:6px 0; width:100%">Adq: <t t-esc="oca_v.acquirer"/></div>
-                    <div style="font-size:11px; text-align:center; margin-bottom:8px; width:100%">Aplica dev. IVA-Ley 19210 Sin nro. factura no aplica ley</div>
-                    <div style="text-align:center; font-size:12px; font-weight:bold; margin-bottom:10px; width:100%">MUCHAS GRACIAS</div>
-                    <div style="background:#000; color:#fff; text-align:center; font-weight:bold; padding:6px 4px; margin-top:4px; width:100%">
-                        *** COPIA CLIENTE ***
-                    </div>
-                </div>
-                </t>
-            </t>
 
             <br/><br/>
             <div style="font-size:12px; text-align:center; width:100%">
