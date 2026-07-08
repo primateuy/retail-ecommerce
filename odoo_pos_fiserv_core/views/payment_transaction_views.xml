@@ -44,6 +44,10 @@
                         </group>
                     </group>
                     <notebook string="Detalle Fiserv" name="fiserv_detailed" invisible="provider_code != 'fiserv'">
+                        <!-- mode 'js': CodeEditor en Odoo 17 solo acepta js|xml|qweb|scss|python; JSON se visualiza correctamente con js -->
+                        <page string="Solicitud JSON" name="fiserv_complete_request">
+                            <field name="fiserv_complete_request" readonly="1" widget="ace" options="{'mode': 'js'}"/>
+                        </page>
                         <page string="Respuesta JSON" name="fiserv_complete_response">
                             <field name="fiserv_complete_response" readonly="1" widget="ace" options="{'mode': 'js'}"/>
                         </page>

@@ -962,7 +962,11 @@ class PosPaymentMethod(models.Model):
             result['msg'] = env['payment.transaction'].get_oca_display_message(result)
             
             try:
-                env['pos.payment.method']._update_stored_transaction_with_session(transaction_id, result, pos_session_id)
+                # ``data`` no se reasigna en este loop: sigue siendo el request
+                # original de la venta y se persiste en oca_complete_request.
+                env['pos.payment.method']._update_stored_transaction_with_session(
+                    transaction_id, result, pos_session_id, pos_data=data
+                )
             except Exception as e:
                 _logger.error('Error al actualizar transacción en segundo plano: %s', str(e))
 

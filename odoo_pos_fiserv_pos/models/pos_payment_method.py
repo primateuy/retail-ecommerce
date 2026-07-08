@@ -890,6 +890,7 @@ class PosPaymentMethod(models.Model):
                         result,
                         pos_session_id,
                         account_payment_id=account_payment_id,
+                        pos_data=data,
                     )
                 except Exception as err_upd:
                     _logger.error('Error al actualizar transacción en segundo plano: %s', str(err_upd))
@@ -1052,15 +1053,18 @@ class PosPaymentMethod(models.Model):
         final_result,
         pos_session_id=None,
         account_payment_id=None,
+        pos_data=None,
     ):
         """
         Crea una transacción Fiserv con la información completa del POS
-        
+
         Args:
             transaction_id (str): ID de la transacción Fiserv
             final_result (dict): Resultado final con información completa
             pos_session_id (int): ID de la sesión POS (opcional)
             account_payment_id (int|None): Pago contable (cobro backend); partner/compañía y payment_transaction_id.
+            pos_data (dict|None): Request original enviado a la API ITD; se
+                persiste en ``fiserv_complete_request``.
         """
         try:
             _logger.info('Creando transacción Fiserv con información completa para ID: %s', transaction_id)
@@ -1093,6 +1097,7 @@ class PosPaymentMethod(models.Model):
                         pos_payment=None,
                         transaction_id=transaction_id,
                         account_payment_id=account_payment_id or False,
+                        pos_data=pos_data,
                     )
                     return
                 # Buscar el pedido POS relacionado usando el transaction_id
@@ -1107,6 +1112,7 @@ class PosPaymentMethod(models.Model):
                         pos_payment=None,
                         transaction_id=transaction_id,
                         account_payment_id=account_payment_id or False,
+                        pos_data=pos_data,
                     )
                     return
                 
@@ -1124,6 +1130,7 @@ class PosPaymentMethod(models.Model):
                 pos_payment=pos_payment,
                 transaction_id=transaction_id,
                 account_payment_id=account_payment_id or False,
+                pos_data=pos_data,
             )
             
             _logger.info('Transacción Fiserv creada exitosamente con ID: %s', transaction.id)
@@ -1138,6 +1145,7 @@ class PosPaymentMethod(models.Model):
                     pos_payment=None,
                     transaction_id=transaction_id,
                     account_payment_id=account_payment_id or False,
+                    pos_data=pos_data,
                 )
                 _logger.info('Transacción Fiserv creada sin relaciones como fallback')
             except Exception as fallback_error:
@@ -1419,6 +1427,7 @@ class PosPaymentMethod(models.Model):
         final_result,
         pos_session_id,
         account_payment_id=None,
+        pos_data=None,
     ):
         """
         Persiste el resultado final del bucle Query (crear o actualizar payment.transaction).
@@ -1432,6 +1441,8 @@ class PosPaymentMethod(models.Model):
             final_result (dict): Última respuesta ITD del pinpad.
             pos_session_id (int|bool): Sesión POS o False si el cobro es desde contabilidad.
             account_payment_id (int|None): Enlace a account.payment si aplica.
+            pos_data (dict|None): Request original enviado a la API ITD; se
+                persiste en ``fiserv_complete_request`` al crear.
         """
         try:
             # --- ITD puede devolver TransactionId numérico; el campo Odoo es Char ---
@@ -1453,6 +1464,7 @@ class PosPaymentMethod(models.Model):
                     final_result,
                     pos_session_id,
                     account_payment_id=account_payment_id,
+                    pos_data=pos_data,
                 )
                 _logger.info(
                     'Transacción Fiserv creada tras Query (id ITD=%s)',
@@ -1469,6 +1481,7 @@ class PosPaymentMethod(models.Model):
         final_result,
         pos_session_id,
         account_payment_id=None,
+        pos_data=None,
     ):
         """
         Persiste el resultado del bucle Query cuando el driver ITD es ``payment.provider``.
@@ -1501,6 +1514,7 @@ class PosPaymentMethod(models.Model):
                     pos_payment=None,
                     transaction_id=tid_key,
                     account_payment_id=account_payment_id or False,
+                    pos_data=pos_data,
                 )
                 _logger.info(
                     'Fiserv: transacción creada tras Query (account.payment, id ITD=%s)',
@@ -1514,6 +1528,7 @@ class PosPaymentMethod(models.Model):
                         final_result,
                         pos_session_id,
                         account_payment_id=account_payment_id,
+                        pos_data=pos_data,
                     )
                 else:
                     _logger.error(

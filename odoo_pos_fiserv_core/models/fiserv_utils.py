@@ -417,6 +417,9 @@ def fiserv_itd_background_worker_account_payment(
                     result,
                     pos_session_id,
                     account_payment_id=account_payment_id,
+                    # Tras el swap void→refund, ``data`` es el request del refund
+                    # realmente enviado; es lo que corresponde auditar.
+                    pos_data=data,
                 )
             except Exception as err_upd:
                 _logger.error(
