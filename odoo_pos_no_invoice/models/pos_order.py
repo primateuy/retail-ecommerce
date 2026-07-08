@@ -642,7 +642,9 @@ class PosOrder(models.Model):
 
             # Construir líneas del recibo a partir de las líneas de factura.
             for line in invoice_lines:
-                is_note = line.display_type == 'note'
+                # Las notas de cliente del POS llegan a la factura como líneas
+                # display_type 'line_note' (las crea _prepare_invoice_lines).
+                is_note = line.display_type == 'line_note'
                 is_combo = False
                 if not is_note and line.tax_ids:
                     for tax in line.tax_ids:
@@ -688,7 +690,7 @@ class PosOrder(models.Model):
 
             # Construir líneas del recibo a partir de las líneas de la orden.
             for line in pos_order.lines:
-                is_note = getattr(line, 'display_type', '') == 'note'
+                is_note = getattr(line, 'display_type', '') == 'line_note'
                 is_combo = False
                 if not is_note and hasattr(line, 'tax_ids') and line.tax_ids:
                     for tax in line.tax_ids:
@@ -701,7 +703,7 @@ class PosOrder(models.Model):
                     'unitPrice': line.price_unit,
                     'price': line.price_subtotal_incl if hasattr(line, 'price_subtotal_incl') else line.price_subtotal,
                     'discount': line.discount or 0.0,
-                    'customerNote': line.note if hasattr(line, 'note') and line.note else '',
+                    'customerNote': line.customer_note or '',
                     'is_note': is_note,
                     'is_combo': is_combo,
                 })

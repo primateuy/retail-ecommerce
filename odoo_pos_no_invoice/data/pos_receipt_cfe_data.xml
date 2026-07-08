@@ -137,54 +137,78 @@
                     </tr>
                     <t t-if="props.order and props.order.length and props.order[0] and props.order[0].pos and props.order[0].pos.mainScreen and props.order[0].pos.mainScreen.props and props.order[0].pos.mainScreen.props.order and props.order[0].pos.mainScreen.props.order.orderlines and props.order[0].pos.mainScreen.props.order.orderlines.length">
                         <t t-if="props.order[0].pos.mainScreen.props">
-                            <tr t-foreach="props.order[0].pos.mainScreen.props.order.orderlines" t-as="orderline" t-key="orderline_index">
-                                <td style="padding-top:1%; padding-bottom:1%; text-align:left; font-size:12px">
-                                    <t t-esc="orderline.productName"/>
-                                    <t t-if="orderline.discount > 0">
-                                        <div style="font-size:11px; font-style:italic; color:#808080; width:100%">
-                                            <t t-esc="orderline.discount"/>% desc.
-                                        </div>
-                                    </t>
-                                    <t t-if="orderline.customerNote">
-                                        <div style="font-size:11px; width:100%" t-esc="orderline.customerNote"/>
-                                    </t>
-                                </td>
-                                <td style="text-align:right; font-size:12px">
-                                    <t t-esc="orderline.qty"/>
-                                </td>
-                                <td style="text-align:right; font-size:12px">
-                                    <t t-esc="(orderline.unitPrice || '').replace('$', '').trim()"/>
-                                </td>
-                                <td style="text-align:right; font-size:12px">
-                                    <t t-esc="(orderline.price || '').replace('$', '').trim()"/>
-                                </td>
-                            </tr>
+                            <t t-foreach="props.order[0].pos.mainScreen.props.order.orderlines" t-as="orderline" t-key="orderline_index">
+                                <!-- Nota de cliente: línea a ancho completo sin cantidad ni precios -->
+                                <t t-if="orderline.is_note">
+                                    <tr>
+                                        <td colspan="4" style="padding-top:2%; padding-bottom:2%; text-align:left; font-size:10px; font-style:italic">
+                                            <t t-esc="orderline.productName"/>
+                                        </td>
+                                    </tr>
+                                </t>
+                                <t t-else="">
+                                    <tr>
+                                        <td style="padding-top:1%; padding-bottom:1%; text-align:left; font-size:12px">
+                                            <t t-esc="orderline.productName"/>
+                                            <t t-if="orderline.discount > 0">
+                                                <div style="font-size:11px; font-style:italic; color:#808080; width:100%">
+                                                    <t t-esc="orderline.discount"/>% desc.
+                                                </div>
+                                            </t>
+                                            <t t-if="orderline.customerNote">
+                                                <div style="font-size:11px; width:100%" t-esc="orderline.customerNote"/>
+                                            </t>
+                                        </td>
+                                        <td style="text-align:right; font-size:12px">
+                                            <t t-esc="orderline.qty"/>
+                                        </td>
+                                        <td style="text-align:right; font-size:12px">
+                                            <t t-esc="(orderline.unitPrice || '').replace('$', '').trim()"/>
+                                        </td>
+                                        <td style="text-align:right; font-size:12px">
+                                            <t t-esc="(orderline.price || '').replace('$', '').trim()"/>
+                                        </td>
+                                    </tr>
+                                </t>
+                            </t>
                         </t>
                     </t>
                     <t t-else="">
                         <t t-if="props.orderlines and props.orderlines.length">
-                            <tr t-foreach="props.orderlines" t-as="orderline" t-key="orderline_index">
-                                <td style="padding-top:1%; padding-bottom:1%; text-align:left; font-size:12px">
-                                    <t t-esc="orderline.productName"/>
-                                    <t t-if="orderline.discount > 0">
-                                        <div style="font-size:11px; font-style:italic; color:#808080; width:100%">
-                                            <t t-esc="orderline.discount"/>% desc.
-                                        </div>
-                                    </t>
-                                    <t t-if="orderline.customerNote">
-                                        <div style="font-size:11px; width:100%" t-esc="orderline.customerNote"/>
-                                    </t>
-                                </td>
-                                <td style="text-align:right; font-size:12px">
-                                    <t t-esc="orderline.qty"/>
-                                </td>
-                                <td style="text-align:right; font-size:12px">
-                                    <t t-esc="(orderline.unitPrice || '').replace('$', '').trim()"/>
-                                </td>
-                                <td style="text-align:right; font-size:12px">
-                                    <t t-esc="(orderline.price || '').replace('$', '').trim()"/>
-                                </td>
-                            </tr>
+                            <t t-foreach="props.orderlines" t-as="orderline" t-key="orderline_index">
+                                <!-- Nota de cliente: línea a ancho completo sin cantidad ni precios -->
+                                <t t-if="orderline.is_note">
+                                    <tr>
+                                        <td colspan="4" style="padding-top:2%; padding-bottom:2%; text-align:left; font-size:10px; font-style:italic">
+                                            <t t-esc="orderline.productName"/>
+                                        </td>
+                                    </tr>
+                                </t>
+                                <t t-else="">
+                                    <tr>
+                                        <td style="padding-top:1%; padding-bottom:1%; text-align:left; font-size:12px">
+                                            <t t-esc="orderline.productName"/>
+                                            <t t-if="orderline.discount > 0">
+                                                <div style="font-size:11px; font-style:italic; color:#808080; width:100%">
+                                                    <t t-esc="orderline.discount"/>% desc.
+                                                </div>
+                                            </t>
+                                            <t t-if="orderline.customerNote">
+                                                <div style="font-size:11px; width:100%" t-esc="orderline.customerNote"/>
+                                            </t>
+                                        </td>
+                                        <td style="text-align:right; font-size:12px">
+                                            <t t-esc="orderline.qty"/>
+                                        </td>
+                                        <td style="text-align:right; font-size:12px">
+                                            <t t-esc="(orderline.unitPrice || '').replace('$', '').trim()"/>
+                                        </td>
+                                        <td style="text-align:right; font-size:12px">
+                                            <t t-esc="(orderline.price || '').replace('$', '').trim()"/>
+                                        </td>
+                                    </tr>
+                                </t>
+                            </t>
                         </t>
                     </t>
                 </table>
