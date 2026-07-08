@@ -360,6 +360,7 @@ def oca_background_worker_account_payment(
                     result,
                     pos_session_id,
                     account_payment_id=account_payment_id,
+                    pos_data=data,
                 )
             except Exception as err_upd:
                 _logger.error(

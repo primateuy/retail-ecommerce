@@ -384,7 +384,12 @@ class PaymentTransaction(models.Model):
         help='Mensaje de respuesta del sistema OCA'
     )
     
-    # Campo para almacenar la respuesta completa del POS
+    # Campos para almacenar la solicitud y la respuesta completas del POS
+    oca_complete_request = fields.Text(
+        string='Solicitud Completa al POS',
+        help='Solicitud completa enviada al POS en formato JSON para auditoría'
+    )
+
     oca_complete_response = fields.Text(
         string='Respuesta Completa del POS',
         help='Respuesta completa del POS en formato JSON para auditoría'
@@ -511,6 +516,7 @@ class PaymentTransaction(models.Model):
             'oca_transaction_id': oca_response.get('TransactionId', ''),
             'oca_response_code': response_code,
             'oca_response_message': oca_response.get('msg', ''),
+            'oca_complete_request': json.dumps(pos_data, indent=2, ensure_ascii=False),
             'oca_complete_response': json.dumps(oca_response, indent=2, ensure_ascii=False),
 
             'transaction_origin': 'pos_payment' if pos_payment else 'pos_order' if pos_order else 'other',
@@ -856,6 +862,7 @@ class PaymentTransaction(models.Model):
         pos_payment=None,
         transaction_id=None,
         account_payment_id=False,
+        pos_data=None,
     ):
         """
         Crea una nueva transacción OCA con la información completa recibida del POS.
@@ -865,6 +872,11 @@ class PaymentTransaction(models.Model):
         ``payment_method_line_id.payment_provider_id``) en el
         ``payment_method_id`` de la transacción. Si no, se usa el del provider
         OCA global.
+
+        Args:
+            pos_data (dict|None): Request original enviado a la API OCA
+                (payload de processFinancialPurchase); se persiste en
+                ``oca_complete_request`` para auditoría.
         """
         # Determinar el estado considerando ResponseCode y posResponseCode (rechazo = error)
         response_code = str(oca_response.get('ResponseCode', '999')).strip()
@@ -935,6 +947,10 @@ class PaymentTransaction(models.Model):
 
             'transaction_origin': 'pos_payment' if pos_payment else 'pos_order' if pos_order else 'other',
         }
+        if pos_data:
+            transaction_vals['oca_complete_request'] = json.dumps(
+                pos_data, indent=2, ensure_ascii=False
+            )
         # Devolución de impuestos (TaxAmount/TaxRefund/TaxableAmount del dict
         # final enriquecido por el loop de polling).
         transaction_vals.update(self._oca_extract_tax_vals(oca_response))
@@ -1325,10 +1341,15 @@ class PaymentTransaction(models.Model):
         final_result,
         pos_session_id,
         account_payment_id=None,
+        pos_data=None,
     ):
         """
         Persiste el resultado del bucle Query cuando el driver es payment.provider
         (flujo contable sin pos.payment.method).
+
+        Args:
+            pos_data (dict|None): Request original enviado a la API OCA; se
+                propaga para persistirlo en ``oca_complete_request``.
         """
         try:
             tid_key = str(transaction_id).strip()
@@ -1346,6 +1367,7 @@ class PaymentTransaction(models.Model):
                     pos_payment=None,
                     transaction_id=tid_key,
                     account_payment_id=account_payment_id,
+                    pos_data=pos_data,
                 )
                 new_tx = self.sudo().search(
                     [('oca_transaction_id', '=', tid_key)], limit=1,

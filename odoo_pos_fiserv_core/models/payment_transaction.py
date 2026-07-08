@@ -234,7 +234,12 @@ class PaymentTransaction(models.Model):
         help='Texto descriptivo para el usuario o soporte.',
     )
     
-    # Campo para almacenar la respuesta completa del POS
+    # Campos para almacenar la solicitud y la respuesta completas del POS
+    fiserv_complete_request = fields.Text(
+        string='Solicitud Completa al POS',
+        help='Solicitud completa enviada al POS en formato JSON para auditoría'
+    )
+
     fiserv_complete_response = fields.Text(
         string='Respuesta Completa del POS',
         help='Respuesta completa del POS en formato JSON para auditoría'
@@ -414,6 +419,7 @@ class PaymentTransaction(models.Model):
             ),
             'fiserv_response_code': response_code,
             'fiserv_response_message': itd_response.get('msg', ''),
+            'fiserv_complete_request': json.dumps(pos_data, indent=2, ensure_ascii=False),
             'fiserv_complete_response': json.dumps(itd_response, indent=2, ensure_ascii=False),
 
             'transaction_origin': 'pos_payment' if pos_payment else 'pos_order' if pos_order else 'other',
@@ -837,17 +843,20 @@ class PaymentTransaction(models.Model):
         pos_payment=None,
         transaction_id=None,
         account_payment_id=False,
+        pos_data=None,
     ):
         """
         Crea una nueva transacción Fiserv con la información completa recibida del POS
-        
+
         Args:
             itd_response (dict): Respuesta completa del POS
             pos_order (pos.order): Pedido POS relacionado
             pos_payment (pos.payment): Pago POS relacionado
             transaction_id (str): ID de la transacción Fiserv
             account_payment_id (int|bool): ID de account.payment si el cobro fue desde contabilidad.
-            
+            pos_data (dict|None): Request original enviado a la API ITD; se
+                persiste en ``fiserv_complete_request`` para auditoría.
+
         Returns:
             payment.transaction: Transacción creada
         """
@@ -966,6 +975,10 @@ class PaymentTransaction(models.Model):
             'account_payment_id': account_pay.id if account_pay else False,
             'transaction_origin': tx_origin,
         }
+        if pos_data:
+            transaction_vals['fiserv_complete_request'] = json.dumps(
+                pos_data, indent=2, ensure_ascii=False
+            )
         # Campos POS: solo si odoo_pos_fiserv_pos los aportó (no romper sin POS).
         if pos_order and 'pos_order_id' in self._fields:
             transaction_vals['pos_order_id'] = pos_order.id
@@ -1355,12 +1368,17 @@ class PaymentTransaction(models.Model):
         final_result,
         pos_session_id,
         account_payment_id=None,
+        pos_data=None,
     ):
         """
         Persiste el resultado del bucle Query cuando el driver ITD es ``payment.provider``.
 
         No depende de ``pos.payment.method``; se usa tanto para cobro contable directo como
         desde POS (con el método POS como fallback si la transacción aún no existe).
+
+        Args:
+            pos_data (dict|None): Request original enviado a la API ITD; se
+                propaga para persistirlo en ``fiserv_complete_request``.
         """
         try:
             tid_key = str(transaction_id).strip()
@@ -1382,6 +1400,7 @@ class PaymentTransaction(models.Model):
                     pos_payment=None,
                     transaction_id=tid_key,
                     account_payment_id=account_payment_id or False,
+                    pos_data=pos_data,
                 )
                 _logger.info(
                     'Fiserv: transacción creada tras Query (account.payment, id ITD=%s)',
@@ -1398,6 +1417,7 @@ class PaymentTransaction(models.Model):
                         final_result,
                         pos_session_id,
                         account_payment_id=account_payment_id,
+                        pos_data=pos_data,
                     )
                     return
             _logger.error(

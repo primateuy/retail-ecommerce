@@ -381,6 +381,10 @@ class PosPaymentMethod(models.Model):
         # resultado final (lo usa el voucher como Imp.Gravado).
         taxable_amount_sent = data.get('TaxableAmount')
 
+        # Request original de la venta: como ``data`` se pisa con el payload
+        # del Query, se conserva para persistirlo en oca_complete_request.
+        original_request = dict(data)
+
         # Nuevo cursor y entorno para evitar problemas de ORM compartido
         with self.pool.cursor() as new_cr:
             env = api.Environment(new_cr, SUPERUSER_ID, {})
@@ -515,7 +519,9 @@ class PosPaymentMethod(models.Model):
             # Actualizar la transacción almacenada con la información final
             # Usar el nuevo cursor para evitar problemas
             try:
-                env['pos.payment.method']._update_stored_transaction_with_session(transaction_id, result, pos_session_id)
+                env['pos.payment.method']._update_stored_transaction_with_session(
+                    transaction_id, result, pos_session_id, pos_data=original_request
+                )
             except Exception as e:
                 _logger.error('Error al actualizar transacción en segundo plano: %s', str(e))
 
@@ -592,7 +598,9 @@ class PosPaymentMethod(models.Model):
         )
         return True
 
-    def _create_oca_transaction_with_complete_data(self, transaction_id, final_result, pos_session_id=None):
+    def _create_oca_transaction_with_complete_data(
+        self, transaction_id, final_result, pos_session_id=None, pos_data=None
+    ):
         """
         Crea un payment.transaction con la respuesta completa del pinpad ITD.
 
@@ -604,6 +612,8 @@ class PosPaymentMethod(models.Model):
             transaction_id (str): ID de la transacción ITD
             final_result (dict): Resultado final con información completa
             pos_session_id (int): ID de la sesión POS (opcional)
+            pos_data (dict|None): Request original enviado a la API OCA; se
+                persiste en ``oca_complete_request``
         """
         try:
             tid = str(transaction_id).strip()
@@ -639,7 +649,8 @@ class PosPaymentMethod(models.Model):
                         oca_response=final_result,
                         pos_order=None,
                         pos_payment=None,
-                        transaction_id=tid
+                        transaction_id=tid,
+                        pos_data=pos_data,
                     )
                     return
                 
@@ -659,7 +670,8 @@ class PosPaymentMethod(models.Model):
                 oca_response=final_result,
                 pos_order=pos_order,
                 pos_payment=pos_payment,
-                transaction_id=tid
+                transaction_id=tid,
+                pos_data=pos_data,
             )
             
             _logger.info('Transacción OCA creada exitosamente con ID: %s', transaction.id)
@@ -672,7 +684,8 @@ class PosPaymentMethod(models.Model):
                     oca_response=final_result,
                     pos_order=None,
                     pos_payment=None,
-                    transaction_id=tid
+                    transaction_id=tid,
+                    pos_data=pos_data,
                 )
                 _logger.info('Transacción OCA creada sin relaciones como fallback')
             except Exception as fallback_error:
@@ -1035,7 +1048,7 @@ class PosPaymentMethod(models.Model):
         return candidates[:1]
 
     def _update_stored_transaction_with_session(
-        self, transaction_id, final_result, pos_session_id, **kwargs
+        self, transaction_id, final_result, pos_session_id, pos_data=None, **kwargs
     ):
         """
         Actualiza la transacción almacenada con la información final del procesamiento
@@ -1053,6 +1066,8 @@ class PosPaymentMethod(models.Model):
             transaction_id (str): ID de transacción ITD (mismo valor en OCA y Fiserv).
             final_result (dict): Resultado final del procesamiento (payload pinpad).
             pos_session_id (int): ID de la sesión POS.
+            pos_data (dict|None): Request original enviado a la API OCA; se
+                propaga a la creación para persistirlo en ``oca_complete_request``.
         """
         try:
             tid = str(transaction_id).strip()
@@ -1082,7 +1097,9 @@ class PosPaymentMethod(models.Model):
                 return
 
             # --- Creación: _create_oca_transaction_with_complete_data enruta a Fiserv si aplica ---
-            self._create_oca_transaction_with_complete_data(tid, final_result, pos_session_id)
+            self._create_oca_transaction_with_complete_data(
+                tid, final_result, pos_session_id, pos_data=pos_data
+            )
             _logger.info(
                 'Transacción ITD creada con información completa (id=%s, sesión=%s)',
                 tid,
