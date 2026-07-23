@@ -21,12 +21,15 @@ class PaymentTransaction(models.Model):
         for record in self:
             code = None
 
-           
+
             if record.issuer_code and record.payment_method_id:
-                brand = PaymentMethod.search([
+                brand = PaymentMethod.with_context(active_test=False).search([
                     ('primary_payment_method_id', '=', record.payment_method_id.id),
-                    ('code', '=', record.issuer_code),
+                    '|',
+                    ('name', '=', record.issuer_name),
+                    ('name', '=', record.manual_stamp),
                 ], limit=1)
+
                 if brand:
                     code = brand.shopping_payment_code
 
