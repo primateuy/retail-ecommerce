@@ -1,9 +1,12 @@
 # -*- coding: utf-8 -*-
 
 import json
+import logging
 
 from odoo import models, fields
 from odoo.exceptions import UserError
+
+_logger = logging.getLogger(__name__)
 
 
 class FenicioCatalogSync(models.TransientModel):
@@ -66,6 +69,7 @@ class FenicioCatalogSync(models.TransientModel):
         url = website.fenicio_catalog_url.rstrip('/') + '/API_V1/catalogo'
         data = CatalogLine._fetch_catalog(url)
         products = CatalogLine._extract_products(data)
+        _logger.info("Catálogo Fenicio obtenido desde %s: %d productos", url, len(products))
 
         created = updated = skipped = 0
         for vals in CatalogLine._iter_lines(products):
@@ -85,8 +89,11 @@ class FenicioCatalogSync(models.TransientModel):
         self.env['fenicio.log'].registrar(
             estado='ok',
             endpoint=url,
-            request='Sincronización automática desde Fenicio',
-            mensaje=f'{created} líneas creadas, {updated} actualizadas, {skipped} sin SKU.',
+            request=(
+                f'Sincronización automática desde Fenicio — '
+                f'{created} líneas creadas, {updated} actualizadas, {skipped} sin SKU.'
+            ),
+            mensaje=data,
         )
         return self._self_action()
 

@@ -69,6 +69,19 @@ class FenicioCatalogLine(models.Model):
 
     @api.model
     def _fetch_catalog(self, url):
+        """Descarga el catálogo desde Fenicio.
+
+        Args:
+            url (str): endpoint del catálogo Fenicio.
+
+        Returns:
+            tuple[str, dict | list]: el cuerpo crudo de la respuesta tal cual
+                lo devuelve el endpoint, y el mismo cuerpo ya parseado a JSON.
+
+        Raises:
+            UserError: si falla la conexión, hay timeout, el endpoint
+                devuelve un error HTTP o el cuerpo no es JSON válido.
+        """
         try:
             resp = requests.get(url, timeout=60)
             resp.raise_for_status()
@@ -154,7 +167,7 @@ class FenicioCatalogLine(models.Model):
     def action_sync_all(self):
         url = self._get_catalog_url()
         _logger.info('[Fenicio] Sincronizando catálogo desde %s', url)
-        data = self._fetch_catalog(url)
+        _raw, data = self._fetch_catalog(url)
         products = self._extract_products(data)
 
         created = updated = skipped = 0
