@@ -26,10 +26,20 @@ class FenicioCatalogExport(models.TransientModel):
     )
     total_productos = fields.Integer(string='Productos encontrados', readonly=True)
 
-    def _get_catalog_url(self):
-        website = self.env['website'].search(
-            [('company_id', '=', self.env.company.id)], limit=1
+    def _get_website(self):
+        """Devuelve el website del contexto (abierto desde la vista de website) o busca el de la compañía."""
+        website_id = self.env.context.get('default_website_id') or self.env.context.get('active_id')
+        if website_id and self.env.context.get('active_model') in ('website', None):
+            website = self.env['website'].browse(website_id).exists()
+            if website:
+                return website
+        return (
+            self.env['website'].search([('company_id', '=', self.env.company.id)], limit=1)
+            or self.env['website'].search([], limit=1)
         )
+
+    def _get_catalog_url(self):
+        website = self._get_website()
         if not website:
             website = self.env['website'].search([], limit=1)
         base_url = website.fenicio_catalog_url if website else False
