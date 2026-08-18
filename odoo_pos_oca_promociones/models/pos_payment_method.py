@@ -11,7 +11,7 @@ import pprint
 import logging
 import requests
 import threading
-from time import sleep
+from time import monotonic, sleep
 
 from odoo import fields, models, api, SUPERUSER_ID
 
@@ -538,6 +538,12 @@ class PosPaymentMethod(models.Model):
             promotion_processed = False  # Flag para evitar procesar múltiples veces
             saved_promotion_info = None  # Variable para preservar promotion_info
 
+            # Timeout propio configurable en el método de pago (oca_polling_timeout,
+            # heredado de odoo_pos_oca): deadline del bucle de polling, independiente
+            # del RemainingExpirationTime que informe el pinpad.
+            own_timeout = env['pos.payment.method'].browse(payment_method_id).oca_polling_timeout or 0
+            start_time = monotonic()
+
             # TaxRefund/TaxAmount (devolución) y EmvApplicationName/Id (datos EMV
             # del voucher) pueden llegar en una iteración intermedia del Query y
             # faltar en la final; se acumulan para que el voucher no los pierda.
@@ -906,9 +912,22 @@ class PosPaymentMethod(models.Model):
                             _logger.info('Preservando promotion_info en resultado final (ResponseCode: %s)', response_code)
                         break
 
+                    # Timeout propio: independiente de lo que informe el pinpad vía
+                    # RemainingExpirationTime. Evita que la espera dependa
+                    # exclusivamente del timer del proveedor.
+                    own_timeout_hit = own_timeout > 0 and (monotonic() - start_time) >= own_timeout
+
                     # Si el tiempo de espera expiró (RemainingExpirationTime == 0.0)
-                    if response_code in ['10', '12'] and rt == 0.0:
-                        _logger.warning('Tiempo de espera expirado para transacción %s. Procesando reversión...', transaction_id)
+                    # o se cumplió nuestro propio timeout configurado
+                    if response_code in ['10', '12'] and (rt == 0.0 or own_timeout_hit):
+                        if own_timeout_hit and rt != 0.0:
+                            _logger.warning(
+                                'Timeout propio (%ss) alcanzado para transacción %s '
+                                '(pinpad aún no reporta expiración). Procesando reversión...',
+                                own_timeout, transaction_id,
+                            )
+                        else:
+                            _logger.warning('Tiempo de espera expirado para transacción %s. Procesando reversión...', transaction_id)
                         reverse_result = env['pos.payment.method'].browse(payment_method_id).processFinancialReverse(query_data, base_url_endpoint)
                         _logger.info('Resultado de reversión: %s', pprint.pformat(reverse_result))
                         

@@ -3,7 +3,7 @@ import pprint
 import logging
 import requests
 
-from time import sleep
+from time import monotonic, sleep
 from odoo import fields, models, api, SUPERUSER_ID
 from datetime import datetime
 
@@ -27,6 +27,18 @@ class PosPaymentMethod(models.Model):
     codigo_terminal = fields.Char('Código Terminal (PosID)')
     client_app_id = fields.Char('Client APP ID', default='1')
     codigo_sucursal = fields.Integer('Código Sucursal')
+    oca_polling_timeout = fields.Integer(
+        string='Timeout de espera OCA (segundos)',
+        default=30,
+        help='Tiempo máximo, en segundos, que el procesamiento en segundo '
+        'plano espera una respuesta final del pinpad antes de cancelar '
+        'automáticamente la transacción (processFinancialReverse). Actúa '
+        'de forma independiente al RemainingExpirationTime que informa el '
+        'propio pinpad. Ajustar según el tiempo real que necesita el '
+        'terminal para completar la operación (lectura de tarjeta, PIN, '
+        'selección de plan, etc.); un valor demasiado bajo puede cancelar '
+        'transacciones que el pinpad todavía está procesando.',
+    )
 
     # Multi-POS (antes en odoo_pos_oca_multiple). El modelo y los campos del
     # provider viven en odoo_pos_oca_multiple; aquí solo las referencias para
@@ -390,6 +402,12 @@ class PosPaymentMethod(models.Model):
             env = api.Environment(new_cr, SUPERUSER_ID, {})
             result = {}
 
+            # Timeout propio configurable en el método de pago (oca_polling_timeout):
+            # deadline del bucle de polling, independiente del RemainingExpirationTime
+            # que informe el pinpad.
+            own_timeout = env['pos.payment.method'].browse(payment_method_id).oca_polling_timeout or 0
+            start_time = monotonic()
+
             data = {
                 "PosID": data['PosID'],
                 "SystemId": data['SystemId'],
@@ -447,11 +465,24 @@ class PosPaymentMethod(models.Model):
                     if response_code not in ['10', '12']:
                         break
 
+                    # Timeout propio: independiente de lo que informe el pinpad vía
+                    # RemainingExpirationTime. Evita que la espera dependa
+                    # exclusivamente del timer del proveedor.
+                    own_timeout_hit = own_timeout > 0 and (monotonic() - start_time) >= own_timeout
+
                     # Si el tiempo de espera expiró (RemainingExpirationTime == 0.0)
-                    # se debe procesar la reversión y notificar al POS para liberarlo
-                    if response_code in ['10', '12'] and rt == 0.0:
-                        _logger.warning('Tiempo de espera expirado para transacción %s. Procesando reversión...', transaction_id)
-                        
+                    # o se cumplió nuestro propio timeout configurado, se debe
+                    # procesar la reversión y notificar al POS para liberarlo
+                    if response_code in ['10', '12'] and (rt == 0.0 or own_timeout_hit):
+                        if own_timeout_hit and rt != 0.0:
+                            _logger.warning(
+                                'Timeout propio (%ss) alcanzado para transacción %s '
+                                '(pinpad aún no reporta expiración). Procesando reversión...',
+                                own_timeout, transaction_id,
+                            )
+                        else:
+                            _logger.warning('Tiempo de espera expirado para transacción %s. Procesando reversión...', transaction_id)
+
                         # Procesar la reversión para devolver el dinero
                         # Usar env en lugar de self para evitar problemas de cursor
                         reverse_result = env['pos.payment.method'].browse(payment_method_id).processFinancialReverse(data, base_url_endpoint)

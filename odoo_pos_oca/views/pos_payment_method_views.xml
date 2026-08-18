@@ -12,6 +12,7 @@
                     <field name="codigo_terminal" invisible="use_payment_terminal != 'oca'" required="use_payment_terminal == 'oca'"/>
                     <field name="client_app_id" invisible="use_payment_terminal != 'oca'" required="use_payment_terminal == 'oca'"/>
                     <field name="codigo_sucursal" invisible="use_payment_terminal != 'oca'" required="use_payment_terminal == 'oca'"/>
+                    <field name="oca_polling_timeout" invisible="use_payment_terminal != 'oca'"/>
                 </xpath>
             </field>
         </record>
