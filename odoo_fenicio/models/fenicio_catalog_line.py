@@ -24,11 +24,16 @@ class FenicioCatalogLine(models.Model):
     moneda = fields.Char('Moneda', default='UYU')
     impuesto = fields.Float('Impuesto %')
     atributos_producto = fields.Text('Atributos Producto')
+    categoria_fenicio_id = fields.Char('ID Categoría Fenicio')
+    categoria_fenicio_nombre = fields.Char('Categoría Fenicio')
+    marca_fenicio_id = fields.Char('ID Marca Fenicio')
+    marca_fenicio_nombre = fields.Char('Marca Fenicio')
 
     # ── Datos de la variante ─────────────────────────────────────────────────
     variante_codigo = fields.Char('Código Variante')
     variante_nombre = fields.Char('Variante')
     atributos_variante = fields.Text('Atributos Variante')
+    variante_descripcion = fields.Text('Descripción Variante')
 
     # ── Datos de la presentación (clave única) ───────────────────────────────
     presentacion_codigo = fields.Char('Código Presentación', required=True)
@@ -131,6 +136,8 @@ class FenicioCatalogLine(models.Model):
         now = fields.Datetime.now()
         for prod in products:
             moneda = prod.get('moneda') or 'UYU'
+            categ = prod.get('categ') or {}
+            marca = prod.get('marca') or {}
             prod_base = {
                 'producto_codigo': prod.get('cod'),
                 'producto_nombre': prod.get('nom'),
@@ -138,6 +145,10 @@ class FenicioCatalogLine(models.Model):
                 'atributos_producto': json.dumps(
                     prod.get('caracts') or {}, ensure_ascii=False
                 ),
+                'categoria_fenicio_id': str(categ.get('id')) if categ.get('id') is not None else False,
+                'categoria_fenicio_nombre': categ.get('nom'),
+                'marca_fenicio_id': str(marca.get('id')) if marca.get('id') is not None else False,
+                'marca_fenicio_nombre': marca.get('nom'),
                 'ultima_sincronizacion': now,
             }
             for variant in (prod.get('vars') or []):
@@ -147,6 +158,7 @@ class FenicioCatalogLine(models.Model):
                     'atributos_variante': json.dumps(
                         variant.get('caracts') or {}, ensure_ascii=False
                     ),
+                    'variante_descripcion': variant.get('desc') or False,
                 }
                 for pres in (variant.get('pres') or []):
 

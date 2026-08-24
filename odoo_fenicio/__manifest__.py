@@ -4,7 +4,7 @@
     'summary': """INTEGRACION FENICIO""",
     'description': """INTEGRACION FENICIO""",
     'category': 'Localization',
-    'version': '17.0.0.0',
+    'version': '17.0.0.0.1',
     'depends': ['base', 'sale', 'sale_management', 'account', 'stock', 'delivery', 'product_brand', 'payment', 'website_sale', 'website_sale_stock', 'contacts', 'l10n_uy_einvoice_base', 'partner_contact_gender', 'loyalty', 'sale_order_type'],
     'data': [
         'security/ir.model.access.csv',

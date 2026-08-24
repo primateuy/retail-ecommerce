@@ -12,7 +12,7 @@ class FeniciLog(models.Model):
 
     fecha = fields.Datetime(string='Fecha y Hora', required=True, default=fields.Datetime.now)
     request = fields.Text(string='Request')
-    mensaje = fields.Text(string='Mensaje / Respuesta')
+    mensaje = fields.Json(string='Mensaje / Respuesta')
     endpoint = fields.Char(string='Endpoint')
     estado = fields.Selection([
         ('ok', 'Exitoso'),
@@ -78,20 +78,22 @@ class FeniciLog(models.Model):
         for rec in self:
             if not rec.mensaje:
                 rec.mensaje_pretty = ''
-                continue
-            try:
-                data = json_lib.loads(rec.mensaje)
-                rec.mensaje_pretty = json_lib.dumps(data, indent=2, ensure_ascii=False)
-            except Exception:
+            elif isinstance(rec.mensaje, str):
                 rec.mensaje_pretty = rec.mensaje
+            else:
+                rec.mensaje_pretty = json_lib.dumps(rec.mensaje, indent=2, ensure_ascii=False)
 
     @api.model
     def registrar(self, estado, request, endpoint=None, company_id=None, mensaje=None):
-        """Método utilitario para crear un log desde cualquier parte del módulo."""
+        """Método utilitario para crear un log desde cualquier parte del módulo.
+
+        `mensaje` va directo al campo Json — puede ser un dict/list (la
+        respuesta cruda de una API) o un string (un resumen de texto).
+        """
         self.sudo().create({
             'estado': estado,
             'request': request,
-            'mensaje': mensaje or '',
+            'mensaje': mensaje,
             'endpoint': endpoint or '',
             'company_id': company_id or self.env.company.id,
         })
