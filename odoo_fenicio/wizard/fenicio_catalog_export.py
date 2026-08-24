@@ -139,117 +139,96 @@ class FenicioCatalogExport(models.TransientModel):
         return buf.read()
 
     _SAMPLE_JSON = {
-        "status": "OK",
-        "mensaje": None,
-        "_idSolicitud": "12345",
-        "data": {
-            "productos": [
-                {
-                    "codigo": "PROD-001",
-                    "nombre": "Remera Clásica",
-                    "fechaCreacion": "2024-01-15T10:30:00",
-                    "prioridad": 1,
-                    "guiaTalles": "https://example.com/guia-talles",
-                    "monedaPredeterminada": "UYU",
-                    "impuesto": 22,
-                    "atributos": {"color": "Azul", "material": "Algodón", "temporada": "Verano"},
-                    "variantes": [
-                        {
-                            "codigo": "PROD-001-S",
-                            "nombre": "Remera Clásica Talle S",
-                            "atributos": {"talle": "S"},
-                            "presentaciones": [
-                                {
-                                    "codigo": "PROD-001-S-UNI",
-                                    "nombre": "Remera Clásica Talle S Única",
-                                    "stock": 15,
-                                    "sku": "SKU-001-S",
-                                    "precioLista": {"UYU": 1990.0},
-                                    "precioVenta": {"UYU": 1590.0},
-                                    "precioAlternativo": {"UYU": 1750.0},
-                                }
-                            ],
-                        },
-                        {
-                            "codigo": "PROD-001-M",
-                            "nombre": "Remera Clásica Talle M",
-                            "atributos": {"talle": "M"},
-                            "presentaciones": [
-                                {
-                                    "codigo": "PROD-001-M-UNI",
-                                    "nombre": "Remera Clásica Talle M Única",
-                                    "stock": 8,
-                                    "sku": "SKU-001-M",
-                                    "precioLista": {"UYU": 1990.0},
-                                    "precioVenta": {"UYU": 1590.0},
-                                    "precioAlternativo": {"UYU": 1750.0},
-                                }
-                            ],
-                        },
-                        {
-                            "codigo": "PROD-001-L",
-                            "nombre": "Remera Clásica Talle L",
-                            "atributos": {"talle": "L"},
-                            "presentaciones": [
-                                {
-                                    "codigo": "PROD-001-L-UNI",
-                                    "nombre": "Remera Clásica Talle L Única",
-                                    "stock": 0,
-                                    "sku": "SKU-001-L",
-                                    "precioLista": {"UYU": 1990.0},
-                                    "precioVenta": {"UYU": 1590.0},
-                                    "precioAlternativo": {"UYU": 1750.0},
-                                }
-                            ],
-                        },
-                    ],
-                },
-                {
-                    "codigo": "PROD-002",
-                    "nombre": "Pantalón Cargo",
-                    "fechaCreacion": "2024-02-20T14:00:00",
-                    "prioridad": 2,
-                    "guiaTalles": None,
-                    "monedaPredeterminada": "UYU",
-                    "impuesto": 22,
-                    "atributos": {"color": "Negro", "material": "Gabardina"},
-                    "variantes": [
-                        {
-                            "codigo": "PROD-002-32",
-                            "nombre": "Pantalón Cargo Talle 32",
-                            "atributos": {"talle": "32"},
-                            "presentaciones": [
-                                {
-                                    "codigo": "PROD-002-32-UNI",
-                                    "nombre": "Pantalón Cargo Talle 32 Única",
-                                    "stock": 5,
-                                    "sku": "SKU-002-32",
-                                    "precioLista": {"UYU": 3490.0},
-                                    "precioVenta": {"UYU": 2990.0},
-                                    "precioAlternativo": {"UYU": 3200.0},
-                                }
-                            ],
-                        },
-                        {
-                            "codigo": "PROD-002-34",
-                            "nombre": "Pantalón Cargo Talle 34",
-                            "atributos": {"talle": "34"},
-                            "presentaciones": [
-                                {
-                                    "codigo": "PROD-002-34-UNI",
-                                    "nombre": "Pantalón Cargo Talle 34 Única",
-                                    "stock": 12,
-                                    "sku": "SKU-002-34",
-                                    "precioLista": {"UYU": 3490.0},
-                                    "precioVenta": {"UYU": 2990.0},
-                                    "precioAlternativo": {"UYU": 3200.0},
-                                }
-                            ],
-                        },
-                    ],
-                },
-            ]
-        },
+        "error": False,
+        "msj": "",
+        "productos": [
+            {
+                "cod": "4565014",
+                "nom": "Gorro de lana Bariloche",
+                "moneda": "UYU",
+                "categ": {"id": 195, "nom": "Gorros"},
+                "marca": {"id": 1, "nom": "Forum"},
+                "caracts": {"genero": "Unisex"},
+                "vars": [
+                    {
+                        "cod": "002000",
+                        "nom": "Negro",
+                        "desc": "",
+                        "imgs": ["https://example.com/gorro-negro.jpg"],
+                        "thumbs": ["https://example.com/gorro-negro-thumb.jpg"],
+                        "pres": [
+                            {
+                                "sku": "4565014002000000",
+                                "sku_fn": "1:4565014:002000:000:1",
+                                "stock": 691,
+                                "pr_normal": {"UYU": 499},
+                                "pr_promo": {"UYU": 499},
+                                "pr_lista": {"UYU": 499},
+                                "identificadores": [],
+                                "sku_cm": "4565014002000000",
+                                "cod": "000",
+                                "nom": "N/A",
+                            }
+                        ],
+                        "caracts": {"color": "Negro"},
+                    },
+                    {
+                        "cod": "007000",
+                        "nom": "Marino",
+                        "desc": "",
+                        "imgs": ["https://example.com/gorro-marino.jpg"],
+                        "thumbs": ["https://example.com/gorro-marino-thumb.jpg"],
+                        "pres": [
+                            {
+                                "sku": "4565014007000000",
+                                "sku_fn": "1:4565014:007000:000:1",
+                                "stock": 36,
+                                "pr_normal": {"UYU": 499},
+                                "pr_promo": {"UYU": 499},
+                                "pr_lista": {"UYU": 499},
+                                "identificadores": [],
+                                "sku_cm": "4565014007000000",
+                                "cod": "000",
+                                "nom": "N/A",
+                            }
+                        ],
+                        "caracts": [],
+                    },
+                ],
+            },
+            {
+                "cod": "4565017",
+                "nom": "Cuello Polar",
+                "moneda": "UYU",
+                "categ": {"id": 195, "nom": "Gorros"},
+                "marca": {"id": 1, "nom": "Forum"},
+                "caracts": {"genero": "Unisex"},
+                "vars": [
+                    {
+                        "cod": "002000",
+                        "nom": "Negro",
+                        "desc": "Cuello Polar 100% poliéster.",
+                        "imgs": ["https://example.com/cuello-negro.jpg"],
+                        "thumbs": ["https://example.com/cuello-negro-thumb.jpg"],
+                        "pres": [
+                            {
+                                "sku": "4565017002000000",
+                                "sku_fn": "1:4565017:002000:000:1",
+                                "stock": 513,
+                                "pr_normal": {"UYU": 499},
+                                "pr_promo": {"UYU": 395},
+                                "pr_lista": {"UYU": 499},
+                                "identificadores": [],
+                                "sku_cm": "4565017002000000",
+                                "cod": "000",
+                                "nom": "N/A",
+                            }
+                        ],
+                        "caracts": {"color": "Negro"},
+                    }
+                ],
+            },
+        ],
     }
 
     def action_test(self):

@@ -101,6 +101,10 @@ class FenicioCatalogLine(models.Model):
         if isinstance(data, list):
             return data
         if isinstance(data, dict):
+            if data.get('error'):
+                raise UserError(f"Fenicio devolvió un error: {data.get('msj') or 'sin detalle'}")
+            if isinstance(data.get('productos'), list):
+                return data['productos']
             for v in data.values():
                 if isinstance(v, list) and v:
                     return v
@@ -118,31 +122,33 @@ class FenicioCatalogLine(models.Model):
 
     @api.model
     def _iter_lines(self, products):
-        """Yield un dict por presentación aplanando producto → variante → presentación."""
+        """Yield un dict por presentación aplanando producto → variante → presentación.
+
+        Mapea los nombres de campo abreviados que usa la API real de Fenicio
+        (cod/nom/vars/pres/pr_lista/pr_promo) a los campos del modelo. No hay
+        equivalente de precio alternativo en la respuesta, así que queda en 0.
+        """
         now = fields.Datetime.now()
         for prod in products:
+            moneda = prod.get('moneda') or 'UYU'
             prod_base = {
-                'producto_codigo': prod.get('codigo'),
-                'producto_nombre': prod.get('nombre'),
-                'fecha_creacion': str(prod.get('fechaCreacion') or ''),
-                'prioridad': int(prod.get('prioridad') or 0),
-                'moneda': prod.get('monedaPredeterminada') or 'UYU',
-                'impuesto': float(prod.get('impuesto') or 0),
+                'producto_codigo': prod.get('cod'),
+                'producto_nombre': prod.get('nom'),
+                'moneda': moneda,
                 'atributos_producto': json.dumps(
-                    prod.get('atributos') or {}, ensure_ascii=False
+                    prod.get('caracts') or {}, ensure_ascii=False
                 ),
                 'ultima_sincronizacion': now,
             }
-            for variant in (prod.get('variantes') or []):
+            for variant in (prod.get('vars') or []):
                 var_base = {
-                    'variante_codigo': variant.get('codigo'),
-                    'variante_nombre': variant.get('nombre'),
+                    'variante_codigo': variant.get('cod'),
+                    'variante_nombre': variant.get('nom'),
                     'atributos_variante': json.dumps(
-                        variant.get('atributos') or {}, ensure_ascii=False
+                        variant.get('caracts') or {}, ensure_ascii=False
                     ),
                 }
-                for pres in (variant.get('presentaciones') or []):
-                    moneda = prod_base['moneda']
+                for pres in (variant.get('pres') or []):
 
                     def _price(d):
                         if not isinstance(d, dict):
@@ -152,13 +158,13 @@ class FenicioCatalogLine(models.Model):
                     yield {
                         **prod_base,
                         **var_base,
-                        'presentacion_codigo': pres.get('codigo'),
-                        'presentacion_nombre': pres.get('nombre'),
+                        'presentacion_codigo': pres.get('cod'),
+                        'presentacion_nombre': pres.get('nom'),
                         'sku': pres.get('sku'),
                         'stock': int(pres.get('stock') or 0),
-                        'precio_lista': _price(pres.get('precioLista')),
-                        'precio_venta': _price(pres.get('precioVenta')),
-                        'precio_alternativo': _price(pres.get('precioAlternativo')),
+                        'precio_lista': _price(pres.get('pr_lista')),
+                        'precio_venta': _price(pres.get('pr_promo')),
+                        'precio_alternativo': 0.0,
                     }
 
     # ── Feature 1: sincronizar desde Fenicio ────────────────────────────────
@@ -167,7 +173,7 @@ class FenicioCatalogLine(models.Model):
     def action_sync_all(self):
         url = self._get_catalog_url()
         _logger.info('[Fenicio] Sincronizando catálogo desde %s', url)
-        _raw, data = self._fetch_catalog(url)
+        data = self._fetch_catalog(url)
         products = self._extract_products(data)
 
         created = updated = skipped = 0
