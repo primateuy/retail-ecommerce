@@ -553,12 +553,19 @@ class PosOrder(models.Model):
             receipt_data['currency_name'] = pos_order.currency_id.name or ''
 
         # Líneas de pago normalizadas desde la orden POS (todas, no solo la primera).
+        # El vuelto en efectivo se registra como un pos.payment aparte con monto
+        # negativo (mismo método), no como ajuste del monto entregado. Si se
+        # listara tal cual, saldrían dos líneas "Efectivo" (una negativa) en vez
+        # de una sola con lo realmente entregado; el vuelto ya se muestra por su
+        # cuenta como línea CAMBIO en el recibo.
         if pos_order and pos_order.payment_ids:
             total_received = 0.0
             paymentlines = []
             for payment in pos_order.payment_ids:
-                pname = self._normalize_payment_name(payment.payment_method_id.name or '')
                 pamount = payment.amount or 0.0
+                if pamount <= 0:
+                    continue
+                pname = self._normalize_payment_name(payment.payment_method_id.name or '')
                 total_received += pamount
                 paymentlines.append({'name': pname, 'amount': pamount})
             receipt_data['paymentlines'] = paymentlines

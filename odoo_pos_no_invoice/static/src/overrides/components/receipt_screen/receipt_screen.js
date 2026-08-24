@@ -133,6 +133,9 @@ patch(ReceiptScreen.prototype, {
             oca_voucher: ocaVouchers[0] || {},
             oca_vouchers: ocaVouchers,
             cfe_data: cfeData,
+            // Evita que receipt_cfe_data.js (onMounted) repita estas mismas RPC:
+            // ya está todo pre-cargado acá antes de montar OrderReceipt para imprimir.
+            _skipAsyncReload: true,
         };
         if (!receiptServerData?.orderlines?.length) {
             receiptData.orderlines = baseReceiptData.orderlines;
