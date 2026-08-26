@@ -38,6 +38,7 @@ patch(OrderReceipt.prototype, {
             ocaVoucher: {},
             ocaVouchers: [],
             snapshotSeller: currentOrder?.employee_id?.name || '',
+            deductedPoints: [],
         });
 
         // Cargar datos del recibo y CFE sin bloquear el render del ticket.
@@ -51,6 +52,19 @@ patch(OrderReceipt.prototype, {
      * Carga en segundo plano los datos del recibo y del CFE.
      */
     async _loadReceiptData() {
+        // El caller (printReceipt en odoo_pos_no_invoice / pos_forum_qz_print) ya
+        // pre-obtuvo cfe_data/oca_vouchers/receiptServerData antes de montar este
+        // componente vía renderer.toHtml(). Repetir esas mismas RPC acá (async,
+        // post-mount) dispara nuevas mutaciones de this.state mientras el
+        // RenderContainer aislado intenta capturar el render, lo que deja el Fiber
+        // de Owl sin completar nunca (renderer.toHtml() termina resolviendo null).
+        // templateProps ya sabe usar props.data.* como fallback, así que alcanza con
+        // no relanzar el fetch.
+        if (this.props.data?._skipAsyncReload) {
+            console.log('✓ _loadReceiptData omitido: props.data ya viene pre-cargado por el caller (print).');
+            return;
+        }
+
         // Si venimos de ReprintReceiptScreen (props.data no tiene cfe_data),
         // usar los datos pre-obtenidos por reprint_receipt_button y limpiarlos.
         const propsCfe = this.props.data?.cfe_data;
@@ -78,6 +92,24 @@ patch(OrderReceipt.prototype, {
         const orderServerId = order?.server_id || null;
         if (!order) {
             console.log('No hay orden disponible en el POS, se usará referencia del recibo');
+        }
+
+        // Reembolso/orden mixta: deductLoyaltyPoints() (advanced_loyalty_management,
+        // CybroAddons) calcula puntos perdidos y saldo nuevo del cliente, pero MUTA
+        // order.lostPoints como efecto colateral. Nunca llamarlo desde dentro de
+        // templateProps (getter evaluado durante el render de Owl): escribir sobre la
+        // orden reactiva ahí dispara un re-render que vuelve a llamar templateProps,
+        // que lo vuelve a llamar... un loop que traba el navegador. Se calcula acá,
+        // en la carga async post-mount, y se guarda en this.state (que sí es seguro
+        // de leer/actualizar desde el getter).
+        try {
+            const isRefundOrMixedOrder = !!order?._isRefundOrMixedOrder?.();
+            this.state.deductedPoints = (isRefundOrMixedOrder && order?.deductLoyaltyPoints)
+                ? (order.deductLoyaltyPoints() || [])
+                : [];
+        } catch (e) {
+            console.error('Error al calcular deductLoyaltyPoints:', e);
+            this.state.deductedPoints = [];
         }
 
         // Registrar información de contexto para depuración controlada.
@@ -311,7 +343,8 @@ patch(OrderReceipt.prototype, {
             : this.props.data.orderlines;
 
         // Líneas de pago normalizadas (ya procesadas arriba).
-        const receiptPaymentlines = normalizedPaymentlines;
+        const receiptPaymentlines = (this.props.data?.paymentlines || [])
+            .map(l => ({ ...l, name: normalizePaymentName(l.name) }));
 
         // Bloque: voucher OCA — marcar show_client_copy si hay datos (evita t-if que falle con JSON).
         // oca_voucher: primer elemento (backward compat); oca_vouchers: lista completa.
@@ -341,19 +374,70 @@ patch(OrderReceipt.prototype, {
                     this.props.data?.oca_voucher || {}
                 )} | fromState=${JSON.stringify(this.state.ocaVoucher || {})}`
         );
-        // Leer desde props.data.pointsDeducted (seteado por export_for_printing de la orden).
-        // this.pos.lostPoints era global y traía datos de órdenes anteriores.
-        const pointsLost = this.props.data?.pointsDeducted?.[0]?.lostPoint || 0;
+        // loyaltyStats en props.data es un snapshot tomado por export_for_printing() en el
+        // momento del pago/reembolso. Se recalcula acá desde la orden viva (mismo método
+        // que usa pos_loyalty) para no depender de cuándo se tomó ese snapshot.
+        //
+        // advanced_loyalty_management (CybroAddons) pisa getLoyaltyPoints() para que
+        // devuelva [] a propósito cuando la orden es reembolso/mixta (order.get_orderlines()
+        // con refunded_orderline_id, o total < 0) — ver _isRefundOrMixedOrder() en
+        // pos_loyalty_card.js. Para esos casos el saldo/puntos perdidos salen de
+        // this.state.deductedPoints, calculado en _loadReceiptData() (no acá: llamar
+        // deductLoyaltyPoints() desde este getter muta la orden reactiva en pleno
+        // render y puede colgar el navegador en un loop de re-render).
+        //
+        // Todo el bloque va en try/catch: templateProps también se evalúa cuando
+        // printer.print()/renderer.toHtml() monta OrderReceipt fuera de pantalla
+        // (botón «Imprimir Boleta», fallback QZ) — ahí una excepción acá deja el
+        // render vacío (renderer.toHtml devuelve null) sin ningún error visible más
+        // que "Images could not be loaded correctly" en loadAllImages, y el botón
+        // de impresión queda sin efecto. Con esta guarda, ante cualquier falla en
+        // el cálculo de puntos el recibo igual se imprime, solo sin ese bloque.
+        let isRefundOrMixedOrder = false;
+        let liveLoyaltyStats = [];
+        let liveDeductedPoints = [];
+        let loyaltyCurrentBalance = null;
+        let pointsLost = 0;
+        let loyaltyVisible = false;
+        try {
+            isRefundOrMixedOrder = !!order?._isRefundOrMixedOrder?.();
+            liveLoyaltyStats = order?.getLoyaltyPoints
+                ? order.getLoyaltyPoints()
+                : (this.props.data?.loyaltyStats || []);
+            liveDeductedPoints = this.state.deductedPoints || [];
+            const deductedEntry = liveDeductedPoints[0];
+            pointsLost = deductedEntry?.lostPoint || 0;
+            // Saldo de puntos del cliente ya reflejando este pedido: en venta normal
+            // sale de loyaltyStats (balance - spent - points_lost, fórmula que ya
+            // usaba el template); en reembolso/mixto sale directo de
+            // deductLoyaltyPoints() (newPoint).
+            const normalLoyalty = liveLoyaltyStats[0];
+            loyaltyCurrentBalance = isRefundOrMixedOrder
+                ? parseFloat(deductedEntry?.newPoint ?? 0)
+                : (normalLoyalty?.points
+                    ? (normalLoyalty.points.balance - normalLoyalty.points.spent - pointsLost)
+                    : null);
 
-        // Excluir categorías que no acumulan puntos (ej: Consumidor final, Empleado).
-        // partner.category_id en POS es un array de IDs (campo many2many).
-        const partnerCategoryIds = partner?.category_id || [];
-        const excludedCategoryIds = [1, 2];
-        const loyaltyVisible = !!(
-            (this.props.data?.loyaltyStats?.length) &&
-            !partnerCategoryIds.some(id => excludedCategoryIds.includes(id))
+            // Excluir categorías que no acumulan puntos (ej: Consumidor final, Empleado).
+            // partner.category_id en POS es un array de IDs (campo many2many).
+            const partnerCategoryIds = partner?.category_id || [];
+            const excludedCategoryIds = [1, 2];
+            loyaltyVisible = !!(
+                (liveLoyaltyStats.length || liveDeductedPoints.length) &&
+                !partnerCategoryIds.some(id => excludedCategoryIds.includes(id))
+            );
+            console.log('ETIQUETAS partner.category_id:', partnerCategoryIds, '| loyalty_visible:', loyaltyVisible);
+        } catch (e) {
+            console.error('[receipt_cfe_data] Error calculando puntos de lealtad en templateProps:', e);
+        }
+        console.log(
+            '[DEBUG loyaltyStats] order.get_partner():', partner,
+            '| isRefundOrMixedOrder:', isRefundOrMixedOrder,
+            '| liveLoyaltyStats:', liveLoyaltyStats,
+            '| liveDeductedPoints:', liveDeductedPoints,
+            '| loyaltyCurrentBalance:', loyaltyCurrentBalance,
+            '| couponPointChanges (live order):', order?.couponPointChanges,
         );
-        console.log('ETIQUETAS partner.category_id:', partnerCategoryIds, '| loyalty_visible:', loyaltyVisible);
 
         // Construir objeto final de props para el template del recibo.
         const props = {
@@ -374,6 +458,9 @@ patch(OrderReceipt.prototype, {
                 currency_name: receiptData?.currency_name || this.props.data?.currency_name || this.pos?.currency?.name || this.pos?.config?.currency_id?.name || '',
                 points_lost: pointsLost,
                 loyalty_visible: loyaltyVisible,
+                loyaltyStats: liveLoyaltyStats,
+                loyalty_is_refund: isRefundOrMixedOrder,
+                loyalty_current_balance: loyaltyCurrentBalance,
             },
             order: order,
             receipt: this.props.data,

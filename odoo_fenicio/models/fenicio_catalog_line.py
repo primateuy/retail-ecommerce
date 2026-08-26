@@ -24,11 +24,16 @@ class FenicioCatalogLine(models.Model):
     moneda = fields.Char('Moneda', default='UYU')
     impuesto = fields.Float('Impuesto %')
     atributos_producto = fields.Text('Atributos Producto')
+    categoria_fenicio_id = fields.Char('ID Categoría Fenicio')
+    categoria_fenicio_nombre = fields.Char('Categoría Fenicio')
+    marca_fenicio_id = fields.Char('ID Marca Fenicio')
+    marca_fenicio_nombre = fields.Char('Marca Fenicio')
 
     # ── Datos de la variante ─────────────────────────────────────────────────
     variante_codigo = fields.Char('Código Variante')
     variante_nombre = fields.Char('Variante')
     atributos_variante = fields.Text('Atributos Variante')
+    variante_descripcion = fields.Text('Descripción Variante')
 
     # ── Datos de la presentación (clave única) ───────────────────────────────
     presentacion_codigo = fields.Char('Código Presentación', required=True)
@@ -69,6 +74,19 @@ class FenicioCatalogLine(models.Model):
 
     @api.model
     def _fetch_catalog(self, url):
+        """Descarga el catálogo desde Fenicio.
+
+        Args:
+            url (str): endpoint del catálogo Fenicio.
+
+        Returns:
+            tuple[str, dict | list]: el cuerpo crudo de la respuesta tal cual
+                lo devuelve el endpoint, y el mismo cuerpo ya parseado a JSON.
+
+        Raises:
+            UserError: si falla la conexión, hay timeout, el endpoint
+                devuelve un error HTTP o el cuerpo no es JSON válido.
+        """
         try:
             resp = requests.get(url, timeout=60)
             resp.raise_for_status()
@@ -88,6 +106,10 @@ class FenicioCatalogLine(models.Model):
         if isinstance(data, list):
             return data
         if isinstance(data, dict):
+            if data.get('error'):
+                raise UserError(f"Fenicio devolvió un error: {data.get('msj') or 'sin detalle'}")
+            if isinstance(data.get('productos'), list):
+                return data['productos']
             for v in data.values():
                 if isinstance(v, list) and v:
                     return v
@@ -105,31 +127,40 @@ class FenicioCatalogLine(models.Model):
 
     @api.model
     def _iter_lines(self, products):
-        """Yield un dict por presentación aplanando producto → variante → presentación."""
+        """Yield un dict por presentación aplanando producto → variante → presentación.
+
+        Mapea los nombres de campo abreviados que usa la API real de Fenicio
+        (cod/nom/vars/pres/pr_lista/pr_promo) a los campos del modelo. No hay
+        equivalente de precio alternativo en la respuesta, así que queda en 0.
+        """
         now = fields.Datetime.now()
         for prod in products:
+            moneda = prod.get('moneda') or 'UYU'
+            categ = prod.get('categ') or {}
+            marca = prod.get('marca') or {}
             prod_base = {
-                'producto_codigo': prod.get('codigo'),
-                'producto_nombre': prod.get('nombre'),
-                'fecha_creacion': str(prod.get('fechaCreacion') or ''),
-                'prioridad': int(prod.get('prioridad') or 0),
-                'moneda': prod.get('monedaPredeterminada') or 'UYU',
-                'impuesto': float(prod.get('impuesto') or 0),
+                'producto_codigo': prod.get('cod'),
+                'producto_nombre': prod.get('nom'),
+                'moneda': moneda,
                 'atributos_producto': json.dumps(
-                    prod.get('atributos') or {}, ensure_ascii=False
+                    prod.get('caracts') or {}, ensure_ascii=False
                 ),
+                'categoria_fenicio_id': str(categ.get('id')) if categ.get('id') is not None else False,
+                'categoria_fenicio_nombre': categ.get('nom'),
+                'marca_fenicio_id': str(marca.get('id')) if marca.get('id') is not None else False,
+                'marca_fenicio_nombre': marca.get('nom'),
                 'ultima_sincronizacion': now,
             }
-            for variant in (prod.get('variantes') or []):
+            for variant in (prod.get('vars') or []):
                 var_base = {
-                    'variante_codigo': variant.get('codigo'),
-                    'variante_nombre': variant.get('nombre'),
+                    'variante_codigo': variant.get('cod'),
+                    'variante_nombre': variant.get('nom'),
                     'atributos_variante': json.dumps(
-                        variant.get('atributos') or {}, ensure_ascii=False
+                        variant.get('caracts') or {}, ensure_ascii=False
                     ),
+                    'variante_descripcion': variant.get('desc') or False,
                 }
-                for pres in (variant.get('presentaciones') or []):
-                    moneda = prod_base['moneda']
+                for pres in (variant.get('pres') or []):
 
                     def _price(d):
                         if not isinstance(d, dict):
@@ -139,13 +170,13 @@ class FenicioCatalogLine(models.Model):
                     yield {
                         **prod_base,
                         **var_base,
-                        'presentacion_codigo': pres.get('codigo'),
-                        'presentacion_nombre': pres.get('nombre'),
+                        'presentacion_codigo': pres.get('cod'),
+                        'presentacion_nombre': pres.get('nom'),
                         'sku': pres.get('sku'),
                         'stock': int(pres.get('stock') or 0),
-                        'precio_lista': _price(pres.get('precioLista')),
-                        'precio_venta': _price(pres.get('precioVenta')),
-                        'precio_alternativo': _price(pres.get('precioAlternativo')),
+                        'precio_lista': _price(pres.get('pr_lista')),
+                        'precio_venta': _price(pres.get('pr_promo')),
+                        'precio_alternativo': 0.0,
                     }
 
     # ── Feature 1: sincronizar desde Fenicio ────────────────────────────────

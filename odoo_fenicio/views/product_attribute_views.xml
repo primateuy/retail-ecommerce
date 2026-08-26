@@ -9,6 +9,9 @@
                 <xpath expr="//field[@name='name']" position="after">
                     <field name="codigo"/>
                     <field name="fenicio_type"/>
+                    <field name="fenicio_categoria_ids" widget="many2many_tags"
+                           invisible="fenicio_type != 'presentacion'"/>
+                    <field name="fenicio_talle_default" invisible="fenicio_type != 'presentacion'"/>
                     <field name="base_product_attribute"/>
                     <field name="base_product_attribute_required" invisible="not base_product_attribute"/>
                 </xpath>

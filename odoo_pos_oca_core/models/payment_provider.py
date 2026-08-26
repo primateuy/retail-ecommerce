@@ -69,6 +69,17 @@ class PaymentProvider(models.Model):
         '(Ley 19210). Se imprime en el voucher de tarjeta cuando hay '
         'devolución de impuestos.',
     )
+    oca_polling_timeout = fields.Integer(
+        string='Timeout de espera OCA (segundos)',
+        default=30,
+        help='Tiempo máximo, en segundos, que ``oca_run_purchase_query_loop`` '
+        'espera una respuesta final del pinpad antes de cancelar '
+        'automáticamente la transacción (processFinancialReverse). Actúa '
+        'de forma independiente al RemainingExpirationTime que informa el '
+        'propio pinpad. Ajustar según el tiempo real que necesita el '
+        'terminal para completar la operación; un valor demasiado bajo '
+        'puede cancelar transacciones que el pinpad todavía está procesando.',
+    )
     # is_multiple / multiple_pos_ids / multiple.pos.config viven en
     # ``odoo_pos_oca_multiple`` (tab "Configuración Multiple POS"). El core no
     # los define; los módulos que necesitan multi-POS (odoo_pos_oca_backend,

@@ -7,7 +7,7 @@ transacciones de pago específicas del sistema OCA, incluyendo
 campos adicionales y métodos de creación y actualización.
 """
 
-from odoo import fields, models, api
+from odoo import _, fields, models, api
 from odoo.exceptions import ValidationError
 from odoo.tools import formatLang
 import logging
@@ -1217,7 +1217,7 @@ class PaymentTransaction(models.Model):
         ``payment_method`` es el driver ITD (pos.payment.method o payment.provider).
         """
         import pprint
-        from time import sleep
+        from time import monotonic, sleep
         from .oca_utils import (
             _oca_build_confirm_financial_purchase_payload,
             _oca_card_data_ready_for_confirm,
@@ -1229,6 +1229,11 @@ class PaymentTransaction(models.Model):
         confirm_after_card_read_done = False
         max_iterations = 900
         iteration = 0
+        # Timeout propio configurable en el driver (pos.payment.method u
+        # payment.provider): deadline del bucle, independiente del
+        # RemainingExpirationTime que informe el pinpad.
+        own_timeout = getattr(payment_method, 'oca_polling_timeout', 0) or 0
+        start_time = monotonic()
         while True:
             iteration += 1
             if iteration > max_iterations:
@@ -1304,8 +1309,21 @@ class PaymentTransaction(models.Model):
                 if response_code not in ['10', '12']:
                     break
 
-                if response_code in ['10', '12'] and rt_num is not None and rt_num <= 0:
-                    _logger.warning('Tiempo de transacción expirado para %s. Reversión...', transaction_id)
+                # Timeout propio: independiente de lo que informe el pinpad vía
+                # RemainingExpirationTime. Evita que la espera dependa
+                # exclusivamente del timer del proveedor.
+                own_timeout_hit = own_timeout > 0 and (monotonic() - start_time) >= own_timeout
+                rt_expired = rt_num is not None and rt_num <= 0
+
+                if response_code in ['10', '12'] and (rt_expired or own_timeout_hit):
+                    if own_timeout_hit and not rt_expired:
+                        _logger.warning(
+                            'Timeout propio (%ss) alcanzado para %s '
+                            '(pinpad aún no reporta expiración). Reversión...',
+                            own_timeout, transaction_id,
+                        )
+                    else:
+                        _logger.warning('Tiempo de transacción expirado para %s. Reversión...', transaction_id)
                     reverse_result = payment_method.processFinancialReverse(query_data, base_url_endpoint)
                     result = {
                         'ResponseCode': '11',

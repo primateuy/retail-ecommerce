@@ -18,6 +18,7 @@
                         <field name="client_app_id" required="code == 'oca'"/>
                         <field name="codigo_sucursal" required="code == 'oca'"/>
                         <field name="branch"/>
+                        <field name="oca_polling_timeout"/>
                     </group>
                 </group>
             </field>
