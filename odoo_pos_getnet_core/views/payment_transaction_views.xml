@@ -1,0 +1,147 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <record id="payment_transaction_form_getnet" model="ir.ui.view">
+            <field name="name">payment.transaction.form.getnet</field>
+            <field name="model">payment.transaction</field>
+            <field name="inherit_id" ref="payment.payment_transaction_form"/>
+            <field name="arch" type="xml">
+                <xpath expr="//sheet" position="before">
+                    <div class="alert alert-warning" role="alert"
+                         invisible="not getnet_requiere_conciliacion">
+                        <field name="getnet_requiere_conciliacion" invisible="1"/>
+                        <i class="fa fa-exclamation-triangle me-2"
+                           title="Requiere conciliación"/>
+                        Esta transacción requiere conciliación manual:
+                        <field name="getnet_motivo_conciliacion" readonly="1"
+                               class="oe_inline" nolabel="1"/>
+                        <button name="getnet_action_conciliada" type="object"
+                                string="Marcar como conciliada"
+                                class="btn btn-secondary btn-sm ms-2"/>
+                    </div>
+                </xpath>
+                <xpath expr="//sheet" position="inside">
+                    <notebook>
+                        <page string="Getnet TransAct" name="getnet"
+                              invisible="provider_code != 'getnet'">
+                            <group>
+                                <group string="Operación">
+                                    <field name="getnet_token"/>
+                                    <field name="getnet_terminal_id"/>
+                                    <field name="getnet_transaction_origin"/>
+                                    <field name="getnet_estado_avance"/>
+                                    <field name="getnet_recovery_intentos"/>
+                                </group>
+                                <group string="Autorización">
+                                    <field name="getnet_transaccion_id"/>
+                                    <field name="getnet_ticket"/>
+                                    <field name="getnet_lote"/>
+                                    <field name="getnet_nro_autorizacion"/>
+                                    <field name="getnet_cod_respuesta"/>
+                                    <field name="getnet_msg_respuesta"/>
+                                </group>
+                                <group string="Tarjeta">
+                                    <field name="getnet_tarjeta_id"/>
+                                    <field name="getnet_tarjeta_tipo"/>
+                                    <field name="getnet_cuotas"/>
+                                    <field name="getnet_es_offline"/>
+                                </group>
+                            </group>
+                            <group string="Voucher">
+                                <field name="getnet_voucher" nolabel="1"/>
+                            </group>
+                            <group string="Auditoría SOAP">
+                                <field name="getnet_complete_request" widget="ace" options="{'mode': 'xml'}"/>
+                                <field name="getnet_complete_response" widget="ace" options="{'mode': 'xml'}"/>
+                            </group>
+                        </page>
+                    </notebook>
+                </xpath>
+            </field>
+        </record>
+
+        <record id="payment_transaction_tree_getnet" model="ir.ui.view">
+            <field name="name">payment.transaction.tree.getnet</field>
+            <field name="model">payment.transaction</field>
+            <field name="arch" type="xml">
+                <tree create="false" edit="false"
+                      decoration-danger="getnet_requiere_conciliacion">
+                    <field name="reference"/>
+                    <field name="partner_id"/>
+                    <field name="amount"/>
+                    <field name="currency_id"/>
+                    <field name="getnet_terminal_id"/>
+                    <field name="getnet_ticket"/>
+                    <field name="getnet_lote"/>
+                    <field name="getnet_nro_autorizacion"/>
+                    <field name="state"/>
+                    <field name="getnet_requiere_conciliacion" optional="show"/>
+                    <field name="getnet_motivo_conciliacion" optional="hide"/>
+                    <field name="create_date"/>
+                </tree>
+            </field>
+        </record>
+
+        <record id="payment_transaction_search_getnet" model="ir.ui.view">
+            <field name="name">payment.transaction.search.getnet</field>
+            <field name="model">payment.transaction</field>
+            <field name="inherit_id" ref="payment.payment_transaction_search"/>
+            <field name="arch" type="xml">
+                <search position="inside">
+                    <filter name="getnet_requiere_conciliacion"
+                            string="Requiere conciliación"
+                            domain="[('getnet_requiere_conciliacion', '=', True)]"/>
+                    <filter name="getnet_en_vuelo" string="En vuelo"
+                            domain="[('state', 'in', ('draft', 'pending')),
+                                     ('getnet_token', '!=', False)]"/>
+                    <separator/>
+                    <filter name="getnet_group_terminal" string="Terminal"
+                            context="{'group_by': 'getnet_terminal_id'}"/>
+                </search>
+            </field>
+        </record>
+
+        <record id="payment_transaction_action_getnet" model="ir.actions.act_window">
+            <field name="name">Transacciones Getnet</field>
+            <field name="res_model">payment.transaction</field>
+            <field name="view_mode">tree,form</field>
+            <field name="view_id" ref="payment_transaction_tree_getnet"/>
+            <field name="search_view_id" ref="payment_transaction_search_getnet"/>
+            <field name="domain">[('provider_code', '=', 'getnet')]</field>
+        </record>
+
+        <record id="payment_transaction_action_getnet_conciliacion"
+                model="ir.actions.act_window">
+            <field name="name">Getnet: requieren conciliación</field>
+            <field name="res_model">payment.transaction</field>
+            <field name="view_mode">tree,form</field>
+            <field name="view_id" ref="payment_transaction_tree_getnet"/>
+            <field name="search_view_id" ref="payment_transaction_search_getnet"/>
+            <field name="domain">[('provider_code', '=', 'getnet'),
+                                  ('getnet_requiere_conciliacion', '=', True)]</field>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smile_face">
+                    No hay transacciones Getnet pendientes de conciliar.
+                </p><p>
+                    Acá aparecen las transacciones que el cron de recuperación
+                    no pudo resolver: respuestas finales contradictorias del
+                    concentrador o transacciones sin respuesta final tras
+                    varios intentos. Hay que verificarlas contra el POS antes
+                    de registrarlas o anularlas.
+                </p>
+            </field>
+        </record>
+
+        <menuitem id="menu_payment_transaction_getnet"
+                  name="Transacciones Getnet"
+                  parent="account.root_payment_menu"
+                  action="payment_transaction_action_getnet"
+                  sequence="30"/>
+
+        <menuitem id="menu_payment_transaction_getnet_conciliacion"
+                  name="Getnet: requieren conciliación"
+                  parent="account.root_payment_menu"
+                  action="payment_transaction_action_getnet_conciliacion"
+                  sequence="31"/>
+    </data>
+</odoo>

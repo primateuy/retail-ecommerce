@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <record id="view_account_payment_register_form_getnet" model="ir.ui.view">
+            <field name="name">account.payment.register.form.getnet</field>
+            <field name="model">account.payment.register</field>
+            <field name="inherit_id" ref="account.view_account_payment_register_form"/>
+            <field name="arch" type="xml">
+                <field name="payment_method_line_id" position="after">
+                    <field name="getnet_is_getnet_journal" invisible="1"/>
+                    <field name="getnet_need_terminal_choice" invisible="1"/>
+                    <field name="getnet_selectable_terminal_ids" invisible="1"/>
+                    <field name="getnet_charge_on_pos"
+                           invisible="not getnet_is_getnet_journal"/>
+                    <field name="getnet_terminal_id"
+                           invisible="not getnet_is_getnet_journal or not getnet_need_terminal_choice"
+                           required="getnet_charge_on_pos and getnet_need_terminal_choice"
+                           domain="[('id', 'in', getnet_selectable_terminal_ids)]"/>
+                </field>
+            </field>
+        </record>
+    </data>
+</odoo>

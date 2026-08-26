@@ -1,0 +1,6 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_getnet_pos_terminal_user,getnet.pos.terminal user,model_getnet_pos_terminal,base.group_user,1,1,1,0
+access_getnet_pos_terminal_manager,getnet.pos.terminal manager,model_getnet_pos_terminal,account.group_account_manager,1,1,1,1
+access_getnet_lote_cierre_user,getnet.lote.cierre user,model_getnet_lote_cierre,base.group_user,1,1,1,0
+access_getnet_lote_cierre_manager,getnet.lote.cierre manager,model_getnet_lote_cierre,account.group_account_manager,1,1,1,1
+access_getnet_payment_transaction_account_user,payment.transaction getnet lectura contable,payment.model_payment_transaction,account.group_account_user,1,0,0,0

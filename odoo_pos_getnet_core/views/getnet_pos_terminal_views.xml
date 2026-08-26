@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <record id="getnet_pos_terminal_view_tree" model="ir.ui.view">
+            <field name="name">getnet.pos.terminal.tree</field>
+            <field name="model">getnet.pos.terminal</field>
+            <field name="arch" type="xml">
+                <tree>
+                    <field name="name"/>
+                    <field name="term_cod"/>
+                    <field name="payment_provider_id"/>
+                    <field name="lock_origin"/>
+                    <field name="lock_date"/>
+                </tree>
+            </field>
+        </record>
+
+        <record id="getnet_pos_terminal_view_form" model="ir.ui.view">
+            <field name="name">getnet.pos.terminal.form</field>
+            <field name="model">getnet.pos.terminal</field>
+            <field name="arch" type="xml">
+                <form>
+                    <header>
+                        <button name="action_getnet_force_release"
+                                type="object"
+                                string="Forzar liberación"
+                                invisible="not lock_origin"
+                                groups="base.group_system"
+                                confirm="Forzar la liberación con una operación en curso puede dejar un cobro aprobado en el pinpad sin pago registrado en Odoo. ¿Continuar?"/>
+                    </header>
+                    <sheet>
+                        <group>
+                            <group>
+                                <field name="name"/>
+                                <field name="term_cod"/>
+                                <field name="payment_provider_id"/>
+                            </group>
+                            <group string="Estado de la terminal">
+                                <field name="lock_origin" readonly="1"/>
+                                <field name="lock_ref" readonly="1"/>
+                                <field name="lock_uid" readonly="1"/>
+                                <field name="lock_date" readonly="1"/>
+                            </group>
+                        </group>
+                    </sheet>
+                </form>
+            </field>
+        </record>
+
+        <record id="getnet_pos_terminal_action" model="ir.actions.act_window">
+            <field name="name">Terminales Getnet</field>
+            <field name="res_model">getnet.pos.terminal</field>
+            <field name="view_mode">tree,form</field>
+        </record>
+
+        <menuitem id="menu_getnet_pos_terminal"
+                  name="Terminales Getnet"
+                  parent="account.menu_finance_configuration"
+                  action="getnet_pos_terminal_action"
+                  sequence="81"/>
+    </data>
+</odoo>

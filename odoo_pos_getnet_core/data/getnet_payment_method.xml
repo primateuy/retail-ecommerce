@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="1">
+        <!-- payment.method requerido por payment.transaction -->
+        <record id="payment_method_getnet" model="payment.method">
+            <field name="name">Getnet</field>
+            <field name="code">getnet</field>
+            <field name="active" eval="False"/>
+            <field name="support_tokenization" eval="False"/>
+        </record>
+
+        <!-- Métodos de pago CONTABLES.
+             Sin estos, account_payment._ensure_payment_method_line() sale
+             sin hacer nada (busca un account.payment.method cuyo code sea
+             el del proveedor) y el diario nunca recibe la línea de método
+             de pago Getnet: el flujo de account.payment no se puede ni
+             configurar. -->
+        <record id="account_payment_method_getnet" model="account.payment.method">
+            <field name="name">Getnet TransAct</field>
+            <field name="code">getnet</field>
+            <field name="payment_type">inbound</field>
+        </record>
+
+        <!-- Outbound: necesario para las devoluciones (DEV con
+             TicketOriginal), que se registran como pago saliente. -->
+        <record id="account_payment_method_getnet_outbound" model="account.payment.method">
+            <field name="name">Getnet TransAct</field>
+            <field name="code">getnet</field>
+            <field name="payment_type">outbound</field>
+        </record>
+    </data>
+</odoo>

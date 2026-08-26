@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <record id="view_account_payment_form_getnet" model="ir.ui.view">
+            <field name="name">account.payment.form.getnet</field>
+            <field name="model">account.payment</field>
+            <field name="inherit_id" ref="account.view_account_payment_form"/>
+            <field name="arch" type="xml">
+                <xpath expr="//header" position="inside">
+                    <!-- Campos técnicos: garantizan que el cliente los cargue -->
+                    <field name="getnet_is_getnet_payment_line" invisible="1"/>
+                    <field name="getnet_is_integrated_journal" invisible="1"/>
+                    <field name="getnet_async_terminal_pending" invisible="1"/>
+                    <field name="getnet_tx_is_done" invisible="1"/>
+                    <field name="getnet_need_terminal_choice" invisible="1"/>
+                    <field name="getnet_selectable_terminal_ids" invisible="1"/>
+                    <field name="getnet_post_blocked" invisible="1"/>
+                    <field name="getnet_cancel_blocked" invisible="1"/>
+                    <field name="getnet_draft_blocked" invisible="1"/>
+                </xpath>
+                <!--
+                    Bloqueo de los botones estándar en modo ADITIVO
+                    (separator=" or " add=...): no reescribimos el invisible
+                    completo para no pisar lo que ya pusieron otros backends
+                    de POS integrado (Fiserv/OCA) sobre los mismos botones.
+                    Al revés también aplica: esas vistas tienen priority 50/99
+                    y sí reemplazan el atributo entero, por lo que en una BD
+                    con Fiserv el término Getnet se pierde aquí y lo aporta
+                    odoo_pos_getnet_fiserv_flags vía pos_integrated_*.
+                    En standalone Getnet este aditivo es el único guard de UI.
+                -->
+                <xpath expr="//button[@name='action_post']" position="attributes">
+                    <attribute name="invisible" separator=" or "
+                               add="getnet_post_blocked"/>
+                </xpath>
+                <xpath expr="//button[@name='action_cancel']" position="attributes">
+                    <attribute name="invisible" separator=" or "
+                               add="getnet_cancel_blocked"/>
+                </xpath>
+                <xpath expr="//button[@name='action_draft']" position="attributes">
+                    <attribute name="invisible" separator=" or "
+                               add="getnet_draft_blocked"/>
+                </xpath>
+                <button name="action_post" position="before">
+                    <button name="action_getnet_create_transaction"
+                            type="object"
+                            string="Crear transacción Getnet"
+                            class="oe_highlight"
+                            invisible="state != 'draft' or not getnet_is_getnet_payment_line or getnet_async_terminal_pending or getnet_tx_is_done"/>
+                </button>
+                <xpath expr="//sheet" position="before">
+                    <div class="alert alert-info" role="status"
+                         invisible="not getnet_async_terminal_pending">
+                        <i class="fa fa-spinner fa-spin me-2" title="Esperando terminal"/>
+                        Esperando respuesta de la terminal Getnet...
+                    </div>
+                    <div class="alert alert-success" role="status"
+                         invisible="not getnet_tx_is_done or state != 'draft'">
+                        <i class="fa fa-check-circle me-2" title="Cobro aprobado"/>
+                        Cobro aprobado en la terminal Getnet. Pulse Confirmar
+                        para registrar el pago.
+                    </div>
+                </xpath>
+                <xpath expr="//group[@name='group2']" position="inside">
+                    <field name="getnet_charge_on_pos"
+                           invisible="not getnet_is_getnet_payment_line"/>
+                    <!--
+                        Único lugar de la UI donde se cargan las facturas
+                        origen: el wizard «Registrar pago» de la factura
+                        no sirve para este flujo (postea el pago al
+                        crearlo y el guard lo rechaza). Sin esto todo
+                        cobro Getnet saldría con FacturaNro=0.
+                    -->
+                    <field name="getnet_source_invoice_ids"
+                           widget="many2many_tags"
+                           invisible="not getnet_is_getnet_payment_line or payment_type != 'inbound'"
+                           readonly="state != 'draft'"
+                           domain="[('move_type', 'in', ('out_invoice', 'out_refund')),
+                                    ('state', '=', 'posted'),
+                                    ('payment_state', 'in', ('not_paid', 'partial')),
+                                    ('partner_id', '=', partner_id),
+                                    ('company_id', '=', company_id)]"/>
+                    <field name="getnet_terminal_id"
+                           invisible="not getnet_is_getnet_payment_line or not getnet_need_terminal_choice"
+                           required="getnet_charge_on_pos and getnet_need_terminal_choice"
+                           domain="[('id', 'in', getnet_selectable_terminal_ids)]"/>
+                    <field name="getnet_original_transaction_id"
+                           invisible="not getnet_is_getnet_payment_line or payment_type != 'outbound'"
+                           required="getnet_charge_on_pos and payment_type == 'outbound'"/>
+                    <field name="getnet_transaction_id" readonly="1"
+                           invisible="not getnet_transaction_id"/>
+                    <field name="getnet_tx_state" readonly="1"
+                           invisible="not getnet_transaction_id"/>
+                </xpath>
+            </field>
+        </record>
+    </data>
+</odoo>
