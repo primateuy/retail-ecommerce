@@ -48,7 +48,8 @@
                 -->
                 <t t-set="discount_display" t-value="o.program_id._forum_get_discount_display()"/>
                 <t t-set="scope_message" t-value="o.program_id._forum_render_receipt_scope(o)"/>
-                <t t-set="coupon_barcode_uri" t-value="o.get_pos_coupon_barcode_data_uri()"/>
+                <t t-set="coupon_barcode_info" t-value="o.get_pos_coupon_barcode_info()"/>
+                <t t-set="coupon_barcode_uri" t-value="coupon_barcode_info and coupon_barcode_info.get('uri')"/>
 
                 <div style="background: #ffffff; color: #1c1c1c; padding: 18px 14px 12px; text-align: center; font-family: Arial, Helvetica, sans-serif;">
 
@@ -84,15 +85,15 @@
                     <div style="border-top: 1.5px dashed #cfcfcf; margin: 20px 0;"></div>
 
                     <!--
-                        Barcode: mismo patrón que el ticket de cambio (odoo_pos_oca). wkhtmltopdf
-                        ignora width:100% en <img> y respeta el tamaño en px; como el barcode
-                        (400px) es más ancho que el área de 80mm, se posiciona absoluto y se centra
-                        sobre el ancho de página (left:50% + margin-left negativo de media imagen).
-                        El contenedor reserva la altura para no solapar lo que sigue.
+                        Barcode: mismo patrón que el ticket de cambio (odoo_pos_oca). Se dimensiona
+                        en mm y entra completo dentro de los 80 mm. La versión anterior lo pintaba a
+                        400 px con position:absolute y margin-left:-200px, o sea sobresaliendo ~49 px
+                        de cada lado del papel: el recorte se llevaba la quiet zone y ~4,8 módulos de
+                        los patrones de start/stop de Code128, y el cupón no se podía escanear.
                     -->
-                    <div t-if="coupon_barcode_uri" style="position: relative; height: 80px; margin: 0 0 6px;">
+                    <div t-if="coupon_barcode_uri" style="margin: 0 0 6px;">
                         <img t-att-src="coupon_barcode_uri" alt="Código de barras del cupón"
-                             style="position: absolute; left: 50%; margin-left: -200px; width: 400px; height: 80px;"/>
+                             t-attf-style="display: block; margin: 0 auto; width: {{ coupon_barcode_info['width_mm'] }}mm; height: {{ coupon_barcode_info['height_mm'] }}mm; max-width: 100%; image-rendering: pixelated; image-rendering: -moz-crisp-edges; image-rendering: -webkit-optimize-contrast;"/>
                     </div>
                     <div t-else="" style="margin: 0 0 6px;">
                         <span t-field="o.code" t-options="{'widget': 'barcode', 'width': 600, 'height': 160}"/>

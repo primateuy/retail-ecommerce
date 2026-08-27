@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 
-import base64
 import logging
 
 from odoo import models
@@ -15,28 +14,36 @@ class LoyaltyCard(models.Model):
 
     _inherit = "loyalty.card"
 
-    def get_pos_coupon_barcode_data_uri(self):
+    def get_pos_coupon_barcode_info(self):
         """
-        PNG Code128 en data URI para el cupón térmico (QZ y PDF sin URL absoluta al barcode).
+        Code128 del código del cupón, listo para el ticket térmico de 80 mm.
 
-        El reporte estándar usa ``t-field`` con widget barcode; en QZ suele fallar la ruta HTTP.
+        El reporte estándar usa ``t-field`` con widget barcode; en QZ suele fallar la
+        ruta HTTP. Se delega en ``ir.actions.report._forum_code128_thermal``
+        (odoo_pos_oca), que genera el PNG alineado a módulo y devuelve el tamaño
+        físico en mm con el que hay que pintarlo.
+
+        :return: dict con ``uri``/``width_mm``/``height_mm``/``value``, o ``False``.
         """
         self.ensure_one()
         value = (self.code or "").strip()
         if not value:
             return False
-        try:
-            # Mismos parámetros que el ticket de cambio (get_change_ticket_barcode_data_uri):
-            # PNG ancho/alta resolución que luego se muestra a 400x80 px posicionado
-            # absoluto sobre el ancho de página. Así sale igual de nítido.
-            png = self.env["ir.actions.report"].barcode(
-                "Code128", value, width=600, height=80
-            )
-        except Exception as err:
+        # normalize=False: el código del cupón es un identificador exacto, no se le
+        # puede recortar nada (a diferencia del "Order " de la referencia del pedido).
+        info = self.env["ir.actions.report"]._forum_code128_thermal(value, normalize=False)
+        if not info:
             _logger.debug(
-                "pos_forum_qz_print: barcode cupón no generado | card=%s | %s",
+                "pos_forum_qz_print: barcode cupón no generado | card=%s | valor=%r",
                 self.id,
-                err,
+                value,
             )
-            return False
-        return "data:image/png;base64," + base64.b64encode(png).decode("ascii")
+        return info
+
+    def get_pos_coupon_barcode_data_uri(self):
+        """
+        Compatibilidad: sólo el data URI del Code128 del cupón.
+        """
+        self.ensure_one()
+        info = self.get_pos_coupon_barcode_info()
+        return info["uri"] if info else False

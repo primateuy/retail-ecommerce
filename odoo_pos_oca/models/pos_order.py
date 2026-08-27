@@ -3,7 +3,6 @@
 Modelo para extender pos.order con funcionalidades básicas
 """
 
-import base64
 import logging
 
 from odoo import models, fields, api, _
@@ -378,33 +377,37 @@ class PosOrder(models.Model):
             return []
         return self._find_all_payment_transactions_for_pos_receipt(order).ids
 
-    def get_change_ticket_barcode_data_uri(self):
+    def get_change_ticket_barcode_info(self):
         """
-        Genera un data URI PNG (Code128) con el nº de orden para el reporte PDF/HTML.
+        Devuelve el Code128 del nº de orden listo para el ticket de cambio.
 
-        El ``<img src="/report/barcode/...">`` no siempre se renderiza en PDF (wkhtmltopdf
-        sin URL absoluta); embeber base64 garantiza que el código de barras se vea.
+        Delega en ``ir.actions.report._forum_code128_thermal`` (odoo_pos_oca), que
+        genera el PNG alineado a módulo y dimensionado para 80 mm. Ver el docstring
+        de ese helper para el detalle de por qué no se usa ``/report/barcode/``.
+
+        :return: dict con ``uri``/``width_mm``/``height_mm``/``value``, o ``False``.
         """
         self.ensure_one()
         value = (self.pos_reference or self.name or "").strip()
         if not value:
             return False
-        try:
-            # PNG ancho/alta resolución: al estirarse a width:100% en el ticket
-            # mantiene nitidez (wkhtmltopdf escala con height:auto preservando
-            # la proporción ~5:1).
-            png = self.env["ir.actions.report"].barcode(
-                "Code128", value, width=600, height=80
-            )
-        except Exception as err:
+        info = self.env["ir.actions.report"]._forum_code128_thermal(value)
+        if not info:
             _logger.debug(
-                "Ticket cambio: no se generó Code128 | orden=%s | valor=%r | %s",
-                self.id,
-                value,
-                err,
+                "Ticket cambio: no se generó Code128 | orden=%s | valor=%r", self.id, value
             )
-            return False
-        return "data:image/png;base64," + base64.b64encode(png).decode("ascii")
+        return info
+
+    def get_change_ticket_barcode_data_uri(self):
+        """
+        Compatibilidad: sólo el data URI del Code128 del nº de orden.
+
+        Se mantiene para plantillas o módulos que ya llamaban a este método. El
+        dimensionado correcto vive en ``get_change_ticket_barcode_info``.
+        """
+        self.ensure_one()
+        info = self.get_change_ticket_barcode_info()
+        return info["uri"] if info else False
 
     @api.model
     def create(self, vals):

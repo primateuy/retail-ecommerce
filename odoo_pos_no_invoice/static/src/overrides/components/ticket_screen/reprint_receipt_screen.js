@@ -14,11 +14,15 @@ patch(ReprintReceiptScreen.prototype, {
      */
     tryReprint() {
         const cfeData = this.pos._reprintCfeData || {};
+        // Igual que cfe_data: el barcode ya lo trajo reprint_receipt_button desde el
+        // servidor. Sin esto el recibo cae al fallback por URL y sale el PNG
+        // estirado que no lee la pistola.
+        const barcode = this.pos._reprintBarcode || false;
         const baseData = this.props.order.export_for_printing();
         this.printer.print(
             OrderReceipt,
             {
-                data: { ...baseData, cfe_data: cfeData },
+                data: { ...baseData, cfe_data: cfeData, barcode },
                 formatCurrency: this.env.utils.formatCurrency,
             },
             { webPrintFallback: true }

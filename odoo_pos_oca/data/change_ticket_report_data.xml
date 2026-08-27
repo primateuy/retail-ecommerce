@@ -201,8 +201,10 @@
                         <t t-set="ticket_number" t-value="o.pos_reference or o.name"/>
                         <!-- Nº de orden para texto bajo el código (prioridad: pos_reference). -->
                         <t t-set="order_number" t-value="o.pos_reference or o.name"/>
-                        <!-- PNG Code128 embebido en base64 (PDF no resuelve bien /report/barcode/...). -->
-                        <t t-set="barcode_data_uri" t-value="o.get_change_ticket_barcode_data_uri()"/>
+                        <!-- PNG Code128 embebido en base64 (PDF no resuelve bien /report/barcode/...).
+                             Devuelve además el tamaño físico en mm con el que hay que pintarlo. -->
+                        <t t-set="barcode_info" t-value="o.get_change_ticket_barcode_info()"/>
+                        <t t-set="barcode_data_uri" t-value="barcode_info and barcode_info.get('uri')"/>
                         <t t-set="branch_partner"
                            t-value="(o.config_id.picking_type_id.warehouse_id.partner_id if o.config_id and o.config_id.picking_type_id and o.config_id.picking_type_id.warehouse_id and o.config_id.picking_type_id.warehouse_id.partner_id else (o.config_id.company_id.partner_id if o.config_id and o.config_id.company_id else o.company_id.partner_id))"/>
                         <t t-set="cfe_serie_num" t-value="o.account_move and o.account_move.cfe_serie_num or ''"/>
@@ -269,14 +271,15 @@
                             </div>
 
                             <!-- Código de barras nº de orden (entre vendedor y PDV / sucursal).
-                                 wkhtmltopdf ignora width:100% en <img> y respeta el tamaño en px;
-                                 además .page (80mm) es más angosto que el barcode deseado. Se posiciona
-                                 absoluto y se centra sobre el ancho de página (left:50% + margin-left
-                                 negativo de media imagen) para que ocupe ~600px sin que .page lo recorte.
-                                 El contenedor reserva la altura para no solapar lo que sigue. -->
-                            <div t-if="barcode_data_uri" style="position: relative; height: 80px; margin: 10px 0 16px 0;">
+                                 El barcode se dimensiona en mm y SIEMPRE entra dentro de los 80 mm de
+                                 .page. La versión anterior lo pintaba a 400 px con position:absolute y
+                                 margin-left:-200px, así que sobresalía ~49 px de cada lado del papel:
+                                 el recorte se comía la quiet zone y ~4,8 módulos de los patrones de
+                                 start (11 módulos) y stop (13 módulos) de Code128, lo que dejaba el
+                                 código imposible de decodificar. Centrado normal, sin desbordar. -->
+                            <div t-if="barcode_data_uri" style="text-align: center; margin: 10px 0 4px 0;">
                                 <img t-att-src="barcode_data_uri" alt="Orden"
-                                     style="position: absolute; left: 50%; margin-left: -200px; width: 400px; height: 80px;"/>
+                                     t-attf-style="display: block; margin: 0 auto; width: {{ barcode_info['width_mm'] }}mm; height: {{ barcode_info['height_mm'] }}mm; max-width: 100%; image-rendering: pixelated; image-rendering: -moz-crisp-edges; image-rendering: -webkit-optimize-contrast;"/>
                             </div>
                             <div t-if="barcode_data_uri" style="text-align: center; font-size: 9px; margin-bottom: 8px; text-transform: none;">
                                 <span t-esc="order_number"/>

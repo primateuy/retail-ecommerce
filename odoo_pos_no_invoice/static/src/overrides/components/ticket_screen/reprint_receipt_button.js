@@ -94,6 +94,15 @@ patch(ReprintReceiptButton.prototype, {
             receiptData.paymentlines = baseReceiptData.paymentlines;
         }
 
+        // El barcode del servidor se arrastra siempre, incluso cuando los datos
+        // vienen de la orden y no de la factura: si no, la reimpresión cae al
+        // fallback por URL (/report/barcode/), que devuelve el PNG estirado y
+        // borroso que justamente no se puede escanear.
+        if (receiptServerData?.barcode) {
+            receiptData.barcode = receiptServerData.barcode;
+            this.pos._reprintBarcode = receiptServerData.barcode;
+        }
+
         // Guardar CFE data en el store para que _loadReceiptData lo use
         // cuando ReprintReceiptScreen renderice OrderReceipt sin cfe_data en props.
         this.pos._reprintCfeData = cfeData;

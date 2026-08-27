@@ -424,6 +424,7 @@ class PosOrder(models.Model):
             'total_received': 0.0,
             'currency_name': '',
             'receipt_logo': False,
+            'barcode': False,
             'tax_details': [],
             'legal_data': {
                 'purchase_condition': '',
@@ -554,22 +555,35 @@ class PosOrder(models.Model):
 
         # Líneas de pago normalizadas desde la orden POS (todas, no solo la primera).
         # El vuelto en efectivo se registra como un pos.payment aparte con monto
-        # negativo (mismo método), no como ajuste del monto entregado. Si se
-        # listara tal cual, saldrían dos líneas "Efectivo" (una negativa) en vez
-        # de una sola con lo realmente entregado; el vuelto ya se muestra por su
-        # cuenta como línea CAMBIO en el recibo.
+        # negativo y `is_change=True` (ver _process_payment_lines en el core). Si se
+        # listara tal cual, saldrían dos líneas "Efectivo" (una negativa) en vez de
+        # una sola con lo realmente entregado; el vuelto ya se muestra por su cuenta
+        # como línea CAMBIO en el recibo.
+        #
+        # El filtro va por `is_change`, no por monto negativo: en una devolución los
+        # pagos son legítimamente negativos y tienen que seguir apareciendo. Es el
+        # mismo criterio que usa el core en export_for_printing() (models.js).
         if pos_order and pos_order.payment_ids:
             total_received = 0.0
             paymentlines = []
-            for payment in pos_order.payment_ids:
+            for payment in pos_order.payment_ids.filtered(lambda p: not p.is_change):
                 pamount = payment.amount or 0.0
-                if pamount <= 0:
-                    continue
                 pname = self._normalize_payment_name(payment.payment_method_id.name or '')
                 total_received += pamount
                 paymentlines.append({'name': pname, 'amount': pamount})
             receipt_data['paymentlines'] = paymentlines
             receipt_data['total_received'] = total_received
+
+        # Código de barras del nº de ticket, generado en el servidor.
+        #
+        # Se manda desde acá (y no se arma en JS con /report/barcode/) para que todas
+        # las vías de impresión —pantalla, botón Imprimir Boleta, rutina QZ y
+        # reimpresión— usen exactamente el mismo PNG, sin una RPC extra. El helper de
+        # odoo_pos_oca lo genera alineado a módulo y dimensionado para 80 mm.
+        if ticket_number:
+            receipt_data['barcode'] = self.env['ir.actions.report']._forum_code128_thermal(
+                ticket_number
+            )
 
         # Asignar información legal al recibo.
         receipt_data['legal_data'].update({

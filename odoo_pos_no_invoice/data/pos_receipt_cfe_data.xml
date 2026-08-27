@@ -389,14 +389,18 @@
             </div>
 
             <!-- Código de barras del número de orden debajo de la adenda.
-                 Ancho/alto fijos + centrado por posición absoluta (igual que en
- `               loyalty_coupon_pos_report.xml). .pos-receipt ahora tiene
-                 position:relative para que el left:50% se calcule contra los
-                 80mm del recibo y no contra la página completa. -->
+                 Se dimensiona en mm (lo manda el servidor en props.data.barcode_*) y
+                 entra COMPLETO dentro de los 80mm de .pos-receipt.
+                 La versión anterior lo pintaba a 400px con position:absolute y
+                 margin-left:-200px: 80mm son 302px, así que la imagen sobresalía
+                 ~49px de cada lado y el papel se comía la quiet zone más ~4,8
+                 módulos de los patrones de start (11 módulos) y stop (13 módulos)
+                 de Code128. Sin start ni stop ningún lector puede decodificarlo:
+                 esa era la causa de que el código no se pudiera escanear. -->
             <t t-if="props.data.barcode_src">
-                <div style="position:relative; height:80px; margin:12px 0 6px;">
+                <div style="text-align:center; margin:12px 0 4px; width:100%">
                     <img t-att-src="props.data.barcode_src" alt="Código de barras"
-                        style="position:absolute; left:50%; margin-left:-200px; width:400px; height:80px;"/>
+                        t-attf-style="display:block; margin:0 auto; width:{{ props.data.barcode_width_mm }}mm; height:{{ props.data.barcode_height_mm }}mm; max-width:100%; image-rendering:pixelated; image-rendering:-moz-crisp-edges; image-rendering:-webkit-optimize-contrast;"/>
                 </div>
                 <div style="font-family:'Courier New',monospace; font-size:12px; letter-spacing:0.06em; text-align:center; width:100%">
                     <t t-esc="props.data.barcode_value"/>

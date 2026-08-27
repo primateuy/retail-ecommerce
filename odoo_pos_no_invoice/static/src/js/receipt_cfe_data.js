@@ -49,9 +49,52 @@ patch(OrderReceipt.prototype, {
     },
 
     /**
+     * Calcula los puntos perdidos/devueltos del reembolso y los deja en this.state.
+     *
+     * Sólo corre si el recibo que se está renderizando es el de la orden activa del
+     * POS: en la reimpresión desde la pantalla de tickets, this.pos.get_order()
+     * apunta a la orden NUEVA (vacía), no a la que se reimprime, y calcular sobre
+     * ella mostraría puntos que no corresponden.
+     */
+    _computeDeductedPoints() {
+        try {
+            const order = this.pos.get_order();
+            const receiptName = this.props.data?.name;
+            const isCurrentOrderReceipt = !!order && (!receiptName || receiptName === order.name);
+            const isRefundOrMixedOrder = isCurrentOrderReceipt && !!order?._isRefundOrMixedOrder?.();
+            this.state.deductedPoints = (isRefundOrMixedOrder && order?.deductLoyaltyPoints)
+                ? (order.deductLoyaltyPoints() || [])
+                : [];
+        } catch (e) {
+            console.error('Error al calcular deductLoyaltyPoints:', e);
+            this.state.deductedPoints = [];
+        }
+    },
+
+    /**
      * Carga en segundo plano los datos del recibo y del CFE.
      */
     async _loadReceiptData() {
+        // Puntos de lealtad primero, ANTES de cualquier early-return.
+        //
+        // Reembolso/orden mixta: deductLoyaltyPoints() (advanced_loyalty_management,
+        // CybroAddons) calcula puntos perdidos y saldo nuevo del cliente, pero MUTA
+        // order.lostPoints como efecto colateral. Nunca llamarlo desde dentro de
+        // templateProps (getter evaluado durante el render de Owl): escribir sobre la
+        // orden reactiva ahí dispara un re-render que vuelve a llamar templateProps,
+        // que lo vuelve a llamar... un loop que traba el navegador. Se calcula acá,
+        // en la carga async post-mount, y se guarda en this.state (que sí es seguro
+        // de leer/actualizar desde el getter).
+        //
+        // Va arriba de todo a propósito: las dos vías de IMPRESIÓN (botón «Imprimir
+        // Boleta» y rutina QZ) montan OrderReceipt con _skipAsyncReload, y la
+        // reimpresión sale por el return de _reprintCfeData. Si este cálculo queda
+        // debajo de esos returns, state.deductedPoints se queda en [] justo en los
+        // recibos impresos; como advanced_loyalty_management hace que
+        // getLoyaltyPoints() devuelva [] en reembolso, loyalty_visible da false y el
+        // bloque de puntos desaparece de la versión impresa (el bug reportado).
+        this._computeDeductedPoints();
+
         // El caller (printReceipt en odoo_pos_no_invoice / pos_forum_qz_print) ya
         // pre-obtuvo cfe_data/oca_vouchers/receiptServerData antes de montar este
         // componente vía renderer.toHtml(). Repetir esas mismas RPC acá (async,
@@ -92,24 +135,6 @@ patch(OrderReceipt.prototype, {
         const orderServerId = order?.server_id || null;
         if (!order) {
             console.log('No hay orden disponible en el POS, se usará referencia del recibo');
-        }
-
-        // Reembolso/orden mixta: deductLoyaltyPoints() (advanced_loyalty_management,
-        // CybroAddons) calcula puntos perdidos y saldo nuevo del cliente, pero MUTA
-        // order.lostPoints como efecto colateral. Nunca llamarlo desde dentro de
-        // templateProps (getter evaluado durante el render de Owl): escribir sobre la
-        // orden reactiva ahí dispara un re-render que vuelve a llamar templateProps,
-        // que lo vuelve a llamar... un loop que traba el navegador. Se calcula acá,
-        // en la carga async post-mount, y se guarda en this.state (que sí es seguro
-        // de leer/actualizar desde el getter).
-        try {
-            const isRefundOrMixedOrder = !!order?._isRefundOrMixedOrder?.();
-            this.state.deductedPoints = (isRefundOrMixedOrder && order?.deductLoyaltyPoints)
-                ? (order.deductLoyaltyPoints() || [])
-                : [];
-        } catch (e) {
-            console.error('Error al calcular deductLoyaltyPoints:', e);
-            this.state.deductedPoints = [];
         }
 
         // Registrar información de contexto para depuración controlada.
@@ -321,12 +346,31 @@ patch(OrderReceipt.prototype, {
         const totalReceived = receiptData?.total_received
             || normalizedPaymentlines.reduce((acc, l) => acc + (typeof l.amount === 'number' ? l.amount : 0), 0);
 
-        // Construir URL del código de barras para el número de ticket.
-        const barcodeValue = this.props.data?.name || legalData.ticket_number || '';
-        const baseUrl = this.props.data?.base_url || this.pos?.base_url || '';
-        const barcodeSrc = barcodeValue
-            ? `${baseUrl}/report/barcode/Code128/${encodeURIComponent(barcodeValue)}?width=600&height=80`
-            : '';
+        // Código de barras del número de ticket.
+        //
+        // El PNG lo genera el servidor (get_receipt_data_from_invoice_or_order ->
+        // ir.actions.report._forum_code128_thermal) y viaja en receipt_data.barcode.
+        // Antes se armaba acá una URL a /report/barcode/Code128/...?width=600, que
+        // estira el dibujo por un factor no entero: el PNG salía con ~115 de 600
+        // píxeles en gris antialiaseado y barras de un mismo módulo midiendo 2, 4, 5
+        // o 6 px, algo que la térmica binariza de forma arbitraria. El helper del
+        // servidor renderiza sin escalado, con ancho de módulo entero, y además
+        // devuelve el tamaño físico en mm con el que hay que pintarlo.
+        const barcodeInfo = receiptData?.barcode || this.props.data?.barcode || null;
+        // Texto legible bajo el código: el nº de ticket completo, aunque el barcode
+        // codifique la versión sin el prefijo «Order »/«Pedido ».
+        const barcodeValue = legalData.ticket_number || this.props.data?.name || '';
+        let barcodeSrc = barcodeInfo?.uri || '';
+        const barcodeWidthMm = barcodeInfo?.width_mm || 70;
+        const barcodeHeightMm = barcodeInfo?.height_mm || 12;
+        if (!barcodeSrc && barcodeValue) {
+            // Fallback: orden todavía no sincronizada o helper no disponible. Sale
+            // por HTTP y con la calidad vieja, pero al menos dimensionado en mm para
+            // que entre completo en los 80 mm y no se recorten los patrones
+            // start/stop ni la quiet zone.
+            const baseUrl = this.props.data?.base_url || this.pos?.base_url || '';
+            barcodeSrc = `${baseUrl}/report/barcode/Code128/${encodeURIComponent(barcodeValue)}?width=600&height=100`;
+        }
 
         // Log para validar el contenido de CFE en el render del recibo.
         console.log('=== templateProps CFE ===');
@@ -448,6 +492,8 @@ patch(OrderReceipt.prototype, {
                 skip_footer: !!hasFooterPolicy,
                 barcode_value: barcodeValue,
                 barcode_src: barcodeSrc,
+                barcode_width_mm: barcodeWidthMm,
+                barcode_height_mm: barcodeHeightMm,
                 legal_data: legalData,
                 adenda_data: adendaData,
                 cfe_data: cfeData,
