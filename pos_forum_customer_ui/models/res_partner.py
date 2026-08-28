@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import re
 
-from odoo import _, api, models
+from odoo import _, api, fields, models
 from odoo.exceptions import UserError, ValidationError
 from odoo.tools import email_re
 
@@ -16,6 +16,69 @@ class _PosRutPreviewRollback(Exception):
 
 class ResPartner(models.Model):
     _inherit = "res.partner"
+
+    pos_fe_amount_limit_control = fields.Boolean(
+        string="Control de monto máximo permitido FE",
+        help="Habilita el control de un monto máximo permitido por comprobante "
+        "de facturación electrónica para este cliente en el POS.",
+    )
+    pos_fe_max_amount_currency_id = fields.Many2one(
+        "res.currency",
+        string="Moneda monto total",
+        default=lambda self: self.env.company.currency_id,
+    )
+    pos_fe_max_amount = fields.Monetary(
+        string="Monto total permitido",
+        currency_field="pos_fe_max_amount_currency_id",
+    )
+    company_currency_id = fields.Many2one(
+        "res.currency",
+        string="Moneda compañía",
+        compute="_compute_company_currency_id",
+    )
+    pos_fe_max_amount_company_currency = fields.Monetary(
+        string="Monto total moneda compañía",
+        compute="_compute_pos_fe_max_amount_company_currency",
+        currency_field="company_currency_id",
+        store=True,
+    )
+
+    @api.depends_context("company")
+    def _compute_company_currency_id(self):
+        """Expone la moneda de la compañía activa como campo de apoyo.
+
+        Se usa como ``currency_field`` de ``pos_fe_max_amount_company_currency``
+        para que el widget monetario muestre el símbolo correcto.
+        """
+        company_currency = self.env.company.currency_id
+        for partner in self:
+            partner.company_currency_id = company_currency
+
+    @api.depends(
+        "pos_fe_max_amount",
+        "pos_fe_max_amount_currency_id",
+        "company_currency_id.rate_ids.rate",
+    )
+    def _compute_pos_fe_max_amount_company_currency(self):
+        """Convierte el monto máximo permitido a la moneda de la compañía.
+
+        Se recalcula ademas cuando se agrega una nueva cotizacion en
+        ``res.currency.rate`` para la moneda de la compañia
+        (``company_currency_id``), para que el monto convertido no quede
+        desactualizado frente al tipo de cambio vigente.
+
+        Returns:
+            None: Asigna el valor convertido en ``pos_fe_max_amount_company_currency``.
+        """
+        company = self.env.company
+        today = fields.Date.context_today(self)
+        for partner in self:
+            if partner.pos_fe_max_amount_currency_id:
+                partner.pos_fe_max_amount_company_currency = partner.pos_fe_max_amount_currency_id._convert(
+                    partner.pos_fe_max_amount, company.currency_id, company, today
+                )
+            else:
+                partner.pos_fe_max_amount_company_currency = partner.pos_fe_max_amount
 
     @api.constrains("mobile", "phone", "country_id")
     def _check_pos_phone_format(self):

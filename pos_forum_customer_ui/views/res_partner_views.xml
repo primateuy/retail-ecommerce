@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="res_partner_view_form_pos_fe_max_amount" model="ir.ui.view">
+        <field name="name">res.partner.form.pos.fe.max.amount</field>
+        <field name="model">res.partner</field>
+        <field name="inherit_id" ref="base.view_partner_form" />
+        <field name="arch" type="xml">
+            <xpath expr="//notebook" position="inside">
+                <page name="pos_fe_max_amount" string="Control FE">
+                    <group>
+                        <group>
+                            <field name="pos_fe_amount_limit_control" />
+                        </group>
+                        <group invisible="pos_fe_amount_limit_control == False">
+                            <field
+                                name="pos_fe_max_amount_currency_id"
+                                required="pos_fe_amount_limit_control == True"
+                            />
+                            <field
+                                name="pos_fe_max_amount"
+                                required="pos_fe_amount_limit_control == True"
+                            />
+                            <field name="pos_fe_max_amount_company_currency" readonly="1" />
+                        </group>
+                    </group>
+                </page>
+            </xpath>
+        </field>
+    </record>
+</odoo>

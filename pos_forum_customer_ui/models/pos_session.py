@@ -132,6 +132,8 @@ class PosSession(models.Model):
                 "birthdate_date",
                 "social_reason",
                 "company_type",
+                "pos_fe_amount_limit_control",
+                "pos_fe_max_amount_company_currency",
             ]
             for field_name in extra_fields:
                 if field_name not in result["search_params"]["fields"]:
