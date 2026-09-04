@@ -133,6 +133,8 @@ class PosSession(models.Model):
                 "social_reason",
                 "company_type",
                 "pos_fe_amount_limit_control",
+                "pos_fe_max_amount",
+                "pos_fe_max_amount_currency_id",
                 "pos_fe_max_amount_company_currency",
             ]
             for field_name in extra_fields:
