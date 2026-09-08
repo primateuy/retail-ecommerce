@@ -7,7 +7,6 @@
         <field name="model">shopping.payment.method</field>
         <field name="arch" type="xml">
             <tree>
-                <field name="shopping_code"/>
                 <field name="payment_code"/>
                 <field name="payment_label"/>
                 <field name="payment_type"/>
@@ -24,7 +23,6 @@
                 <sheet>
                     <group>
                         <group>
-                            <field name="shopping_code"/>
                             <field name="payment_code"/>
                             <field name="payment_label" placeholder="ej: VISA, MasterCard, etc."/>
                             <field name="payment_type"/>
