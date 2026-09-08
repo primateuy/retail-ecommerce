@@ -61,7 +61,7 @@ export class AccountMoveWidget extends Component {
             const methods = await this.orm.read(
                 "shopping.payment.method",
                 methodIds,
-                ["name", "shopping_code", "payment_code"]
+                ["name", "payment_code"]
             );
             
             this.state.paymentMethods = methods;
@@ -94,7 +94,6 @@ export class AccountMoveWidget extends Component {
                             return {
                                 id: method.id,
                                 name: method.name,
-                                shopping_code: method.shopping_code,
                                 payment_code: method.payment_code,
                                 amount: amount,
                                 percentage: percentage
@@ -104,7 +103,6 @@ export class AccountMoveWidget extends Component {
                             return {
                                 id: method.id,
                                 name: method.name,
-                                shopping_code: method.shopping_code,
                                 payment_code: method.payment_code,
                                 amount: 0,
                                 percentage: 0
@@ -136,7 +134,6 @@ export class AccountMoveWidget extends Component {
         this.state.payments = methods.map(method => ({
             id: method.id,
             name: method.name,
-            shopping_code: method.shopping_code,
             payment_code: method.payment_code,
             amount: 0,
             percentage: 0
@@ -205,7 +202,6 @@ export class AccountMoveWidget extends Component {
         const distributionData = this.state.payments.map(p => ({
             payment_method_id: p.id,
             payment_method_name: p.name,
-            shopping_code: p.shopping_code,
             payment_code: p.payment_code,
             amount: parseFloat(p.amount.toFixed(2)),
             percentage: parseFloat(p.percentage.toFixed(2))
