@@ -8,7 +8,7 @@
     "author": "PRIMATE",
     "website": "https://www.primateuy.com",
     "category": "Point of Sale",
-    "version": "17.0.1.3.0",
+    "version": "17.0.1.4.0",
     "depends": [
         "point_of_sale",
         "l10n_uy_einvoice_base",

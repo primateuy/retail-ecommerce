@@ -25,7 +25,10 @@ class ResPartner(models.Model):
     pos_fe_max_amount_currency_id = fields.Many2one(
         "res.currency",
         string="Moneda monto total",
-        default=lambda self: self.env.company.currency_id,
+        help="Se completa solo en los contactos que tienen el control de monto "
+        "máximo activado. Mantener ese invariante no es cosmético: es lo que "
+        "acota el recálculo de pos_fe_max_amount_company_currency cuando cambia "
+        "una cotización (ver el comentario del @api.depends).",
     )
     pos_fe_max_amount = fields.Monetary(
         string="Monto total permitido",
@@ -57,15 +60,32 @@ class ResPartner(models.Model):
     @api.depends(
         "pos_fe_max_amount",
         "pos_fe_max_amount_currency_id",
-        "company_currency_id.rate_ids.rate",
+        "pos_fe_max_amount_currency_id.rate_ids.rate",
     )
     def _compute_pos_fe_max_amount_company_currency(self):
         """Convierte el monto máximo permitido a la moneda de la compañía.
 
-        Se recalcula ademas cuando se agrega una nueva cotizacion en
-        ``res.currency.rate`` para la moneda de la compañia
-        (``company_currency_id``), para que el monto convertido no quede
-        desactualizado frente al tipo de cambio vigente.
+        Se recalcula ademas cuando cambia una cotizacion en ``res.currency.rate``
+        para la moneda cargada en la ficha, para que el monto convertido no
+        quede desactualizado frente al tipo de cambio vigente.
+
+        La dependencia va por ``pos_fe_max_amount_currency_id`` y NO por
+        ``company_currency_id``, aunque este ultimo parezca mas natural. El
+        motor de dependencias, para saber a que contactos recomputar, hace
+        ``search([(campo, 'in', ids)])`` (``models.py::_modified_triggers``).
+        ``company_currency_id`` es un compute sin ``store`` ni ``search``, asi
+        que ese leaf se descarta —``expression.py``: "Non-stored field %s cannot
+        be searched. Ignore it: generate a dummy leaf"— y el dominio queda
+        vacio: **recomputaba res.partner ENTERO** ante cualquier cambio de
+        cotizacion. Con 647.000 contactos eso termina en MemoryError al flushear,
+        y el cron del BCU escribe cotizaciones solo, asi que se disparaba dia por
+        medio sin que nadie tocara nada.
+
+        ``pos_fe_max_amount_currency_id`` si es stored, con lo cual el search es
+        SQL real. Y como el campo se completa unicamente en los contactos con
+        ``pos_fe_amount_limit_control`` activo (invariante sostenido en
+        ``create``/``write``), el recalculo queda acotado justo a los que usan
+        la funcionalidad.
 
         Returns:
             None: Asigna el valor convertido en ``pos_fe_max_amount_company_currency``.
@@ -79,6 +99,72 @@ class ResPartner(models.Model):
                 )
             else:
                 partner.pos_fe_max_amount_company_currency = partner.pos_fe_max_amount
+
+    # ------------------------------------------------------------------
+    # Invariante: la moneda del limite existe si y solo si el control esta ON
+    # ------------------------------------------------------------------
+    # No es una preferencia de prolijidad. `pos_fe_max_amount_currency_id` es el
+    # campo por el que viaja la dependencia de `pos_fe_max_amount_company_currency`
+    # con las cotizaciones, y el motor recomputa TODO lo que ese search devuelva.
+    # Dejarlo cargado en contactos que no usan la funcionalidad significa
+    # recomputarlos a todos cada vez que se mueve el tipo de cambio.
+    #
+    # Se sostiene en create/write y no solo en el onchange porque el onchange
+    # corre unicamente en la interfaz: una importacion, una llamada RPC o el POS
+    # escribiendo directo lo saltean.
+
+    def _valores_moneda_limite(self, control, moneda_actual):
+        """Devuelve la moneda que corresponde, o None si no hay que tocar nada."""
+        if control:
+            return moneda_actual or self.env.company.currency_id.id
+        return False if moneda_actual else None
+
+    @api.model_create_multi
+    def create(self, vals_list):
+        for vals in vals_list:
+            moneda = self._valores_moneda_limite(
+                vals.get("pos_fe_amount_limit_control"),
+                vals.get("pos_fe_max_amount_currency_id"),
+            )
+            if moneda is not None:
+                vals["pos_fe_max_amount_currency_id"] = moneda
+        return super().create(vals_list)
+
+    def write(self, vals):
+        res = super().write(vals)
+        if "pos_fe_amount_limit_control" not in vals:
+            return res
+
+        # Se corrige despues del super() porque el conjunto a ajustar depende
+        # del valor que quedo en cada registro, y un write puede abarcar
+        # contactos con monedas distintas.
+        if vals.get("pos_fe_amount_limit_control"):
+            faltantes = self.filtered(lambda p: not p.pos_fe_max_amount_currency_id)
+            if faltantes:
+                faltantes.write({
+                    "pos_fe_max_amount_currency_id": self.env.company.currency_id.id,
+                })
+        else:
+            sobrantes = self.filtered("pos_fe_max_amount_currency_id")
+            if sobrantes:
+                sobrantes.write({"pos_fe_max_amount_currency_id": False})
+        # Sin recursion: los write de arriba no traen
+        # `pos_fe_amount_limit_control`, asi que salen por el return de arriba.
+        return res
+
+    @api.onchange("pos_fe_amount_limit_control")
+    def _onchange_pos_fe_amount_limit_control(self):
+        """Precarga la moneda al tildar el control, y la limpia al destildarlo.
+
+        Es solo comodidad de pantalla —la vista pide la moneda como obligatoria
+        cuando el control esta activo—; la garantia real vive en create/write.
+        """
+        for partner in self:
+            if partner.pos_fe_amount_limit_control:
+                if not partner.pos_fe_max_amount_currency_id:
+                    partner.pos_fe_max_amount_currency_id = self.env.company.currency_id
+            else:
+                partner.pos_fe_max_amount_currency_id = False
 
     @api.constrains("mobile", "phone", "country_id")
     def _check_pos_phone_format(self):
