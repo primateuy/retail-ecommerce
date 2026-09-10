@@ -28,7 +28,7 @@ class AccountJournal(models.Model):
         'journal_shopping_payment_rel',  # Nombre de la tabla intermedia
         'journal_id',                     # Columna para journal
         'payment_method_id',              # Columna para payment method
-        string='Métodos de Pago Shopping'
+        string='Formas de Pago Shopping'
     )
 
     def write(self, vals):
