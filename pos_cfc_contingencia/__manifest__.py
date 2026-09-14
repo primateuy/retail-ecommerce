@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 {
     'name': 'POS — PDV de Contingencia CFC (Uruguay)',
-    'version': '17.0.1.0.0',
+    'version': '17.0.1.1.0',
     'category': 'Point of Sale',
     'summary': "Punto de venta dedicado para emisión de Comprobantes Fiscales "
                "de Contingencia (CFC). Banner + validación de folio en la "
@@ -30,6 +30,7 @@ de pago (provisto por pos_reference_for_payment) y este módulo:
     ],
     'assets': {
         'point_of_sale._assets_pos': [
+            'pos_cfc_contingencia/static/src/js/Order.js',
             'pos_cfc_contingencia/static/src/js/PaymentScreen.js',
             'pos_cfc_contingencia/static/src/xml/PaymentScreen.xml',
             'pos_cfc_contingencia/static/src/css/cfc_banner.css',
