@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- Folio editable en la orden: una venta que se sincronizó sin folio (o con
+         uno inválido) queda sin facturar, y desde acá se carga el folio correcto
+         antes de facturarla. -->
+    <record id="view_pos_pos_form_cfc_contingencia" model="ir.ui.view">
+        <field name="name">pos.order.form.cfc.contingencia</field>
+        <field name="model">pos.order</field>
+        <field name="inherit_id" ref="point_of_sale.view_pos_pos_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='pos_reference']" position="after">
+                <field name="cfc_es_contingencia" invisible="1"/>
+                <field name="cfc_folio"
+                       invisible="not cfc_es_contingencia"
+                       readonly="state == 'invoiced'"/>
+                <field name="cfc_problema_sync"
+                       class="text-danger"
+                       invisible="not cfc_problema_sync or state == 'invoiced'"/>
+            </xpath>
+        </field>
+    </record>
+
+</odoo>
