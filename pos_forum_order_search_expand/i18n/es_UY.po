@@ -17,6 +17,13 @@ msgstr ""
 
 #. module: pos_forum_order_search_expand
 #. odoo-javascript
+#: code:addons/pos_forum_order_search_expand/static/src/overrides/ticket_screen.js:0
+#, python-format
+msgid "All"
+msgstr "Todo"
+
+#. module: pos_forum_order_search_expand
+#. odoo-javascript
 #: code:addons/pos_forum_order_search_expand/static/src/components/reprint_change_ticket_button.js:0
 #, python-format
 msgid "Change Ticket"
