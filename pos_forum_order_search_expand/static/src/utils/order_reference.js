@@ -10,31 +10,30 @@ import { _t } from "@web/core/l10n/translation";
 // que llega al input es 00697'001'0001 en lugar de 00697-001-0001.
 // Los largos mínimos (5/3/4) son los del zero_pad y evitan falsos positivos con
 // otros términos separados por signos, p. ej. la fecha 01/02/2024.
-const SCANNED_REFERENCE_RE = /^(\d{5,})[^0-9A-Za-z](\d{3,})[^0-9A-Za-z](\d{4,})$/;
-
-// Prefijo textual de pos.order.pos_reference: una única palabra seguida de
-// espacio ("Orden ", "Order ", "Pedido ", según el idioma del PDV que creó la
-// orden). No viaja en el código de barras impreso porque son 77 módulos extra
-// sobre 187; ver ir.actions.report._forum_normalize_barcode_value en odoo_pos_oca.
-const REFERENCE_PREFIX_RE = /^\p{L}+\s+(\S.*)$/u;
+// Sólo se ancla al final: el botón Reembolso abre la pantalla de órdenes con el
+// nombre del cliente ya cargado en el buscador y la lectora teclea el código a
+// continuación ("Consumidor Final00697'001'0001"), así que el nº de orden puede
+// venir precedido por cualquier texto. Lo que importa es que termine con él.
+const SCANNED_REFERENCE_RE = /(\d{5,})[^0-9A-Za-z](\d{3,})[^0-9A-Za-z](\d{4,})$/;
 
 /**
  * Devuelve la parte numérica del nº de orden, o null si el valor no lo es.
  *
- * Tolera el prefijo textual y cualquier separador no alfanumérico, así que
- * reconoce tanto "00697'001'0001" (lectura cruda) como "00697-001-0001" o
- * "Orden 00697-001-0001" (tecleado a mano o ya normalizado).
+ * Tolera texto previo (prefijo "Orden ", nombre de cliente precargado, etc.) y
+ * cualquier separador no alfanumérico, así que reconoce "00697'001'0001"
+ * (lectura cruda), "00697-001-0001", "Orden 00697-001-0001" (tecleado a mano
+ * o ya normalizado) y "Consumidor Final00697'001'0001" (lectura sobre un
+ * buscador que ya tenía texto).
  *
  * @param {string} value texto escaneado o tecleado.
- * @returns {string|null} "00697-001-0001", o null si no tiene forma de nº de orden.
+ * @returns {string|null} "00697-001-0001", o null si no termina con un nº de orden.
  */
 export function parseOrderReference(value) {
     const text = (value || "").trim();
     if (!text) {
         return null;
     }
-    const withoutPrefix = text.match(REFERENCE_PREFIX_RE);
-    const match = (withoutPrefix ? withoutPrefix[1].trim() : text).match(SCANNED_REFERENCE_RE);
+    const match = text.match(SCANNED_REFERENCE_RE);
     if (!match) {
         return null;
     }
@@ -47,9 +46,10 @@ export function parseOrderReference(value) {
  *
  * "00697'001'0001" -> "Orden 00697-001-0001". El prefijo sale de _t("Order %s"),
  * el mismo string con el que el POS arma pos_reference, así que respeta el
- * idioma de la sesión en vez de hardcodear "Orden".
+ * idioma de la sesión en vez de hardcodear "Orden". Cualquier texto que
+ * precediera al código (p. ej. el nombre del cliente precargado) se descarta.
  *
- * Es idempotente y todo lo que no tenga forma de nº de orden se devuelve
+ * Es idempotente y todo lo que no termine con un nº de orden se devuelve
  * intacto, para no romper las búsquedas por cliente, fecha o texto libre.
  *
  * @param {string} value texto escaneado o tecleado en el buscador.
