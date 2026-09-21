@@ -6,6 +6,9 @@ import logging
 
 _logger = logging.getLogger(__name__)
 
+# Maximo de registros por pagina que admite la API de Mercado Pago.
+MP_PAGE_SIZE = 30
+
 
 class MercadoPagoUser(models.Model):
 
@@ -145,24 +148,70 @@ class MercadoPagoUser(models.Model):
                     user.name, user.id, str(e)
                 )
 
+    def _fetch_all_paginated(self, url, resource_label, page_size=MP_PAGE_SIZE):
+        """Obtiene todos los resultados de un endpoint paginado de Mercado Pago.
+
+        Los endpoints de tiendas y cajas devuelven como maximo ``page_size``
+        registros por request, junto con un bloque ``paging`` con el ``total``.
+        Este metodo itera incrementando ``offset`` hasta cubrir el total (o hasta
+        que una pagina venga incompleta, si la respuesta no trae ``paging``).
+
+        Args:
+            url (str): endpoint a consultar (sin parametros de paginacion).
+            resource_label (str): nombre del recurso para los mensajes de error.
+            page_size (int): cantidad de registros por pagina.
+
+        Returns:
+            list: todos los registros acumulados de ``results``.
+
+        Raises:
+            ValidationError: si la API responde con error o falla la conexion.
+        """
+        self.ensure_one()
+        results = []
+        offset = 0
+        total = None
+        while True:
+            params = {"offset": offset, "limit": page_size}
+            try:
+                response = self._make_request('get', url, params=params)
+                if response.status_code >= 400:
+                    raise ValidationError(
+                        _("Error al obtener %s de Mercado Pago: %s") % (resource_label, response.text)
+                    )
+                data = response.json()
+            except requests.exceptions.RequestException as e:
+                raise ValidationError(
+                    _("Error de conexion al obtener %s: %s") % (resource_label, str(e))
+                )
+
+            if isinstance(data, dict):
+                page = data.get("results", [])
+                paging = data.get("paging") or {}
+                total = paging.get("total", total)
+            else:
+                page = data
+            if not isinstance(page, list):
+                page = []
+
+            results.extend(page)
+            offset += page_size
+
+            # Sin paging: cortamos cuando la pagina viene vacia o incompleta.
+            if not page or len(page) < page_size:
+                break
+            if total is not None and offset >= total:
+                break
+
+        _logger.info("Mercado Pago: %s %s obtenidas desde %s", len(results), resource_label, url)
+        return results
+
     def fetch_stores_and_tills(self):
         self.ensure_one()
 
         # 1. Fetch stores from MP
         stores_url = f"https://api.mercadopago.com/users/{self.user_id}/stores/search"
-        try:
-            stores_response = self._make_request('get', stores_url)
-            if stores_response.status_code >= 400:
-                raise ValidationError(
-                    _("Error al obtener tiendas de Mercado Pago: %s") % stores_response.text
-                )
-            stores_data = stores_response.json()
-        except requests.exceptions.RequestException as e:
-            raise ValidationError(_("Error de conexion al obtener tiendas: %s") % str(e))
-
-        mp_stores = stores_data.get("results", stores_data) if isinstance(stores_data, dict) else stores_data
-        if not isinstance(mp_stores, list):
-            mp_stores = []
+        mp_stores = self._fetch_all_paginated(stores_url, _("tiendas"))
 
         StoreBranch = self.env['store.branches']
 
@@ -196,19 +245,7 @@ class MercadoPagoUser(models.Model):
 
         # 2. Fetch tills/POS from MP
         tills_url = "https://api.mercadopago.com/pos"
-        try:
-            tills_response = self._make_request('get', tills_url)
-            if tills_response.status_code >= 400:
-                raise ValidationError(
-                    _("Error al obtener cajas de Mercado Pago: %s") % tills_response.text
-                )
-            tills_data = tills_response.json()
-        except requests.exceptions.RequestException as e:
-            raise ValidationError(_("Error de conexion al obtener cajas: %s") % str(e))
-
-        mp_tills = tills_data.get("results", tills_data) if isinstance(tills_data, dict) else tills_data
-        if not isinstance(mp_tills, list):
-            mp_tills = []
+        mp_tills = self._fetch_all_paginated(tills_url, _("cajas"))
 
         StoreTill = self.env['store.tills']
 
