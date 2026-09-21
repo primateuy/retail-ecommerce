@@ -34,6 +34,7 @@
 
                                 <field name="guia_talle_id" invisible="not product_e_fenicio"/>
                                 <field name="descripcion_fenicio" invisible="not product_e_fenicio"/>
+                                <field name="descripcion_ampliada_fenicio" invisible="not product_e_fenicio"/>
                             </group>
 
                             <group>
