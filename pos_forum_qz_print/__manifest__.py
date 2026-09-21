@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 {
     "name": "POS Forum — Impresión QZ Tray",
-    "version": "17.0.1.1.0",
+    "version": "17.0.1.3.0",
     "category": "Point of Sale",
     "summary": "Ticket de cambio y recibo POS vía QZ Tray (impresora local sin diálogo del navegador).",
     "description": """
@@ -41,6 +41,7 @@ pos_qz_printer Kanak / QZ Tray).
             "pos_forum_qz_print/static/src/lib/qz-tray.js",
             "pos_forum_qz_print/static/src/js/qz_print_service.js",
             "pos_forum_qz_print/static/src/js/receipt_screen_qz.js",
+            "pos_forum_qz_print/static/src/js/loyalty_code_scan.js",
         ],
     },
     "installable": True,
