@@ -9,7 +9,7 @@
         Requiere el módulo custom_receipts_for_pos para funcionar correctamente.
     """,
     'category': 'Localization',
-    'version': '17.0.0.2',
+    'version': '17.0.0.3',
     'depends': ['base', 'base_setup', 'point_of_sale', 'custom_receipts_for_pos', 'odoo_pos_oca'],
     'data': [
         'views/res_config_settings_views.xml',
