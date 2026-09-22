@@ -94,6 +94,11 @@ class ProductTemplate(models.Model):
     )
 
     descripcion_fenicio = fields.Text('Descripción e-Fenicio');
+    descripcion_ampliada_fenicio = fields.Text(
+        'Descripción ampliada e-Fenicio',
+        help='Texto plano. Se convierte a HTML automáticamente al enviarlo a Fenicio '
+             '(cada línea en blanco genera un párrafo nuevo).',
+    )
 
 
 

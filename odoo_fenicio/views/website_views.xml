@@ -40,8 +40,16 @@
                                     string="Exportar a Excel"
                                     type="object"
                                     class="btn btn-secondary"/>
+                        </div>
+                    </group>
+                    <group string="Logs" col="1">
+                        <div class="d-flex gap-2 flex-wrap mt-1 mb-2">
+                            <button name="action_open_order_logs"
+                                    string="Logs de órdenes"
+                                    type="object"
+                                    class="btn btn-primary"/>
                             <button name="action_open_logs"
-                                    string="Ver Logs"
+                                    string="Logs Importación"
                                     type="object"
                                     class="btn btn-secondary"/>
                         </div>
