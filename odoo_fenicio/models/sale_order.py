@@ -5,7 +5,7 @@ import logging
 
 import pytz
 from dateutil.parser import parse
-from odoo import models, fields, api
+from odoo import _, api, fields, models
 from odoo.exceptions import ValidationError
 
 _logger = logging.getLogger(__name__)
@@ -56,6 +56,52 @@ class SaleOrder(models.Model):
 
         self.write(vals)
 
+    def _get_fenicio_payment_method(self, provider, codigo_pago):
+        """Resuelve el método de pago de la transacción a partir del código de Fenicio.
+
+        `payment.transaction.payment_method_id` es obligatorio en Odoo 17, pero
+        Fenicio puede no enviar `codigo` o enviar uno que no coincide con ningún
+        método configurado. En ese caso se usa el método genérico de Odoo
+        ('payment.payment_method_unknown') en lugar de hacer fallar la orden; el
+        código original queda igualmente guardado en `issuer_name`.
+
+        Args:
+            provider (payment.provider): proveedor de pago Fenicio.
+            codigo_pago (str): código del medio de pago enviado por Fenicio.
+
+        Returns:
+            payment.method: método de pago a asignar a la transacción.
+
+        Raises:
+            ValidationError: si no existe el método genérico de Odoo.
+        """
+        if codigo_pago:
+            codigo = codigo_pago.strip().lower()
+            # active_test=False: los métodos no habilitados en el proveedor siguen
+            # siendo válidos para registrar una transacción ya procesada en Fenicio.
+            metodo = provider.with_context(active_test=False).payment_method_ids.filtered(
+                lambda m: codigo in ((m.code or '').lower(), (m.name or '').lower())
+            )[:1]
+            if not metodo:
+                metodo = self.env['payment.method'].with_context(active_test=False).search(
+                    ['|', ('code', '=ilike', codigo_pago), ('name', '=ilike', codigo_pago)],
+                    limit=1,
+                )
+            if metodo:
+                return metodo
+            _logger.warning(
+                "Fenicio: no se encontró un payment.method para el código '%s'; "
+                "se usa el método genérico.", codigo_pago
+            )
+
+        metodo_generico = self.env.ref('payment.payment_method_unknown', raise_if_not_found=False)
+        if not metodo_generico:
+            raise ValidationError(
+                _("No se encontró el método de pago genérico de Odoo "
+                  "(payment.payment_method_unknown).")
+            )
+        return metodo_generico
+
     def create_payment_transaction(self, json_data, payment_id=False):
         try:
             self.ensure_one()
@@ -94,12 +140,7 @@ class SaleOrder(models.Model):
                 )[:1]
 
             codigo_pago = (json_data_pago.get('codigo') or '')
-            payment_method = False
-            if codigo_pago:
-                payment_method = self.env['payment.method'].search(
-                    [('name', '=', codigo_pago)], limit=1
-                )
-
+            payment_method = self._get_fenicio_payment_method(provider, codigo_pago)
 
             transaction = self.env['payment.transaction'].create({
                 'reference': id_externo,
@@ -107,7 +148,7 @@ class SaleOrder(models.Model):
                 'currency_id': currency.id,
                 'partner_id': self.partner_id.id,
                 'provider_id': provider.id,
-                'payment_method_id': payment_method.id if payment_method else False,
+                'payment_method_id': payment_method.id,
                 'issuer_name': codigo_pago,
                 'payment_id': payment_id.id if payment_id else False,
                 'invoice_ids': [(6, 0, self.invoice_ids.ids)] if self.invoice_ids else False,
