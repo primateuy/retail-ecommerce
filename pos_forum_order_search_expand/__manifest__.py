@@ -2,13 +2,14 @@
     "name": "POS Forum - Order Search Expand",
     "summary": "Show all orders and reprint change ticket",
     "description": """
-        Quita filtros de PDV/compañía en la búsqueda de órdenes del POS
+        Quita filtros de PDV/compañía en la búsqueda de órdenes del POS,
+        habilita devolver una orden hecha en otra sucursal o empresa
         y agrega botón para reimprimir ticket de cambio desde órdenes.
     """,
     "author": "PRIMATE",
     "website": "https://www.primate.com",
     "category": "Point of Sale",
-    "version": "17.0.1.0.0",
+    "version": "17.0.1.1.0",
     "depends": [
         "point_of_sale",
         "odoo_pos_oca",
