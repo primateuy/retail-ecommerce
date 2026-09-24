@@ -6,7 +6,7 @@ class PosPaymentMethod(models.Model):
     _inherit = 'pos.payment.method'
 
     is_pos_shopping = fields.Boolean(
-        string='POS Shopping',
+        string='PDV Shopping',
         default=False,
         help='Indica que este método de pago corresponde a una integración con Shopping.'
     )

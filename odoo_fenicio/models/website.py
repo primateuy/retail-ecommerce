@@ -95,6 +95,23 @@ class Website(models.Model):
             'domain': [('company_id', '=', self.company_id.id)],
         }
 
+    def action_open_order_logs(self):
+        """Abre los logs del endpoint /orden de este sitio, agrupados por orden Fenicio.
+
+        Returns:
+            dict: action window sobre fenicio.log filtrada por compañía y endpoint.
+        """
+        self.ensure_one()
+        return {
+            'type': 'ir.actions.act_window',
+            'name': 'Logs de órdenes Fenicio',
+            'res_model': 'fenicio.log',
+            'view_mode': 'tree,form',
+            'target': 'current',
+            'domain': [('company_id', '=', self.company_id.id), ('endpoint', '=', '/orden')],
+            'context': {'search_default_group_id_order': 1},
+        }
+
     @api.constrains('fenicio_payment_journal_id')
     def _check_fenicio_payment_journal_company(self):
         for rec in self:

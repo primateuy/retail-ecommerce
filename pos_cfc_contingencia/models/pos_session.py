@@ -5,6 +5,10 @@ PaymentScreen para obtener los datos del CAE de contingencia activo.
 Se eligió RPC bajo demanda en lugar de pre-cargar via `_loader_params_*`
 porque los datos del CAE pueden cambiar entre sesiones (admin renueva el
 talonario) y la cantidad de datos es pequeña.
+
+Lo que sí viaja con la carga es si el PDV ES de contingencia
+(`pos.config.cfc_es_contingencia`), para que el frontend pida el folio aunque
+este RPC falle.
 """
 from odoo import fields, models
 
@@ -12,16 +16,25 @@ from odoo import fields, models
 class PosSession(models.Model):
     _inherit = 'pos.session'
 
+    def _get_pos_ui_pos_config(self, params):
+        config = super()._get_pos_ui_pos_config(params)
+        config['cfc_es_contingencia'] = bool(self.config_id._cfc_journal())
+        return config
+
     def cfc_cae_info(self):
         """Devuelve datos del CAE de contingencia activo para el PDV actual.
 
-        Lee `self.config_id.journal_id` para determinar si es un PDV de
-        contingencia. Si lo es, retorna info del CAE activo; si no, retorna
+        Usa el diario de facturas del PDV (ver `pos.config._cfc_journal`). Si
+        es de contingencia retorna info del CAE activo; si no, retorna
         `{'is_cfc': False}` para que el frontend desactive la lógica CFC.
+
+        La lectura del CAE va en sudo: la llamada ya pasó el control de acceso
+        del cajero sobre su sesión, y sin sudo un cajero sin grupo contable
+        recibía AccessError y el POS dejaba de pedir el folio.
         """
         self.ensure_one()
-        journal = self.config_id.journal_id
-        if not journal or not journal.es_diario_contingencia:
+        journal = self.config_id._cfc_journal()
+        if not journal:
             return {'is_cfc': False}
         cae = journal.cae_activo_id
         if not cae:

@@ -35,23 +35,79 @@ class ApiController(http.Controller):
             'data': data,
         }
         
-        # Guardar log si se proporcionan los datos necesarios
-        if endpoint and request_data:
-            try:
-                request.env['fenicio.log'].sudo().create({
-                    'estado': 'ok' if status == 'OK' else 'error',
-                    'request': json.dumps(request_data),
-                    'mensaje': json.dumps(response_data),
-                    'endpoint': endpoint,
-                    'company_id': request.env.company.id if status == 'OK' or (hasattr(request.env, 'company') and request.env.company) else None,
-                })
-            except Exception as e:
-                _logger.error("Error al crear log en Fenicio: %s", str(e))
+        if endpoint:
+            self._registrar_log(endpoint, request_data, response_data, status, data, mensaje)
 
         return request.make_response(
             json.dumps(response_data).replace('false', 'null'), 
             headers=[('Content-Type', 'application/json')]
         )
+
+    def _registrar_log(self, endpoint, request_data, response_data, status, data, mensaje):
+        """Registra la llamada en fenicio.log sin afectar nunca la respuesta HTTP.
+
+        Se loguea aunque `request_data` esté vacío (token inválido o JSON
+        malformado), guardando el body crudo. Un `{'error': ...}` en `data`
+        se marca como error en el log aunque el status HTTP siga siendo 'OK':
+        el contrato con Fenicio no cambia, solo la trazabilidad interna.
+
+        Args:
+            endpoint (str): ruta invocada, ej. '/orden'.
+            request_data (dict): body parseado, o {} si falló antes de parsearlo.
+            response_data (dict): respuesta completa que se devuelve a Fenicio.
+            status (str): 'OK' o 'ERROR'.
+            data (dict|list|None): campo `data` de la respuesta.
+            mensaje (str): campo `mensaje` de la respuesta.
+        """
+        try:
+            error_negocio = data.get('error') if isinstance(data, dict) else None
+            is_error = status != 'OK' or bool(error_negocio)
+            mensaje_error = (mensaje if status != 'OK' else error_negocio) or None
+
+            if request_data:
+                request_text = json.dumps(request_data)
+            else:
+                request_text = request.httprequest.get_data(as_text=True)
+
+            company = self._get_fenicio_company()
+            id_order_fenicio = None
+            sale_order = None
+            if isinstance(request_data, dict) and request_data.get('idOrden'):
+                id_order_fenicio = str(request_data['idOrden'])
+                # sudo: el env puede ser el usuario público si falló la autenticación.
+                # Se busca también en errores: tras el rollback el pedido de este request
+                # no existe, pero uno creado en un request anterior sí, y así queda enlazado.
+                sale_order = request.env['sale.order'].sudo().search([
+                    ('id_order_fenicio', '=', id_order_fenicio),
+                    ('company_id', '=', company.id),
+                ], limit=1)
+
+            request.env['fenicio.log'].registrar(
+                'error' if is_error else 'ok',
+                request_text,
+                endpoint=endpoint,
+                company_id=company.id,
+                mensaje=response_data,
+                id_order_fenicio=id_order_fenicio,
+                sale_order_id=sale_order.id if sale_order else None,
+                mensaje_error=str(mensaje_error) if mensaje_error else None,
+            )
+        except Exception as e:
+            _logger.error("Error al crear log en Fenicio: %s", str(e))
+
+    def _get_fenicio_company(self):
+        """Devuelve la compañía del sitio web dueño del token, o la del entorno.
+
+        Returns:
+            res.company: compañía a la que pertenece la llamada.
+        """
+        token = request.httprequest.headers.get('Token-Autenticacion-Efenicio')
+        if token:
+            # sudo: se consulta antes de autenticar, con el usuario público.
+            website = request.env['website'].sudo().search([('fenicio_token', '=', token)], limit=1)
+            if website and website.company_id:
+                return website.company_id
+        return request.env.company
 
     def _authenticate_and_setup_env(self):
         token = request.httprequest.headers.get('Token-Autenticacion-Efenicio')

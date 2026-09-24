@@ -15,7 +15,10 @@
                            decoration-success="estado == 'ok'"
                            width="100"/>
                     <field name="endpoint" width="140"/>
-                    <field name="request_preview" string="Detalle Request" />
+                    <field name="id_order_fenicio" width="120"/>
+                    <field name="sale_order_id" width="140"/>
+                    <field name="mensaje_error" optional="show"/>
+                    <field name="request_preview" string="Detalle Request" optional="hide"/>
                     <field name="company_id" groups="base.group_multi_company" width="120"/>
                 </tree>
             </field>
@@ -36,10 +39,15 @@
                             </group>
                             <group>
                                 <field name="endpoint"/>
+                                <field name="id_order_fenicio"/>
+                                <field name="sale_order_id"/>
                                 <field name="company_id" groups="base.group_multi_company"/>
                             </group>
                         </group>
-                        
+                        <group string="Error" invisible="estado != 'error'">
+                            <field name="mensaje_error" nolabel="1" readonly="1"/>
+                        </group>
+
                         <notebook>
                             <page string="Request (JSON)" name="request_page">
                                 <field name="request_pretty" readonly="1" widget="text"
@@ -62,15 +70,20 @@
                 <search string="Buscar Logs">
                     <field name="request" string="Request"/>
                     <field name="endpoint" string="Endpoint"/>
+                    <field name="id_order_fenicio" string="ID Orden Fenicio"/>
+                    <field name="sale_order_id" string="Pedido de venta"/>
                     <separator/>
                     <filter string="Exitosos" name="exitosos" domain="[('estado','=','ok')]"/>
                     <filter string="Errores"  name="errores"  domain="[('estado','=','error')]"/>
+                    <separator/>
+                    <filter string="Órdenes" name="ordenes" domain="[('endpoint','=','/orden')]"/>
                     <separator/>
                     <filter string="Hoy" name="hoy"
                             domain="[('fecha','&gt;=', (datetime.date.today()).strftime('%Y-%m-%d 00:00:00'))]"/>
                     <group expand="0" string="Agrupar por">
                         <filter string="Estado"   name="group_estado" context="{'group_by': 'estado'}"/>
                         <filter string="Endpoint" name="group_endpoint" context="{'group_by': 'endpoint'}"/>
+                        <filter string="Orden Fenicio" name="group_id_order" context="{'group_by': 'id_order_fenicio'}"/>
                         <filter string="Día"      name="group_dia"    context="{'group_by': 'fecha:day'}"/>
                         <filter string="Compañía" name="group_company" context="{'group_by': 'company_id'}"
                                 groups="base.group_multi_company"/>

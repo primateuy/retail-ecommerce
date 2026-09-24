@@ -29,7 +29,7 @@
                 </page>
             </xpath>
             <xpath expr="//notebook" position="inside">
-                <page string="Métodos de pago Shopping" invisible="not integracionShopping">
+                <page string="Formas de pago Shopping" invisible="not integracionShopping">
                     <group>
 
                         <field name="shopping_payment_method_ids" widget="many2many_tags"/>

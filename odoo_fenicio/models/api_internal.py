@@ -4,6 +4,7 @@ import logging
 
 from odoo import models, fields, api
 from odoo.exceptions import UserError, ValidationError
+from odoo.tools import plaintext2html
 
 _logger = logging.getLogger(__name__)
 
@@ -76,6 +77,11 @@ class ApiInternal(models.Model):
                     'categoria': listaCategoria,
                     'marca': product_template_id.product_brand_id.fenicio_brand_id if product_template_id.product_brand_id and product_template_id.product_brand_id.fenicio_brand_id else '0',
                     'descripcion': product_template_id.descripcion_fenicio or '',
+                    # Fenicio espera HTML; el usuario carga texto plano y se convierte acá.
+                    'descripcion-ampliada': (
+                        plaintext2html(product_template_id.descripcion_ampliada_fenicio)
+                        if product_template_id.descripcion_ampliada_fenicio else ''
+                    ),
                 },
                 'variantes': [],
             }

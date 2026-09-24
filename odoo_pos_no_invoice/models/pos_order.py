@@ -401,6 +401,46 @@ class PosOrder(models.Model):
             return 'Efectivo'
         return name or ''
 
+    def _receipt_tax_detail_vals(self, group):
+        """Una línea de `tax_details` del recibo, en las DOS formas que conviven.
+
+        El diseño de recibo de FORUM (`pos.receipt`) lee `tax_group_*`. Pero la
+        plantilla del core —y su copia dentro de `custom_receipts_for_pos`, que
+        es la que se dibuja cuando la caja **no** tiene marcado «Is Custom
+        Receipt»— lee la forma del front (`Order.get_tax_details`):
+        `tax.tax.id`, `tax.tax.amount`, `tax.amount` y `tax.base`.
+
+        🔴 Mandar solo la primera forma revienta esa caja al reimprimir desde la
+        pantalla de órdenes:
+
+            TypeError: Cannot read properties of undefined (reading 'id')
+
+        porque el `t-key="tax.tax.id"` del `t-foreach` se evalúa **antes** que
+        cualquier `t-if`, así que no alcanza con que el bloque esté oculto.
+        """
+        amount = group.get('tax_group_amount') or 0.0
+        base = group.get('tax_group_base_amount') or 0.0
+        rate = group.get('tax_group_rate')
+        name = group.get('tax_group_name') or ''
+        return {
+            # Forma del diseño de FORUM.
+            'tax_group_name': name,
+            'tax_group_rate': rate,
+            'tax_group_base_amount': base,
+            'tax_group_amount': amount,
+            # Forma del core / `custom_receipts_for_pos`.
+            'name': name,
+            'amount': amount,
+            'base': base,
+            'tax': {
+                'id': group.get('tax_group_id') or 0,
+                'name': name,
+                'letter': '',
+                'amount': rate if rate is not None else 0.0,
+                'amount_type': 'percent',
+            },
+        }
+
     @api.model
     def get_receipt_data_from_invoice_or_order(self, ids, account_move_id, order_reference, order_id=None):
         """
@@ -443,9 +483,25 @@ class PosOrder(models.Model):
         }
 
         # Normalizar parámetros de entrada para evitar errores en búsquedas.
-        normalized_reference = (order_reference or '').strip()
-        normalized_account_move_id = int(account_move_id) if account_move_id else False
-        normalized_order_id = int(order_id) if order_id else False
+        #
+        # 🔴 No se confía en el tipo que manda el front. Hay pantallas que pasan
+        # un id donde va la referencia y la referencia donde va el id, y con el
+        # código anterior eso era `'int' object has no attribute 'strip'` o
+        # `invalid literal for int()`: la llamada devolvía **500 y el recibo se
+        # imprimía sin ningún dato legal ni de adenda**, sin error visible,
+        # porque todos los llamadores tragan la excepción en su `catch`.
+        normalized_reference = str(order_reference).strip() if order_reference else ''
+        try:
+            normalized_account_move_id = int(account_move_id) if account_move_id else False
+        except (TypeError, ValueError):
+            normalized_account_move_id = False
+        try:
+            normalized_order_id = int(order_id) if order_id else False
+        except (TypeError, ValueError):
+            # Vino una referencia donde se esperaba el id: sirve para buscar igual.
+            normalized_order_id = False
+            if not normalized_reference:
+                normalized_reference = str(order_id).strip()
 
         # Buscar la orden del POS por ID si está disponible (más confiable que la referencia).
         pos_order = self.env['pos.order']
@@ -695,19 +751,19 @@ class PosOrder(models.Model):
             groups_by_subtotal = tax_totals.get('groups_by_subtotal', {})
             for group_list in groups_by_subtotal.values():
                 for group in group_list:
-                    receipt_data['tax_details'].append({
-                        'tax_group_name': group.get('tax_group_name') or '',
-                        'tax_group_rate': group.get('tax_group_rate'),
-                        'tax_group_base_amount': group.get('tax_group_base_amount') or 0.0,
-                        'tax_group_amount': group.get('tax_group_amount') or 0.0,
-                    })
+                    receipt_data['tax_details'].append(self._receipt_tax_detail_vals(group))
 
         # Si no hay factura, construir líneas y totales desde la orden del POS.
         elif pos_order:
             receipt_data['source'] = 'order'
             receipt_data['amount_total'] = pos_order.amount_total
             receipt_data['amount_tax'] = pos_order.amount_tax
-            receipt_data['total_without_tax'] = pos_order.amount_untaxed
+            # `pos.order` NO tiene `amount_untaxed` (sí lo tiene `account.move`):
+            # leerlo tiraba AttributeError y la llamada entera devolvía 500, así
+            # que toda orden SIN factura perdía los datos legales y de adenda del
+            # recibo. El front se lo comía en un try/catch y el recibo salía
+            # degradado, sin error visible.
+            receipt_data['total_without_tax'] = pos_order.amount_total - pos_order.amount_tax
 
             # Construir líneas del recibo a partir de las líneas de la orden.
             for line in pos_order.lines:
@@ -734,11 +790,6 @@ class PosOrder(models.Model):
                 groups_by_subtotal = pos_order.tax_totals.get('groups_by_subtotal', {})
                 for group_list in groups_by_subtotal.values():
                     for group in group_list:
-                        receipt_data['tax_details'].append({
-                            'tax_group_name': group.get('tax_group_name') or '',
-                            'tax_group_rate': group.get('tax_group_rate'),
-                            'tax_group_base_amount': group.get('tax_group_base_amount') or 0.0,
-                            'tax_group_amount': group.get('tax_group_amount') or 0.0,
-                        })
+                        receipt_data['tax_details'].append(self._receipt_tax_detail_vals(group))
 
         return receipt_data

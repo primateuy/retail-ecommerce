@@ -35,7 +35,7 @@
 
     <!-- Acción -->
     <record id="action_shopping_payment_method" model="ir.actions.act_window">
-        <field name="name">Métodos de Pago Shopping</field>
+        <field name="name">Formas de Pago Shopping</field>
         <field name="res_model">shopping.payment.method</field>
         <field name="view_mode">tree,form</field>
         <field name="help" type="html">
@@ -51,7 +51,7 @@
 
     <!-- Menú en Configuración > Contabilidad -->
     <menuitem id="menu_shopping_payment_method"
-              name="Métodos Pago Shopping"
+              name="Formas de Pago Shopping"
               parent="account.menu_finance_configuration"
               action="action_shopping_payment_method"
               sequence="100"/>
