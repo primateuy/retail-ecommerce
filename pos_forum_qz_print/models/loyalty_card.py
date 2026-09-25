@@ -29,14 +29,29 @@ class LoyaltyCard(models.Model):
         value = (self.code or "").strip()
         if not value:
             return False
+        # 🔴 El guion NO viaja en el código de barras, a propósito.
+        #
+        # La lectora no "lee texto": teclea. Emite el scancode de cada carácter con
+        # el layout con el que viene configurada —US— y la caja tiene un teclado
+        # español/latinoamericano, donde esa tecla es el apóstrofe. Así,
+        # "0445-2781-4ece" entra como "0445'2781'4ece" en cualquier campo del
+        # sistema. Dentro del PDV lo arregla normalizeScannedCouponCode
+        # (loyalty_code_scan.js), pero fuera de ahí —una búsqueda en el backend, un
+        # bloc de notas— no lo arregla nadie.
+        #
+        # Codificando sólo los alfanuméricos el problema desaparece de raíz: no hay
+        # ningún carácter cuyo scancode dependa del layout. El código legible que va
+        # impreso abajo SÍ conserva los guiones, porque es el que el cajero teclea a
+        # mano y el que figura en Odoo.
+        valor_barcode = "".join(c for c in value if c.isalnum())
         # normalize=False: el código del cupón es un identificador exacto, no se le
         # puede recortar nada (a diferencia del "Order " de la referencia del pedido).
-        info = self.env["ir.actions.report"]._forum_code128_thermal(value, normalize=False)
+        info = self.env["ir.actions.report"]._forum_code128_thermal(valor_barcode, normalize=False)
         if not info:
             _logger.debug(
                 "pos_forum_qz_print: barcode cupón no generado | card=%s | valor=%r",
                 self.id,
-                value,
+                valor_barcode,
             )
         return info
 

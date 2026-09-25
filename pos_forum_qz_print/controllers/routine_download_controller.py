@@ -172,6 +172,16 @@ class PosForumQzRoutineDownloadController(http.Controller):
                 f'<base href="{base_href}/"/>'
                 "<style>"
                 "body { margin: 0; padding: 0; font-family: sans-serif; }"
+                # Los fragmentos vienen con el ancho clavado en milímetros
+                # (max-width: 80mm) y centrados. Sobre el área imprimible real
+                # del rollo eso desborda; se deja que ocupen la página.
+                ".container, .container-fluid, .article, .page,"
+                ".o_forum_loyalty_coupon_thermal, .oca-thermal-voucher {"
+                "  width: 100% !important; max-width: 100% !important;"
+                "  margin-left: 0 !important; margin-right: 0 !important;"
+                "  padding-left: 0 !important; padding-right: 0 !important;"
+                "}"
+                "img { max-width: 100% !important; }"
                 "@media print {"
                 "  div[style*='page-break-before'] { page-break-before: always; }"
                 "}"
@@ -199,7 +209,16 @@ class PosForumQzRoutineDownloadController(http.Controller):
             ReportModel = request.env["ir.actions.report"].sudo()
             wkhtmltopdf_state = "ok"
             try:
-                wkhtmltopdf_state = ReportModel._get_wkhtmltopdf_state()
+                # 🔴 En 17.0 el método se llama ``get_wkhtmltopdf_state`` (sin guion
+                # bajo); el nombre con guion es el de 16.0. Llamar al viejo levantaba
+                # AttributeError, lo comía este mismo ``except`` y el estado quedaba
+                # en 'broken': el respaldo de la rutina NUNCA devolvió un PDF, siempre
+                # el HTML combinado. Y un HTML impreso desde el navegador sale con los
+                # márgenes A4 que trae el diálogo de impresión.
+                if hasattr(ReportModel, "get_wkhtmltopdf_state"):
+                    wkhtmltopdf_state = ReportModel.get_wkhtmltopdf_state()
+                else:
+                    wkhtmltopdf_state = ReportModel._get_wkhtmltopdf_state()
             except Exception:
                 _logger.exception(
                     "pos_forum_qz_print: routine pdf | no se pudo consultar el estado de wkhtmltopdf."
@@ -211,8 +230,17 @@ class PosForumQzRoutineDownloadController(http.Controller):
                 # Bloque: usar wkhtmltopdf con el cuerpo HTML combinado. Pasamos
                 # un único elemento en la lista de bodies; los page-break del
                 # propio HTML separan los documentos en páginas distintas.
+                #
+                # ``report_ref`` no es decorativo: sin él, _run_wkhtmltopdf cae en
+                # ``self.get_paperformat()`` sobre un recordset vacío, que devuelve
+                # el formato de la compañía (A4, márgenes 40/32/7/7). Toda la rutina
+                # se maquetaba sobre 210 mm y después se imprimía en el rollo de
+                # 80 mm: de ahí los márgenes mal y el recorte a los costados.
                 try:
-                    pdf_bytes = ReportModel._run_wkhtmltopdf([combined_html])
+                    pdf_bytes = ReportModel._run_wkhtmltopdf(
+                        [combined_html],
+                        report_ref="pos_forum_qz_print.report_loyalty_card_pos_thermal",
+                    )
                 except FileNotFoundError:
                     _logger.warning(
                         "pos_forum_qz_print: routine pdf | wkhtmltopdf no encontrado en PATH; "

@@ -17,11 +17,19 @@ const SCANNED_COUPON_CODE_RE = /^([0-9a-f]{4})[^0-9a-z]([0-9a-f]{4})[^0-9a-z]([0
 // con volver a poner el guion que la lectora reemplazó.
 const APOSTROPHES_RE = /['‘’´`]/g;
 
+// El cupón impreso lleva el código de barras SIN separadores (ver
+// loyalty_card.get_pos_coupon_barcode_info): así ninguna lectora tiene que
+// teclear un carácter que dependa del layout del teclado. Lo que llega entonces
+// son los 12 alfanuméricos corridos, y hay que devolverles la forma 4-4-4 con la
+// que loyalty.card guarda el código.
+const UNSEPARATED_COUPON_CODE_RE = /^([0-9a-f]{4})([0-9a-f]{4})([0-9a-f]{4})$/i;
+
 /**
  * Devuelve el código del cupón tal como está guardado en loyalty.card.
  *
- * "044b'a0a0'44b5" -> "044b-a0a0-44b5". Es idempotente: un código ya correcto
- * o tecleado a mano se devuelve igual.
+ * "044b'a0a0'44b5" -> "044b-a0a0-44b5" (lectora con layout US sobre teclado español).
+ * "044ba0a044b5"   -> "044b-a0a0-44b5" (código de barras sin separadores).
+ * Es idempotente: un código ya correcto o tecleado a mano se devuelve igual.
  *
  * @param {string} code lo que emitió la lectora o tecleó el cajero.
  * @returns {string} código con guiones.
@@ -31,6 +39,13 @@ export function normalizeScannedCouponCode(code) {
     const match = text.match(SCANNED_COUPON_CODE_RE);
     if (match) {
         return `${match[1]}-${match[2]}-${match[3]}`;
+    }
+    // Bloque: el código corrido del barcode nuevo. Sólo se reagrupa si tiene la
+    // pinta exacta del código generado por loyalty.card (12 hex que arrancan en
+    // 043/044); un "PROMO10" tecleado a mano no se toca.
+    const corrido = text.match(UNSEPARATED_COUPON_CODE_RE);
+    if (corrido && /^0(43|44)/.test(text)) {
+        return `${corrido[1]}-${corrido[2]}-${corrido[3]}`;
     }
     return text.replace(APOSTROPHES_RE, "-");
 }

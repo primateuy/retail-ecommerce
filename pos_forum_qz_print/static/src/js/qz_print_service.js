@@ -13,24 +13,103 @@ import { registry } from "@web/core/registry";
 const LOG = "[pos_forum_qz_print]";
 
 /**
- * Inserta <base href> para que imágenes y rutas relativas del HTML apunten a Odoo.
+ * CSS del envoltorio térmico.
  *
- * @param {string} html - HTML del reporte o del recibo.
- * @param {string} origin - Origen (p. ej. window.location.origin).
+ * Deliberadamente NO toca html/body/@page ni el tipo de caja: el recibo que
+ * imprime «Imprimir Boleta» tiene que salir exactamente igual que hasta ahora,
+ * y hoy sale con los márgenes por defecto del motor. Acá sólo van reglas que
+ * enganchan en las clases que traen los reportes QWeb del servidor.
+ *
+ * Por qué hacen falta: el recibo del PDV llega como fragmento pelado (un <div>
+ * sin <html> ni CSS), mientras que el ticket de cambio y el voucher llegan
+ * envueltos en ``web.html_container``, es decir con ``<body class="container">``
+ * y los CSS de /web/assets pensados para A4, y con ``max-width`` fijado en
+ * milímetros. Esos 80 mm clavados desbordan el área imprimible real del rollo
+ * (~72 mm en una térmica de 80 mm): de ahí salía el recorte a izquierda y derecha.
+ */
+const THERMAL_CSS = `
+.container, .container-fluid, .article, .page,
+.o_forum_loyalty_coupon_thermal, .oca-thermal-voucher {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+}
+img { max-width: 100% !important; }
+`;
+/**
+ * Quita del HTML todo lo que apunte a los assets web de Odoo y cualquier script.
+ *
+ * Los reportes QWeb salen de ``web.html_container`` con <link> y <script> a
+ * /web/assets/...: hojas de estilo de reporte A4 que no tienen nada que hacer en
+ * un documento de 80 mm, y recursos que el WebView de QZ Tray tiene que resolver
+ * contra el servidor antes de dar la página por cargada. El recibo del PDV es el
+ * único documento que nunca los trajo, y es justamente el único que imprimía bien.
+ *
+ * @param {string} html
+ * @returns {string}
+ */
+function stripWebAssets(html) {
+    if (!html) {
+        return "";
+    }
+    let out = String(html);
+    out = out.replace(
+        /<link[^>]+href=['"][^'"]*?\/web\/assets\/[^'"]+['"][^>]*\/?>/gi,
+        ""
+    );
+    // Bloque: cualquier <script> sobra en un documento de impresión, venga de
+    // /web/assets o sea inline.
+    out = out.replace(/<script[\s\S]*?<\/script>/gi, "");
+    return out;
+}
+
+/**
+ * Extrae el cuerpo de un documento HTML completo y conserva sus <style> inline.
+ *
+ * @param {string} html
+ * @returns {{body: string, styles: string}}
+ */
+function extractBody(html) {
+    const txt = String(html || "");
+    const bodyMatch = txt.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
+    if (!bodyMatch) {
+        return { body: txt, styles: "" };
+    }
+    const headMatch = txt.match(/<head[^>]*>([\s\S]*?)<\/head>/i);
+    let styles = "";
+    if (headMatch) {
+        const found = headMatch[1].match(/<style[\s\S]*?<\/style>/gi);
+        if (found) {
+            styles = found.join("\n");
+        }
+    }
+    return { body: bodyMatch[1], styles };
+}
+
+/**
+ * Normaliza cualquier fragmento o documento a un HTML térmico autocontenido.
+ *
+ * Todos los documentos de la rutina pasan por acá, de modo que el recibo que
+ * imprime «Imprimir Boleta» y el que imprime «Rutina» son byte a byte el mismo
+ * documento: si los márgenes están bien en uno, están bien en el otro.
+ *
+ * @param {string} html - Fragmento o documento HTML.
+ * @param {string} origin - Origen para el <base href>.
  * @returns {string} Documento HTML listo para QZ.
  */
-function injectBaseHref(html, origin) {
-    // Bloque: no duplicar base.
-    if (/<base\s+/i.test(html)) {
-        return html;
-    }
-    // Bloque: insertar tras <head>.
-    const withHead = html.replace(/<head([^>]*)>/i, `<head$1><base href="${origin}/">`);
-    if (withHead !== html) {
-        return withHead;
-    }
-    // Bloque: documento mínimo.
-    return `<!DOCTYPE html><html><head><meta charset="utf-8"/><base href="${origin}/"></head><body>${html}</body></html>`;
+function buildThermalDocument(html, origin) {
+    const limpio = stripWebAssets(html);
+    const { body, styles } = extractBody(limpio);
+    return (
+        "<!DOCTYPE html><html><head><meta charset=\"utf-8\"/>" +
+        `<base href="${origin}/"/>` +
+        `<style>${THERMAL_CSS}</style>` +
+        styles +
+        `</head><body>${body}</body></html>`
+    );
 }
 
 export const qzPrintService = {
@@ -41,6 +120,12 @@ export const qzPrintService = {
     start() {
         const certPath = "/pos_forum_qz_print/static/src/lib/digital-certificate.txt";
         const signPath = "/pos_forum_qz_print/sign";
+
+        // Bloque: promesa única de conexión. Dos impresiones lanzadas casi a la vez
+        // (p. ej. el recibo automático y un botón de la fila de acciones) llamaban
+        // cada una a qz.websocket.connect(); la segunda se encontraba con un intento
+        // en curso y moría con «The current connection attempt has not returned yet».
+        let conexionEnCurso = null;
 
         // Bloque: comprobar que el bundle cargó el conector QZ.
         const ensureQzGlobal = () => {
@@ -59,11 +144,14 @@ export const qzPrintService = {
         const connectIfNeeded = async () => {
             const qz = ensureQzGlobal();
             if (qz.websocket.isActive()) {
-                console.info(`${LOG} WebSocket QZ ya activo; se reutiliza la conexión.`);
+                return qz;
+            }
+            if (conexionEnCurso) {
+                await conexionEnCurso;
                 return qz;
             }
             console.info(`${LOG} Conectando a QZ Tray (WebSocket)...`);
-            // Bloque: certificado público para firma del lado de QZ (reemplazar en producción).
+            // Bloque: certificado público para firma del lado de QZ.
             qz.security.setCertificatePromise((resolve, reject) => {
                 fetch(certPath, { credentials: "same-origin" })
                     .then((response) => {
@@ -115,9 +203,35 @@ export const qzPrintService = {
                         });
                 };
             });
-            await qz.websocket.connect();
-            console.info(`${LOG} Conexión a QZ Tray establecida.`);
+            // Bloque: reintentos. Una térmica compartida o un QZ Tray que acaba de
+            // arrancar tarda en aceptar el socket; sin reintento el primer botón que
+            // se aprieta cae al PDF y el operador cree que QZ no anda.
+            conexionEnCurso = Promise.resolve(
+                qz.websocket.connect({ retries: 2, delay: 1 })
+            )
+                .then(() => {
+                    console.info(`${LOG} Conexión a QZ Tray establecida.`);
+                })
+                .finally(() => {
+                    conexionEnCurso = null;
+                });
+            await conexionEnCurso;
             return qz;
+        };
+
+        /**
+         * Configuración de impresión. Única para todos los documentos: es lo que
+         * garantiza que la rutina y el botón de recibo compartan márgenes.
+         */
+        const crearConfig = (qz, name, options = {}) => {
+            // Misma configuración que venía usando el recibo: márgenes en cero y
+            // el tamaño de página del driver de la impresora. No se fuerza ``size``
+            // a propósito — el driver ya sabe que el rollo es de 80 mm, y forzarlo
+            // rompería el único camino que hoy imprime bien.
+            return qz.configs.create(name, {
+                margins: { top: 0, right: 0, bottom: 0, left: 0 },
+                jobName: options.jobName || "Odoo PDV",
+            });
         };
 
         return {
@@ -125,7 +239,14 @@ export const qzPrintService = {
              * Expone el helper por si otro código arma HTML manualmente.
              */
             injectBaseHref(html) {
-                return injectBaseHref(html, window.location.origin);
+                return buildThermalDocument(html, window.location.origin);
+            },
+
+            /**
+             * Normaliza un fragmento al documento térmico estándar (sin imprimir).
+             */
+            buildThermalDocument(html) {
+                return buildThermalDocument(html, window.location.origin);
             },
 
             /**
@@ -133,8 +254,9 @@ export const qzPrintService = {
              *
              * @param {string} printerName - Nombre exacto de la cola de impresión.
              * @param {string} html - HTML (fragmento o documento).
+             * @param {Object} [options] - ``jobName`` para la cola de impresión.
              */
-            async printHtml(printerName, html) {
+            async printHtml(printerName, html, options = {}) {
                 if (!printerName || !String(printerName).trim()) {
                     console.error(`${LOG} printHtml abortado: nombre de impresora vacío.`);
                     throw new Error("Falta el nombre de impresora QZ en la configuración del POS.");
@@ -144,16 +266,14 @@ export const qzPrintService = {
                 console.info(
                     `${LOG} Enviando trabajo de impresión HTML a QZ | impresora=${JSON.stringify(
                         name
-                    )} | tamaño_html_entrada=${htmlLen} caracteres`
+                    )} | documento=${options.jobName || "-"} | tamaño_html_entrada=${htmlLen} caracteres`
                 );
                 const qz = await connectIfNeeded();
-                const documentHtml = injectBaseHref(html, window.location.origin);
+                const documentHtml = buildThermalDocument(html, window.location.origin);
                 console.info(
-                    `${LOG} HTML preparado con base href | tamaño_final=${documentHtml.length} caracteres`
+                    `${LOG} HTML térmico preparado | tamaño_final=${documentHtml.length} caracteres`
                 );
-                const config = qz.configs.create(name, {
-                    margins: { top: 0, right: 0, bottom: 0, left: 0 },
-                });
+                const config = crearConfig(qz, name, options);
                 const printData = [
                     {
                         type: "html",
@@ -178,46 +298,48 @@ export const qzPrintService = {
             },
 
             /**
-             * Imprime varios fragmentos HTML en un único trabajo QZ (p. ej. recibo + ticket
-             * de cambio + voucher + cupón). Los bloques vacíos se omiten.
+             * Imprime varios documentos, uno por trabajo, en el orden recibido.
+             *
+             * Antes iban los cuatro en un único ``qz.print()`` multi-documento. Se
+             * pasó a un trabajo por documento a propósito: es exactamente la misma
+             * llamada que hace el botón «Imprimir Boleta», que es el camino que se
+             * sabe que imprime con los márgenes correctos. Los bloques vacíos se omiten.
              *
              * @param {string} printerName - Nombre exacto de la cola de impresión.
              * @param {string[]} htmlParts - Lista de HTML en orden.
+             * @param {Object} [options] - ``labels``: nombre de cada documento.
              */
-            async printSequentialHtmlDocuments(printerName, htmlParts) {
+            async printSequentialHtmlDocuments(printerName, htmlParts, options = {}) {
                 if (!printerName || !String(printerName).trim()) {
                     console.error(`${LOG} printSequentialHtmlDocuments abortado: impresora vacía.`);
                     throw new Error("Falta el nombre de impresora QZ en la configuración del POS.");
                 }
                 const name = String(printerName).trim();
-                const list = (htmlParts || []).filter((h) => h != null && String(h).trim());
-                if (!list.length) {
+                const etiquetas = options.labels || [];
+                const lista = [];
+                (htmlParts || []).forEach((h, idx) => {
+                    if (h != null && String(h).trim()) {
+                        lista.push({ html: h, label: etiquetas[idx] || `documento ${idx + 1}` });
+                    }
+                });
+                if (!lista.length) {
                     throw new Error("No hay HTML para imprimir en la secuencia QZ.");
                 }
                 console.info(
-                    `${LOG} Enviando ${list.length} bloque(s) HTML | impresora=${JSON.stringify(name)}`
+                    `${LOG} Enviando ${lista.length} documento(s) en trabajos separados | impresora=${JSON.stringify(
+                        name
+                    )}`
                 );
-                const qz = await connectIfNeeded();
-                const config = qz.configs.create(name, {
-                    margins: { top: 0, right: 0, bottom: 0, left: 0 },
-                });
-                const printData = list.map((html) => ({
-                    type: "html",
-                    format: "plain",
-                    data: injectBaseHref(html, window.location.origin),
-                }));
-                try {
-                    await qz.print(config, printData);
-                } catch (err) {
-                    console.error(
-                        `${LOG} qz.print() falló (secuencia ${list.length} bloques, impresora=${JSON.stringify(
-                            name
-                        )}).`,
-                        err
-                    );
-                    throw err;
+                // Bloque: la conexión se resuelve una sola vez antes del bucle para
+                // que un corte a mitad de la rutina no dispare varios reintentos.
+                await connectIfNeeded();
+                for (const doc of lista) {
+                    await this.printHtml(name, doc.html, {
+                        ...options,
+                        jobName: doc.label,
+                    });
                 }
-                console.info(`${LOG} Secuencia ${list.length} bloque(s): trabajo enviado OK.`);
+                console.info(`${LOG} Secuencia de ${lista.length} documento(s): enviada OK.`);
             },
 
             /**

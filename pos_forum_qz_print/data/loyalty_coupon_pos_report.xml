@@ -8,7 +8,7 @@
         <template id="forum_minimal_report_layout">
             <t t-if="not o" t-set="o" t-value="doc"/>
             <div class="article o_forum_loyalty_coupon_thermal"
-                 style="max-width: 80mm; margin: 0 auto; padding: 4px 6px; font-family: Arial, Helvetica, sans-serif; font-size: 10px; color: #000;">
+                 style="width: 100%; max-width: 100%; margin: 0; padding: 4px 0; font-family: Arial, Helvetica, sans-serif; font-size: 11px; color: #000;">
                 <t t-out="0"/>
             </div>
         </template>
@@ -42,7 +42,7 @@
 
                 <!--
                     Cuerpo del cupón. Estilo de tarjeta (eyebrow + título + descuento rojo +
-                    separadores dashed + caja roja FORUM + pie). CSS adaptado a wkhtmltopdf:
+                    separadores de guiones + caja roja FORUM + pie). CSS adaptado a wkhtmltopdf:
                     sin -webkit-mask, sin radial-gradient, sin box-shadow ni flex (se usan
                     text-align / inline-block / px), que el motor no soporta o renderiza mal.
                 -->
@@ -51,16 +51,16 @@
                 <t t-set="coupon_barcode_info" t-value="o.get_pos_coupon_barcode_info()"/>
                 <t t-set="coupon_barcode_uri" t-value="coupon_barcode_info and coupon_barcode_info.get('uri')"/>
 
-                <div style="background: #ffffff; color: #1c1c1c; padding: 18px 14px 12px; text-align: center; font-family: Arial, Helvetica, sans-serif;">
+                <div style="background: #ffffff; color: #000000; padding: 14px 0 10px; text-align: center; font-family: Arial, Helvetica, sans-serif;">
 
                     <!-- Eyebrow: nombre de la compañía. -->
-                    <div style="font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; color: #6b6b6b; margin-bottom: 4px;">
+                    <div style="font-size: 13px; font-weight: bold; letter-spacing: 0.06em; text-transform: uppercase; color: #000; margin-bottom: 4px;">
                         FORUM INDUSTRIES CO.
                     </div>
 
 
                     <!-- Título. -->
-                    <div style="font-family: 'Arial Narrow', 'Oswald', Arial, sans-serif; font-weight: bold; font-size: 30px; margin: 0 0 16px; color: #1c1c1c;">¡Felicidades!</div>
+                    <div style="font-family: 'Arial Narrow', 'Oswald', Arial, sans-serif; font-weight: bold; font-size: 30px; margin: 0 0 16px; color: #000;">¡Felicidades!</div>
 
                     <!-- Frase de descuento (porcentaje dinámico en rojo grande). -->
                     <div t-if="discount_display" style="font-size: 15px; line-height: 1.45; margin: 0 0 4px; font-weight: 500;">
@@ -78,11 +78,11 @@
                     </div>
 
                     <!-- Línea de alcance editable (con placeholders resueltos). -->
-                    <div t-if="scope_message" style="font-style: italic; font-size: 13px; color: #6b6b6b; margin: 6px 8px 0;"
+                    <div t-if="scope_message" style="font-size: 14px; font-weight: bold; color: #000; margin: 6px 4px 0;"
                          t-out="scope_message"/>
 
                     <!-- Separador troquelado. -->
-                    <div style="border-top: 1.5px dashed #cfcfcf; margin: 20px 0;"></div>
+                    <div style="margin: 16px 0; font-family: 'Courier New', Courier, monospace; font-size: 13px; font-weight: bold; letter-spacing: 0.5px; white-space: nowrap; overflow: hidden; color: #000; line-height: 1;">- - - - - - - - - - - - - - - - - - - - - - - -</div>
 
                     <!--
                         Barcode: mismo patrón que el ticket de cambio (odoo_pos_oca). Se dimensiona
@@ -100,26 +100,27 @@
                     </div>
 
                     <!-- Código legible. -->
-                    <div style="font-family: 'Courier New', monospace; font-size: 14px; letter-spacing: 0.06em; color: #1c1c1c;">
+                    <div style="font-family: 'Courier New', monospace; font-size: 17px; font-weight: bold; letter-spacing: 0.08em; color: #000;">
                         <span t-out="o.code"/>
                     </div>
 
                     <!-- Separador troquelado. -->
-                    <div style="border-top: 1.5px dashed #cfcfcf; margin: 20px 0;"></div>
+                    <div style="margin: 16px 0; font-family: 'Courier New', Courier, monospace; font-size: 13px; font-weight: bold; letter-spacing: 0.5px; white-space: nowrap; overflow: hidden; color: #000; line-height: 1;">- - - - - - - - - - - - - - - - - - - - - - - -</div>
 
                     <!-- Cierre + caja de marca. -->
-                    <div style="font-weight: 800; font-size: 15px; letter-spacing: 0.06em; margin-bottom: 14px;">Gracias</div>
+                    <div style="font-weight: bold; font-size: 16px; letter-spacing: 0.06em; margin-bottom: 14px; color: #000;">Gracias</div>
                     <div style="margin-bottom: 16px;">
-                        <div style="display: inline-block; background: #c1272d; color: #ffffff; width: 64px; height: 64px;">
-                            <div style="padding-top: 17px;">
-                                <div style="font-weight: 800; font-size: 13px; letter-spacing: 0.03em;">FORUM</div>
-                                <div style="font-size: 6px; letter-spacing: 0.04em; margin-top: 2px;">INDUSTRIES CO.</div>
+                        <div style="display: inline-block; background: #c1272d; color: #ffffff; width: 82px; height: 82px;">
+                            <div style="padding-top: 22px;">
+                                <div style="font-weight: bold; font-size: 16px; letter-spacing: 0.03em;">FORUM</div>
+                                <div style="font-weight: bold; font-size: 9px; letter-spacing: 0.02em; margin-top: 3px;">INDUSTRIES CO.</div>
                             </div>
                         </div>
                     </div>
 
                     <!-- Pie: vigencia (dinámica) + condiciones. -->
-                    <div style="border-top: 1.5px dashed #cfcfcf; padding-top: 12px; font-size: 11px; color: #6b6b6b; line-height: 1.6;">
+                    <div style="margin: 16px 0; font-family: 'Courier New', Courier, monospace; font-size: 13px; font-weight: bold; letter-spacing: 0.5px; white-space: nowrap; overflow: hidden; color: #000; line-height: 1;">- - - - - - - - - - - - - - - - - - - - - - - -</div>
+                    <div style="padding-top: 4px; font-size: 13px; color: #000; line-height: 1.5;">
                         <t t-if="o.expiration_date">
                             Válido hasta el
                             <span t-field="o.expiration_date" t-options='{"format": "dd/MM/yyyy"}'/>
@@ -134,6 +135,7 @@
 
         <template id="loyalty_report_pos_thermal_i18n">
             <t t-call="web.html_container">
+                <t t-call="odoo_pos_oca.thermal_reset_css"/>
                 <t t-foreach="docs" t-as="o">
                     <t t-set="o" t-value="o.with_context(lang=o._get_mail_partner().lang or o.env.lang)"/>
                     <t t-call="pos_forum_qz_print.loyalty_report_pos_thermal" t-lang="o._get_mail_partner().lang or o.env.lang"/>
@@ -148,6 +150,7 @@
             <field name="report_name">pos_forum_qz_print.loyalty_report_pos_thermal_i18n</field>
             <field name="report_file">pos_forum_qz_print.loyalty_report_pos_thermal_i18n</field>
             <field name="print_report_name">'Cupón - %s' % (object.code or object.id)</field>
+            <field name="paperformat_id" ref="odoo_pos_oca.paperformat_pos_thermal_80"/>
             <field name="binding_model_id" ref="loyalty.model_loyalty_card"/>
             <field name="binding_type">report</field>
         </record>

@@ -275,13 +275,24 @@ patch(ReceiptScreen.prototype, {
                 couponHtml = "";
             }
             const parts = [receiptHtml, html];
+            const labels = ["recibo", "ticket de cambio"];
             if (voucherHtml && String(voucherHtml).trim()) {
                 parts.push(voucherHtml);
+                labels.push("voucher OCA");
             }
             if (couponHtml && String(couponHtml).trim()) {
                 parts.push(couponHtml);
+                labels.push("cupón de promoción");
             }
-            await qzPrint.printSequentialHtmlDocuments(cfg.qz_tray_printer_name.trim(), parts);
+            // Bloque: un trabajo por documento, con la misma configuración y el
+            // mismo envoltorio que usa el botón «Imprimir Boleta». Antes iban los
+            // cuatro en un único qz.print() multi-documento y el recibo salía con
+            // otros márgenes que por el camino del botón.
+            await qzPrint.printSequentialHtmlDocuments(
+                cfg.qz_tray_printer_name.trim(),
+                parts,
+                { labels }
+            );
             const desc = ["recibo", "ticket de cambio"];
             if (voucherHtml && String(voucherHtml).trim()) {
                 desc.push("voucher OCA");
@@ -341,12 +352,24 @@ patch(ReceiptScreen.prototype, {
                 orderId,
                 reportId,
             ]);
-            await this.env.services.qz_print.printHtml(cfg.qz_tray_printer_name.trim(), html);
+            await this.env.services.qz_print.printHtml(
+                cfg.qz_tray_printer_name.trim(),
+                html,
+                { jobName: "ticket de cambio" }
+            );
             this.env.services.notification.add("Ticket de cambio enviado a la impresora (QZ).", {
                 type: "success",
             });
         } catch (error) {
             console.error(`${LOG} T-Cambio QZ error`, error);
+            // Bloque: la caída al PDF tiene que verse. Degradar en silencio es lo
+            // que hacía creer que el botón «no hace nada»: el operador esperaba el
+            // papel y lo que llegaba era una descarga.
+            this.env.services.notification.add(
+                `QZ no imprimió el ticket de cambio: ${error?.message || String(error)}. ` +
+                "Se genera el PDF.",
+                { type: "warning" }
+            );
             return _superPrintChangeTicketDocumentOnly.call(this);
         }
     },
@@ -382,13 +405,18 @@ patch(ReceiptScreen.prototype, {
             }
             await this.env.services.qz_print.printHtml(
                 this.pos.config.qz_tray_printer_name.trim(),
-                voucherHtml
+                voucherHtml,
+                { jobName: "voucher OCA" }
             );
             this.env.services.notification.add("Voucher OCA enviado a la impresora (QZ).", {
                 type: "success",
             });
         } catch (error) {
             console.error(`${LOG} Voucher solo QZ error`, error);
+            this.env.services.notification.add(
+                `QZ no imprimió el voucher: ${error?.message || String(error)}. Se genera el PDF.`,
+                { type: "warning" }
+            );
             return _superPrintOcaVoucherOnly.call(this);
         }
     },
@@ -425,13 +453,18 @@ patch(ReceiptScreen.prototype, {
             }
             await this.env.services.qz_print.printHtml(
                 this.pos.config.qz_tray_printer_name.trim(),
-                html
+                html,
+                { jobName: "cupón de promoción" }
             );
             this.env.services.notification.add("Código de cupón enviado a la impresora (QZ).", {
                 type: "success",
             });
         } catch (error) {
             console.error(`${LOG} Cupon PC QZ error → PDF`, error);
+            this.env.services.notification.add(
+                `QZ no imprimió el cupón: ${error?.message || String(error)}. Se genera el PDF.`,
+                { type: "warning" }
+            );
             return _superPrintLoyaltyCouponCode.call(this);
         }
     },
@@ -546,7 +579,9 @@ patch(ReceiptScreen.prototype, {
                 data: receiptData,
                 formatCurrency: this.env.utils.formatCurrency,
             });
-            await qzPrint.printHtml(cfg.qz_tray_printer_name.trim(), el.outerHTML);
+            await qzPrint.printHtml(cfg.qz_tray_printer_name.trim(), el.outerHTML, {
+                jobName: "recibo",
+            });
             this.currentOrder._printed = true;
         } catch (error) {
             console.error(`${LOG} Recibo POS: error QZ; impresión estándar.`, error);

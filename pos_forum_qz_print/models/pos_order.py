@@ -199,11 +199,19 @@ class PosOrder(models.Model):
                 if c.code
             ]
 
-        # Bloque: fallback por ventana de tiempo (write_date). Cubre source_pos_order_id=NULL
-        # y el caso donde Odoo actualiza una tarjeta existente en lugar de crear una nueva
-        # (el socio ya tiene un cupón pendiente del mismo programa). Se ejecuta DESPUÉS del
-        # filtro para no bloquearse por tarjetas de otros tipos (loyalty/both) que llegan
-        # en loyalty_card_ids desde el cliente.
+        # Bloque: fallback. Cubre source_pos_order_id=NULL y el caso donde Odoo
+        # actualiza una tarjeta existente en lugar de crear una nueva (el socio ya
+        # tiene un cupón pendiente del mismo programa). Se ejecuta DESPUÉS del
+        # filtro para no bloquearse por tarjetas de otros tipos (loyalty/both) que
+        # llegan en loyalty_card_ids desde el cliente.
+        #
+        # 🔴 El ``if not cards`` no es cosmético. Esta búsqueda estaba indentada
+        # dentro del ``if "coupon_id" in ...`` de arriba (Python la tomaba como
+        # parte de ese bloque, sin error), así que corría SIEMPRE y descartaba
+        # todos los candidatos encontrados antes. Como exige earned_partner_id, en
+        # una venta sin cliente no quedaba ninguna tarjeta y el cupón no se
+        # imprimía nunca.
+        if not cards:
             cards = Card.sudo().search([
                 ("earned_partner_id", "=", order.partner_id.id),
                 ("program_id.applies_on", "=", "future"),
