@@ -16,12 +16,25 @@ import { _t } from "@web/core/l10n/translation";
 // venir precedido por cualquier texto. Lo que importa es que termine con él.
 const SCANNED_REFERENCE_RE = /(\d{5,})[^0-9A-Za-z](\d{3,})[^0-9A-Za-z](\d{4,})$/;
 
+// Y la forma CORRIDA, sin separadores: es lo que emite la lectora desde que el
+// Code128 del recibo y del ticket de cambio se genera sin guiones
+// (ir_actions_report._forum_normalize_barcode_value). El guion se sacó porque la
+// lectora manda posiciones de tecla, no caracteres, y en un teclado español esa
+// tecla es «'»: el código entraba como 00429'001'0002 en cualquier campo.
+//
+// Acá el anclaje es a los DOS extremos y con largos exactos (5+3+4 = 12
+// dígitos, los del zero_pad de generate_unique_id). Si sólo se anclara al final,
+// un EAN-13 escaneado en el mismo buscador entraría como si fuera un nº de
+// orden. Si algún día una sesión pasa de 99.999, esta forma deja de matchear y
+// hay que ampliarla; la forma con separador sigue andando igual.
+const SCANNED_REFERENCE_JOINED_RE = /^(\d{5})(\d{3})(\d{4})$/;
+
 /**
  * Devuelve la parte numérica del nº de orden, o null si el valor no lo es.
  *
  * Tolera texto previo (prefijo "Orden ", nombre de cliente precargado, etc.) y
  * cualquier separador no alfanumérico, así que reconoce "00697'001'0001"
- * (lectura cruda), "00697-001-0001", "Orden 00697-001-0001" (tecleado a mano
+ * (lectura cruda), "006970010001" (código sin separadores), "00697-001-0001", "Orden 00697-001-0001" (tecleado a mano
  * o ya normalizado) y "Consumidor Final00697'001'0001" (lectura sobre un
  * buscador que ya tenía texto).
  *
@@ -33,7 +46,7 @@ export function parseOrderReference(value) {
     if (!text) {
         return null;
     }
-    const match = text.match(SCANNED_REFERENCE_RE);
+    const match = text.match(SCANNED_REFERENCE_RE) || text.match(SCANNED_REFERENCE_JOINED_RE);
     if (!match) {
         return null;
     }

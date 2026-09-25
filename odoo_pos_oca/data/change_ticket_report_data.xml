@@ -42,7 +42,7 @@
                     <t t-set="dgi_code" t-value="tx.provider_id.oca_dgi_code or ''"/>
 
                     <div class="oca-thermal-voucher"
-                         style="font-family: 'Courier New', Courier, monospace; font-size: 13px; line-height: 1.4; width: 100%; max-width: 100%; margin: 0; color: #000; padding: 4px 0;">
+                         style="font-family: 'Courier New', Courier, monospace; font-size: 13px; line-height: 1.4; width: 100%; max-width: 80mm; margin: 0 auto; color: #000; padding: 4px 0;">
 
                         <!-- Bloque: encabezado de sucursal (nombre, dirección, ciudad, teléfono) -->
                         <div style="text-align:center; font-weight:bold; margin-bottom:2px;">
@@ -251,7 +251,7 @@
                         <t t-set="cfe_joined" t-value="' '.join(cfe_parts) if cfe_parts else (cfe_serie_num or cfe_type_code or '')"/>
 
                         <!-- Diseño tipo ticket térmico (referencia retail Uruguay) -->
-                        <div class="page" style="width: 100%; max-width: 100%; margin: 0; padding: 8px 0; font-family: Arial, Helvetica, sans-serif; font-size: 10px; color: #000; text-transform: uppercase;">
+                        <div class="page" style="width: 100%; max-width: 80mm; margin: 0 auto; padding: 8px 0; font-family: Arial, Helvetica, sans-serif; font-size: 10px; color: #000; text-transform: uppercase;">
 
                             <!-- Bloque: marca / nombre comercial (sucursal o compañía) 
                             <div style="text-align:center; font-weight: bold; font-size: 18px; letter-spacing: 1px; margin-bottom: 10px;">

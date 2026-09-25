@@ -23,7 +23,9 @@
                     margin-left: 0 !important;
                     margin-right: 0 !important;
                 }
-                .article, .page { width: 100% !important; max-width: 100% !important; }
+                /* .article y .page NO se fuerzan a 100%: su max-width en mm es
+                   el que mantiene el tamaño con el que QZ viene imprimiendo. */
+                .article, .page { width: 100% !important; }
                 img { max-width: 100% !important; }
             </style>
         </template>

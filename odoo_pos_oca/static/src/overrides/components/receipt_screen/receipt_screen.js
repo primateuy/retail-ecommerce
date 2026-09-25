@@ -255,9 +255,16 @@ patch(ReceiptScreen.prototype, {
 
     /**
      * Compatibilidad: botones encadenados y código antiguo llaman a `printChangeTicket`.
+     *
+     * 🔴 Imprime SÓLO el ticket de cambio, que es lo que dice el nombre. Antes
+     * delegaba en `printChangeTicketRoutine`, y `pos_forum_qz_print` redefine esa
+     * rutina como recibo + ticket de cambio + voucher + cupón: el encadenado de
+     * «Imprimir Boleta» (pos_forum_receipt_print_chain) terminaba imprimiendo el
+     * recibo y después la rutina entera, con el recibo repetido adentro. No se
+     * notaba porque la rutina moría en QZ antes de llegar al papel.
      */
     async printChangeTicket() {
-        return this.printChangeTicketRoutine();
+        return this.printChangeTicketDocumentOnly();
     },
 
     /**

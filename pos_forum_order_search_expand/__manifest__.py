@@ -10,7 +10,7 @@
     "author": "PRIMATE",
     "website": "https://www.primate.com",
     "category": "Point of Sale",
-    "version": "17.0.1.2.0",
+    "version": "17.0.1.3.0",
     "depends": [
         "point_of_sale",
         "odoo_pos_oca",

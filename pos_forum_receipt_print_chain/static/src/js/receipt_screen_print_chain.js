@@ -30,7 +30,9 @@ patch(ReceiptScreen.prototype, {
             return;
         }
 
-        // Bloque: delegación en el método aportado por odoo_pos_oca.
-        await this.printChangeTicket();
+        // Bloque: SÓLO el documento del ticket de cambio. Explícito a propósito:
+        // `printChangeTicketRoutine` es la rutina completa (recibo + ticket +
+        // voucher + cupón) y encadenarla acá imprimiría el recibo dos veces.
+        await this.printChangeTicketDocumentOnly();
     },
 });

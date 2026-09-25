@@ -43,7 +43,22 @@ patch(OrderReceipt.prototype, {
 
         // Cargar datos del recibo y CFE sin bloquear el render del ticket.
         onMounted(() => {
-            this._loadReceiptData();
+            // 🔴 La promesa no se espera, así que sin catch cualquier error de acá
+            // queda como unhandled rejection y le salta al cajero como un error
+            // del PDV. Y no es hipotético: adentro hay RPC de CFE que pueden
+            // fallar (Uruware caído, receptor sin configurar) y mutaciones de
+            // this.state que revientan si el cajero cambió de pantalla mientras
+            // la RPC volvía («Component is destroyed»).
+            //
+            // Los datos del CFE son un agregado del recibo: si no llegan, el
+            // recibo sale sin ese bloque, pero el PDV tiene que seguir andando.
+            this._loadReceiptData().catch((error) => {
+                console.error(
+                    "odoo_pos_no_invoice: no se pudieron cargar los datos del recibo/CFE; " +
+                    "el recibo se imprime sin ellos.",
+                    error
+                );
+            });
         });
 
     },
@@ -274,8 +289,21 @@ patch(OrderReceipt.prototype, {
         const stateHasCfe = this.state.cfeData &&
             (this.state.cfeData.tipo || this.state.cfeData.serie || this.state.cfeData.numero);
         const cfeData = stateHasCfe ? this.state.cfeData : (this.props.data?.cfe_data || {});
-        // Usar los datos del recibo cargados desde factura/orden.
-        const receiptData = this.state.receiptData || {};
+        // Datos del recibo traídos del servidor (factura/orden).
+        //
+        // 🔴 Hay que mirar props.data además de this.state. En las vías de
+        // impresión —Imprimir Boleta, la rutina y la reimpresión— el caller ya
+        // pre-cargó estos datos y los pasó en props.data junto con
+        // _skipAsyncReload; por ese early-return `this.state.receiptData` queda
+        // VACÍO. Sin este fallback todo lo que sale de acá cae en su segunda
+        // opción: debajo del código de barras aparecía el nº de CFE
+        // («101-A-5307») en vez del nº de orden, y la adenda perdía cajero y
+        // vendedor. Es la misma trampa de los early-returns que ya dejó los
+        // puntos de lealtad fuera del impreso.
+        const datosDelEstado = this.state.receiptData;
+        const receiptData = (datosDelEstado && Object.keys(datosDelEstado).length)
+            ? datosDelEstado
+            : (this.props.data || {});
 
         // Definir datos legales con fallback a la información local del POS.
         const legalData = {

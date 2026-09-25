@@ -28,12 +28,18 @@ const LOG = "[pos_forum_qz_print]";
  * (~72 mm en una térmica de 80 mm): de ahí salía el recorte a izquierda y derecha.
  */
 const THERMAL_CSS = `
-.container, .container-fluid, .article, .page,
-.o_forum_loyalty_coupon_thermal, .oca-thermal-voucher {
+.container, .container-fluid {
     width: 100% !important;
     max-width: 100% !important;
     margin-left: 0 !important;
     margin-right: 0 !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+}
+/* .article, .page y los contenedores térmicos conservan su max-width en mm:
+   es el que fija el tamaño con el que QZ viene imprimiendo. Sólo se les saca
+   el padding lateral de Bootstrap. */
+.article, .page, .o_forum_loyalty_coupon_thermal, .oca-thermal-voucher {
     padding-left: 0 !important;
     padding-right: 0 !important;
 }

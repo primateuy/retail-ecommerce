@@ -71,11 +71,19 @@ class IrActionsReport(models.Model):
         menos de ancho por módulo (0,374 mm -> 0,265 mm), que es la diferencia entre
         un código holgado y uno en el límite de lo legible.
 
-        El resto se deja intacto, así lo escaneado sigue haciendo match por substring
-        contra ``pos_reference`` tanto en la búsqueda del PDV como en el backend.
+        🔴 También se quitan los guiones. La lectora no manda caracteres sino
+        POSICIONES DE TECLA: la tecla que en un teclado US es «-», en uno
+        español/latinoamericano es «'», así que "00429-001-0002" entra como
+        "00429'001'0002" en cualquier campo del sistema. Codificando sólo los
+        alfanuméricos no queda ningún carácter que dependa del layout y el
+        escaneo sale igual en cualquier caja. De reconstruir la referencia se
+        encarga ``parseOrderReference`` (pos_forum_order_search_expand), que
+        acepta las tres formas: con guion, con el separador que emita la lectora,
+        y corrida. El número que va IMPRESO debajo del código sigue con guiones,
+        que es el que el cajero teclea a mano.
 
         :param value: valor crudo (p. ej. ``pos_reference``).
-        :return: valor a codificar, sin el prefijo alfabético inicial.
+        :return: valor a codificar, sin el prefijo alfabético inicial ni guiones.
         """
         text = (value or '').strip()
         if not text:
@@ -91,9 +99,10 @@ class IrActionsReport(models.Model):
                 prefix = text[:index]
                 is_separate_word = prefix != prefix.rstrip()
                 if is_separate_word and prefix.strip().isalpha():
-                    return text[index:].strip()
-                return text
-        return text
+                    text = text[index:].strip()
+                break
+        # Bloque: fuera los separadores (ver el docstring). Sólo alfanuméricos.
+        return ''.join(c for c in text if c.isalnum())
 
     @api.model
     def _forum_code128_thermal(self, value, target_mm=None, height_mm=None, dpi=None,

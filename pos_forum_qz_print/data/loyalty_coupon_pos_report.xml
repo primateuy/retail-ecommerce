@@ -8,7 +8,7 @@
         <template id="forum_minimal_report_layout">
             <t t-if="not o" t-set="o" t-value="doc"/>
             <div class="article o_forum_loyalty_coupon_thermal"
-                 style="width: 100%; max-width: 100%; margin: 0; padding: 4px 0; font-family: Arial, Helvetica, sans-serif; font-size: 11px; color: #000;">
+                 style="width: 100%; max-width: 80mm; margin: 0 auto; padding: 4px 0; font-family: Arial, Helvetica, sans-serif; font-size: 11px; color: #000;">
                 <t t-out="0"/>
             </div>
         </template>
