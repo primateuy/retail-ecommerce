@@ -289,13 +289,22 @@ class PaymentTransaction(models.Model):
 
             raw = manual_vals.get(code)
 
+            # 🔴 El popup manda el ID del catálogo para los campos relacionales
+            # (el sello es un payment.method). Se resuelve acá, ANTES de repartir
+            # a los destinos, porque si no el id crudo termina escrito en el
+            # campo: en la ficha de la transacción aparecía «295» en vez de
+            # «Visa Débito». Antes esto sólo pasaba cuando el destino era el
+            # alias heredado «stamp»; con un campo directo de payment.transaction
+            # —por ejemplo issuer_name, «Nombre adquirente»— caía por la otra
+            # rama y se guardaba el número.
+            if request_field.field_type == "many2one":
+                raw = self._forum_resolve_reference_label(request_field, raw)
+
             if target in FORUM_TX_FIELD_TARGETS:
                 # Alias heredado: ambos destinos son Char (OCA + manual_*).
                 # Se mantiene la conversión a string como antes para conservar
                 # 100% de retrocompatibilidad con el flujo existente.
-                if request_field.field_type == "many2one" and target == "stamp":
-                    value = self._forum_resolve_stamp_label(raw)
-                elif raw is None or raw is False:
+                if raw is None or raw is False:
                     value = ""
                 else:
                     value = str(raw).strip()
@@ -426,6 +435,34 @@ class PaymentTransaction(models.Model):
             )
             return {}
         return data
+
+    @api.model
+    def _forum_resolve_reference_label(self, request_field, raw):
+        """
+        Nombre legible del registro referenciado por un campo relacional.
+
+        Usa el modelo configurado en el catálogo (``relation_model_id``), no uno
+        fijo: el sello es un ``payment.method``, pero el catálogo permite otros.
+
+        :param request_field: línea de ``manual.payment.request.field``.
+        :param raw: lo que mandó el popup del PDV (normalmente el id).
+        :return str: nombre del registro, o el valor tal cual si no se resuelve.
+        """
+        if raw in (None, False, ""):
+            return ""
+        modelo = (
+            request_field.relation_model_id.model
+            if request_field.relation_model_id else "payment.method"
+        )
+        if modelo not in self.env:
+            return str(raw).strip()
+        try:
+            registro_id = int(raw)
+        except (ValueError, TypeError):
+            # Ya venía el nombre (o algo que no es un id): se deja como está.
+            return str(raw).strip()
+        registro = self.env[modelo].sudo().browse(registro_id)
+        return registro.display_name if registro.exists() else ""
 
     @api.model
     def _forum_resolve_stamp_label(self, stamp_value):
