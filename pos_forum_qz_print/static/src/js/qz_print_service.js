@@ -1,13 +1,17 @@
 /** @odoo-module */
 
 /**
- * Servicio POS: conexión a QZ Tray e impresión HTML en impresora nominal.
+ * Servicio POS: conexión a QZ Tray e impresión térmica en impresora nominal.
+ *
+ * Los documentos se rasterizan y se mandan como ESC/POS crudo; el porqué está
+ * contado en ``escpos_raster.js``.
  *
  * Requiere RSVP + Sha256 globales (cargados antes que qz-tray.js en el manifiesto)
  * y la app QZ Tray ejecutándose en la máquina del cajero.
  */
 
 import { registry } from "@web/core/registry";
+import { documentoAEscPosBase64 } from "@pos_forum_qz_print/js/escpos_raster";
 
 /** Prefijo único para filtrar en consola del navegador (F12). */
 const LOG = "[pos_forum_qz_print]";
@@ -43,7 +47,11 @@ const THERMAL_CSS = `
     padding-left: 0 !important;
     padding-right: 0 !important;
 }
-img { max-width: 100% !important; }
+/* 🔴 SIN !important, y no es un detalle de estilo: con él, este max-width le gana
+   al tamaño propio de cada imagen. El QR del CFE viene con max-width de 150 px
+   y mide 1060 px de lado; pisado por esta regla se estiraba al ancho completo
+   del papel y salía un QR de 72 mm. Así, sólo achica lo que de verdad se pasa. */
+img { max-width: 100%; }
 `;
 /**
  * Quita del HTML todo lo que apunte a los assets web de Odoo y cualquier script.
@@ -230,12 +238,13 @@ export const qzPrintService = {
          * garantiza que la rutina y el botón de recibo compartan márgenes.
          */
         const crearConfig = (qz, name, options = {}) => {
-            // Misma configuración que venía usando el recibo: márgenes en cero y
-            // el tamaño de página del driver de la impresora. No se fuerza ``size``
-            // a propósito — el driver ya sabe que el rollo es de 80 mm, y forzarlo
-            // rompería el único camino que hoy imprime bien.
+            // Bloque: con ESC/POS la página no se negocia con nadie.
+            //
+            // Los bytes van derecho a la impresora, así que no hay tamaño de
+            // página, ni márgenes, ni escalado de por medio: el largo de la tira
+            // lo fija el propio documento y el corte lo manda el bitmap. De acá
+            // sólo sale el nombre con el que el trabajo aparece en la cola.
             return qz.configs.create(name, {
-                margins: { top: 0, right: 0, bottom: 0, left: 0 },
                 jobName: options.jobName || "Odoo PDV",
             });
         };
@@ -279,12 +288,20 @@ export const qzPrintService = {
                 console.info(
                     `${LOG} HTML térmico preparado | tamaño_final=${documentHtml.length} caracteres`
                 );
+                // Bloque: el documento va como bitmap ESC/POS, no como HTML.
+                //
+                // Mandarle el HTML a QZ (``type: "html"``) lo deja en manos del
+                // WebView que QZ lleva adentro, y ahí los documentos salen en
+                // blanco, a medias o cuatro veces más grandes — medido en papel
+                // con los cuatro de la rutina. El bitmap, en cambio, sale
+                // exacto: ver ``escpos_raster.js``.
+                const datosCrudos = await documentoAEscPosBase64(documentHtml);
                 const config = crearConfig(qz, name, options);
                 const printData = [
                     {
-                        type: "html",
-                        format: "plain",
-                        data: documentHtml,
+                        type: "raw",
+                        format: "base64",
+                        data: datosCrudos,
                     },
                 ];
                 try {

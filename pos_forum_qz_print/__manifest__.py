@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 {
     "name": "POS Forum — Impresión QZ Tray",
-    "version": "17.0.1.4.0",
+    "version": "17.0.2.0.0",
     "category": "Point of Sale",
     "summary": "Ticket de cambio y recibo POS vía QZ Tray (impresora local sin diálogo del navegador).",
     "description": """
@@ -23,8 +23,11 @@ Requisitos
 * Sustituir `digital-certificate.txt` por el certificado firmado según la
   documentación de QZ cuando pase a producción (el archivo incluido es plantilla).
 
+Los documentos NO se mandan como HTML: se rasterizan a 576 puntos y se envían
+como ESC/POS crudo. El motivo, medido en papel, está en `static/src/js/escpos_raster.js`.
+
 Librerías JS en `static/src/lib/` proceden del conector QZ (referencia módulo
-pos_qz_printer Kanak / QZ Tray).
+pos_qz_printer Kanak / QZ Tray) y de html2canvas 1.4.1 (MIT).
     """,
     "author": "PRIMATE",
     "license": "LGPL-3",
@@ -39,6 +42,8 @@ pos_qz_printer Kanak / QZ Tray).
             "pos_forum_qz_print/static/src/lib/rsvp-3.1.0.min.js",
             "pos_forum_qz_print/static/src/lib/sha-256.min.js",
             "pos_forum_qz_print/static/src/lib/qz-tray.js",
+            "pos_forum_qz_print/static/src/lib/html2canvas.js",
+            "pos_forum_qz_print/static/src/js/escpos_raster.js",
             "pos_forum_qz_print/static/src/js/qz_print_service.js",
             "pos_forum_qz_print/static/src/js/receipt_screen_qz.js",
             "pos_forum_qz_print/static/src/js/loyalty_code_scan.js",
