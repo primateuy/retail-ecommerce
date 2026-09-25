@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <!--
+            Reset de geometría para los documentos térmicos (ticket de cambio,
+            voucher OCA, cupón de próxima compra).
+
+            ``web.html_container`` mete el contenido dentro de
+            ``<body class="container">``, y .container es de Bootstrap: trae
+            padding lateral y un ancho pensado para pantalla/A4. Sobre una página
+            de 80 mm eso se come varios milímetros de cada lado, además de los
+            márgenes del formato de papel. Los tres reportes llaman a esta
+            plantilla para anularlo y quedar con la misma caja.
+        -->
+        <template id="thermal_reset_css">
+            <style>
+                html, body { margin: 0 !important; padding: 0 !important; }
+                body.container, .container, .container-fluid {
+                    width: 100% !important;
+                    max-width: 100% !important;
+                    padding-left: 0 !important;
+                    padding-right: 0 !important;
+                    margin-left: 0 !important;
+                    margin-right: 0 !important;
+                }
+                .article, .page { width: 100% !important; max-width: 100% !important; }
+                img { max-width: 100% !important; }
+            </style>
+        </template>
+    </data>
+</odoo>

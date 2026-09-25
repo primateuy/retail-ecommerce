@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <!--
+            Formato de papel para los documentos térmicos del PDV (ticket de cambio,
+            voucher OCA, cupón de próxima compra).
+
+            Por qué existe:
+            - Sin formato propio, Odoo usa el de la compañía (A4, márgenes 40/32/7/7).
+              Un documento pensado para 80 mm maquetado sobre 210 mm y después impreso
+              en el rollo sale reducido y cortado: eso es lo que hacía ilegible el
+              cupón de próxima compra.
+            - El formato «Ticket» que había a mano en las bases es B7 (88 x 125 mm).
+              Los 88 mm con el contenido centrado dejan el ticket desplazado respecto
+              de los ~72 mm que realmente imprime una térmica de 80 mm, y se come un
+              poco de cada lado.
+
+            Los números:
+            - 80 mm de papel y márgenes en CERO: el contenido son los 80 mm.
+              🔴 Con 4 mm de margen a cada lado el área de contenido queda en 72 mm, y
+              el recibo del PDV trae `width: 80mm` clavado en su div raíz: se salía 8 mm
+              y salía CORTADO A LA DERECHA (medido: se perdían la columna Total y el
+              final de cada importe). Por QZ no pasa porque ahí la página es la del
+              driver, de 80 mm con margen cero. El PDF tiene que tener la misma caja
+              que QZ, y del área imprimible real del cabezal se ocupa la impresora.
+            - 🔴 dpi = 96 y no 203. El campo NO es la resolución del cabezal: Odoo le
+              pasa a wkhtmltopdf un zoom de 96/dpi (ir_actions_report.py:306), así que
+              un dpi de 203 sale con zoom 0,47 y el documento entero se imprime a
+              menos de la mitad de su tamaño. Medido: el ticket de cambio pasaba de
+              83 mm a 41 mm. Con 96 el zoom es 1,0 y los milímetros del diseño son
+              los milímetros del papel. El texto no pierde nitidez porque en el PDF
+              es vectorial; quien rasteriza al final es la impresora.
+            - disable_shrinking evita el «smart shrinking» de wkhtmltopdf, que reescala
+              todo el render y arruina el contraste de las letras pequeñas.
+            - La altura es holgada a propósito: el corte lo hace la impresora al final
+              del trabajo, y una página corta partiría el ticket en dos.
+        -->
+        <record id="paperformat_pos_thermal_80" model="report.paperformat">
+            <field name="name">Térmico 80 mm (PDV)</field>
+            <field name="default" eval="False"/>
+            <field name="format">custom</field>
+            <field name="page_width">80</field>
+            <field name="page_height">297</field>
+            <field name="orientation">Portrait</field>
+            <field name="margin_top">0</field>
+            <field name="margin_bottom">0</field>
+            <field name="margin_left">0</field>
+            <field name="margin_right">0</field>
+            <field name="header_line" eval="False"/>
+            <field name="header_spacing">0</field>
+            <field name="dpi">96</field>
+            <field name="disable_shrinking" eval="True"/>
+        </record>
+    </data>
+</odoo>

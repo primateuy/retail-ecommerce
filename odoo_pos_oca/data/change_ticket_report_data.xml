@@ -7,6 +7,7 @@
         -->
         <record id="oca_card_voucher_snippet" model="ir.ui.view">
             <field name="name">odoo_pos_oca.oca_card_voucher_snippet</field>
+            <field name="key">odoo_pos_oca.oca_card_voucher_snippet</field>
             <field name="type">qweb</field>
             <field name="arch" type="xml">
                 <t t-name="odoo_pos_oca.oca_card_voucher_snippet">
@@ -41,7 +42,7 @@
                     <t t-set="dgi_code" t-value="tx.provider_id.oca_dgi_code or ''"/>
 
                     <div class="oca-thermal-voucher"
-                         style="font-family: 'Courier New', Courier, monospace; font-size: 13px; line-height: 1.4; max-width: 80mm; margin: 0 auto; color: #000; padding: 4px 0;">
+                         style="font-family: 'Courier New', Courier, monospace; font-size: 13px; line-height: 1.4; width: 100%; max-width: 100%; margin: 0; color: #000; padding: 4px 0;">
 
                         <!-- Bloque: encabezado de sucursal (nombre, dirección, ciudad, teléfono) -->
                         <div style="text-align:center; font-weight:bold; margin-bottom:2px;">
@@ -59,14 +60,18 @@
 
                         <!-- Bloque: ref voucher + fecha/hora (izquierda / derecha) -->
                         <!-- No usar widget "time" con t-field sobre Datetime: en 17.x dispara conversor incorrecto. -->
-                        <div style="display:flex; justify-content:space-between; margin-bottom:1px;">
-                            <span>Voucher de Tarjeta</span>
-                            <span t-if="voucher_ref" t-esc="voucher_ref"/>
-                        </div>
-                        <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
-                            <span t-if="tx.create_date" t-out="context_timestamp(tx.create_date).strftime('%d/%m/%Y')"/>
-                            <span t-if="tx.create_date" t-out="context_timestamp(tx.create_date).strftime('%H:%M:%S')"/>
-                        </div>
+                        <table style="width:100%; border-collapse:collapse; margin-bottom:1px;">
+                            <tr>
+                                <td style="text-align:left; padding:0;"><span>Voucher de Tarjeta</span></td>
+                                <td style="text-align:right; padding:0;"><span t-if="voucher_ref" t-esc="voucher_ref"/></td>
+                            </tr>
+                        </table>
+                        <table style="width:100%; border-collapse:collapse; margin-bottom:6px;">
+                            <tr>
+                                <td style="text-align:left; padding:0;"><span t-if="tx.create_date" t-out="context_timestamp(tx.create_date).strftime('%d/%m/%Y')"/></td>
+                                <td style="text-align:right; padding:0;"><span t-if="tx.create_date" t-out="context_timestamp(tx.create_date).strftime('%H:%M:%S')"/></td>
+                            </tr>
+                        </table>
 
                         <div style="border-top:1px solid #000; margin-bottom:6px;"></div>
 
@@ -77,59 +82,81 @@
                         <div style="text-align:center; font-weight:bold; margin-bottom:6px;">
                             <span t-esc="tx.emv_application_name or tx.issuer_name or tipo_label"/>
                         </div>
-                        <div style="display:flex; justify-content:space-between; margin-bottom:2px;">
-                            <span>Tipo: <span t-esc="tipo_label"/></span>
-                            <span>Exp: xx/xx</span>
-                        </div>
-                        <div style="display:flex; justify-content:space-between; margin-bottom:2px;">
-                            <span>Operacion: Venta</span>
-                            <span>o.Doc: <span t-esc="tx.oca_transaction_id or '-'"/></span>
-                        </div>
-                        <div style="display:flex; justify-content:space-between; margin-bottom:2px;">
-                            <span>Comercio: <span t-esc="tx.merchant_number or '-'"/></span>
-                            <span>Term: <span t-esc="tx.pos_id or '-'"/></span>
-                        </div>
-                        <div style="display:flex; justify-content:space-between; margin-bottom:2px;">
-                            <span>Lote: <span t-esc="tx.batch_number or '-'"/></span>
-                            <span>Ticket: <span t-esc="tx.ticket_number or '-'"/></span>
-                        </div>
-                        <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
-                            <span>Tarjeta: <span t-esc="card_masked"/></span>
-                            <span>NFC</span>
-                        </div>
-                        <div style="display:flex; justify-content:space-between; margin-bottom:2px;">
-                            <span>Plan: <span t-esc="tx.issuer_code or '0'"/></span>
-                            <span>Cuotas: <span t-esc="tx.installments or 0"/></span>
-                        </div>
+                        <table style="width:100%; border-collapse:collapse; margin-bottom:2px;">
+                            <tr>
+                                <td style="text-align:left; padding:0;"><span>Tipo: <span t-esc="tipo_label"/></span></td>
+                                <td style="text-align:right; padding:0;"><span>Exp: xx/xx</span></td>
+                            </tr>
+                        </table>
+                        <table style="width:100%; border-collapse:collapse; margin-bottom:2px;">
+                            <tr>
+                                <td style="text-align:left; padding:0;"><span>Operacion: Venta</span></td>
+                                <td style="text-align:right; padding:0;"><span>o.Doc: <span t-esc="tx.oca_transaction_id or '-'"/></span></td>
+                            </tr>
+                        </table>
+                        <table style="width:100%; border-collapse:collapse; margin-bottom:2px;">
+                            <tr>
+                                <td style="text-align:left; padding:0;"><span>Comercio: <span t-esc="tx.merchant_number or '-'"/></span></td>
+                                <td style="text-align:right; padding:0;"><span>Term: <span t-esc="tx.pos_id or '-'"/></span></td>
+                            </tr>
+                        </table>
+                        <table style="width:100%; border-collapse:collapse; margin-bottom:2px;">
+                            <tr>
+                                <td style="text-align:left; padding:0;"><span>Lote: <span t-esc="tx.batch_number or '-'"/></span></td>
+                                <td style="text-align:right; padding:0;"><span>Ticket: <span t-esc="tx.ticket_number or '-'"/></span></td>
+                            </tr>
+                        </table>
+                        <table style="width:100%; border-collapse:collapse; margin-bottom:6px;">
+                            <tr>
+                                <td style="text-align:left; padding:0;"><span>Tarjeta: <span t-esc="card_masked"/></span></td>
+                                <td style="text-align:right; padding:0;"><span>NFC</span></td>
+                            </tr>
+                        </table>
+                        <table style="width:100%; border-collapse:collapse; margin-bottom:2px;">
+                            <tr>
+                                <td style="text-align:left; padding:0;"><span>Plan: <span t-esc="tx.issuer_code or '0'"/></span></td>
+                                <td style="text-align:right; padding:0;"><span>Cuotas: <span t-esc="tx.installments or 0"/></span></td>
+                            </tr>
+                        </table>
                         <div style="margin-bottom:8px;">
                             <span>Autorizacion: <span t-esc="tx.authorization_code or '-'"/></span>
                         </div>
 
                         <!-- Bloque: AID + nombre aplicativo EMV (formato voucher OCA:
                              AID a la izquierda, nombre legible a la derecha). -->
-                        <div t-if="aid or emv_app_name" style="display:flex; justify-content:space-between; margin-bottom:4px;">
-                            <span t-esc="aid"/>
-                            <span t-esc="emv_app_name or issuer_aid_label"/>
-                        </div>
+                        <table t-if="aid or emv_app_name" style="width:100%; border-collapse:collapse; margin-bottom:4px;">
+                            <tr>
+                                <td style="text-align:left; padding:0;"><span t-esc="aid"/></td>
+                                <td style="text-align:right; padding:0;"><span t-esc="emv_app_name or issuer_aid_label"/></td>
+                            </tr>
+                        </table>
 
                         <!-- Bloque: importe / devolución IVA / pago -->
-                        <div style="display:flex; justify-content:space-between; font-weight:bold; margin-bottom:2px;">
-                            <span>Importe $</span>
-                            <span t-esc="tx.format_amount(tx.amount)"/>
-                        </div>
+                        <table style="width:100%; border-collapse:collapse; font-weight:bold; margin-bottom:2px;">
+                            <tr>
+                                <td style="text-align:left; padding:0;"><span>Importe $</span></td>
+                                <td style="text-align:right; padding:0;"><span t-esc="tx.format_amount(tx.amount)"/></td>
+                            </tr>
+                        </table>
                         <t t-if="has_tax_refund">
-                            <div style="display:flex; justify-content:space-between; margin-bottom:2px;">
-                                <span>Dev. <t t-esc="tax_law_label"/></span>
-                                <span t-esc="tx.format_amount(tx.tax_refund_amount)"/>
-                            </div>
-                            <div style="display:flex; justify-content:space-between; font-weight:bold; margin-bottom:2px;">
-                                <span>Pago</span>
-                                <span t-esc="tx.format_amount(pago)"/>
-                            </div>
-                            <div style="display:flex; justify-content:space-between; margin-bottom:2px;">
-                                <span>DGI</span>
-                                <span t-if="dgi_code" t-esc="dgi_code"/>
-                            </div>
+                            <table style="width:100%; border-collapse:collapse; margin-bottom:2px;">
+                                <tr>
+                                    <td style="text-align:left; padding:0;"><span>Dev. <t t-esc="tax_law_label"/></span></td>
+                                    <td style="text-align:right; padding:0;"><span t-esc="tx.format_amount(tx.tax_refund_amount)"/></td>
+                                </tr>
+                            </table>
+                            <table style="width:100%; border-collapse:collapse; font-weight:bold; margin-bottom:2px;">
+                                <tr>
+                                    <td style="text-align:left; padding:0;"><span>Pago</span></td>
+                                    <td style="text-align:right; padding:0;"><span t-esc="tx.format_amount(pago)"/></td>
+                                </tr>
+                            </table>
+                            <table style="width:100%; border-collapse:collapse; margin-bottom:2px;">
+                                <tr>
+                                    <td style="text-align:left; padding:0;"><span>DGI</span></td>
+                                    <td style="text-align:right; padding:0;"><span t-if="dgi_code" t-esc="dgi_code"/></td>
+                                </tr>
+                            </table>
                             <div style="text-align:center; font-size:11px;">
                                 Aplica dev. <t t-esc="tax_law_label"/>
                             </div>
@@ -139,14 +166,18 @@
                         </t>
 
                         <!-- Bloque: importes fiscales (factura / gravado) -->
-                        <div style="display:flex; justify-content:space-between; margin-top:8px;">
-                            <span>Imp.Factura</span>
-                            <span t-esc="tx.format_amount(tx.amount)"/>
-                        </div>
-                        <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
-                            <span>Imp.Gravado TRX</span>
-                            <span t-esc="tx.format_amount(gravado)"/>
-                        </div>
+                        <table style="width:100%; border-collapse:collapse; margin-top:8px;">
+                            <tr>
+                                <td style="text-align:left; padding:0;"><span>Imp.Factura</span></td>
+                                <td style="text-align:right; padding:0;"><span t-esc="tx.format_amount(tx.amount)"/></td>
+                            </tr>
+                        </table>
+                        <table style="width:100%; border-collapse:collapse; margin-bottom:4px;">
+                            <tr>
+                                <td style="text-align:left; padding:0;"><span>Imp.Gravado TRX</span></td>
+                                <td style="text-align:right; padding:0;"><span t-esc="tx.format_amount(gravado)"/></td>
+                            </tr>
+                        </table>
 
                         <div style="text-align:center; font-weight:bold; margin-bottom:4px;">
                             *** COMPRA ***
@@ -185,6 +216,10 @@
             <field name="report_name">odoo_pos_oca.change_ticket_report</field>
             <field name="report_file">odoo_pos_oca.change_ticket_report</field>
             <field name="print_report_name">'Ticket de Cambio - %s' % (object.name)</field>
+            <!-- Sin esto hereda el formato de la compañía (A4) o el «Ticket» B7 que
+                 quedó puesto a mano en las bases: en los dos casos el ticket sale
+                 desplazado y cortado en el rollo de 80 mm. -->
+            <field name="paperformat_id" ref="odoo_pos_oca.paperformat_pos_thermal_80"/>
             <field name="binding_model_id" ref="point_of_sale.model_pos_order"/>
             <field name="binding_type">report</field>
         </record>
@@ -193,10 +228,12 @@
         <!-- El XML ID debe coincidir con el report_name para que el sistema pueda encontrarlo -->
         <record id="change_ticket_report" model="ir.ui.view">
             <field name="name">odoo_pos_oca.change_ticket_report</field>
+            <field name="key">odoo_pos_oca.change_ticket_report</field>
             <field name="model">pos.order</field>
             <field name="type">qweb</field>
             <field name="arch" type="xml">
                 <t t-call="web.html_container">
+                    <t t-call="odoo_pos_oca.thermal_reset_css"/>
                     <t t-foreach="docs" t-as="o">
                         <t t-set="ticket_number" t-value="o.pos_reference or o.name"/>
                         <!-- Nº de orden para texto bajo el código (prioridad: pos_reference). -->
@@ -214,7 +251,7 @@
                         <t t-set="cfe_joined" t-value="' '.join(cfe_parts) if cfe_parts else (cfe_serie_num or cfe_type_code or '')"/>
 
                         <!-- Diseño tipo ticket térmico (referencia retail Uruguay) -->
-                        <div class="page" style="max-width: 80mm; margin: 0 auto; padding: 8px 4px; font-family: Arial, Helvetica, sans-serif; font-size: 10px; color: #000; text-transform: uppercase;">
+                        <div class="page" style="width: 100%; max-width: 100%; margin: 0; padding: 8px 0; font-family: Arial, Helvetica, sans-serif; font-size: 10px; color: #000; text-transform: uppercase;">
 
                             <!-- Bloque: marca / nombre comercial (sucursal o compañía) 
                             <div style="text-align:center; font-weight: bold; font-size: 18px; letter-spacing: 1px; margin-bottom: 10px;">
@@ -302,7 +339,7 @@
                                 LOS CAMBIOS SE PODRAN REALIZAR DENTRO DE UN PLAZO DE 30 DIAS
                             </div>
 
-                            <div style="text-align: center; font-size: 9px; margin-top: 12px; color: #555;">
+                            <div style="text-align: center; font-size: 9px; margin-top: 12px; color: #000;">
                                 <span t-if="o.session_id">Sesion: <span t-field="o.session_id.name"/></span>
                             </div>
                         </div>
@@ -319,18 +356,21 @@
             <field name="report_name">odoo_pos_oca.payment_transaction_oca_voucher_report</field>
             <field name="report_file">odoo_pos_oca.payment_transaction_oca_voucher_report</field>
             <field name="print_report_name">'Voucher OCA - %s' % (object.reference or object.id)</field>
+            <field name="paperformat_id" ref="odoo_pos_oca.paperformat_pos_thermal_80"/>
             <field name="binding_model_id" ref="payment.model_payment_transaction"/>
             <field name="binding_type">report</field>
         </record>
 
         <record id="payment_transaction_oca_voucher_report" model="ir.ui.view">
             <field name="name">odoo_pos_oca.payment_transaction_oca_voucher_report</field>
+            <field name="key">odoo_pos_oca.payment_transaction_oca_voucher_report</field>
             <field name="model">payment.transaction</field>
             <field name="type">qweb</field>
             <field name="arch" type="xml">
                 <t t-call="web.html_container">
+                    <t t-call="odoo_pos_oca.thermal_reset_css"/>
                     <t t-foreach="docs" t-as="tx">
-                        <div class="article o_report_layout_standard" style="padding: 8px;">
+                        <div class="article o_report_layout_standard" style="padding: 4px 0; margin: 0; width: 100%; max-width: 100%;">
                             <t t-set="copy_label" t-value="'COPIA EMPRESA'"/>
                             <t t-call="odoo_pos_oca.oca_card_voucher_snippet"/>
                         </div>
