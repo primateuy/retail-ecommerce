@@ -20,7 +20,7 @@
         <field name="name">Recibo con CFE (FORUM)</field>
         <field name="design_receipt"><![CDATA[<!-- FORUM v2 -->
         <style>@page { size: 80mm auto; margin: 0; } @media print { body { margin: 0; } }</style>
-        <div style="position:relative; width:80mm; margin:0; padding:0; font-family:'Courier New',monospace; font-size:12px; box-sizing:border-box" class="pos-receipt">
+        <div style="position:relative; width:100%; max-width:80mm; margin:0; padding:0; font-family:'Courier New',monospace; font-size:12px; box-sizing:border-box" class="pos-receipt">
 
             <!-- ===================== ENCABEZADO ===================== -->
 

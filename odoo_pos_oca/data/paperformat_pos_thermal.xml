@@ -16,13 +16,17 @@
               poco de cada lado.
 
             Los números:
-            - 80 mm de papel y márgenes en CERO: el contenido son los 80 mm.
-              🔴 Con 4 mm de margen a cada lado el área de contenido queda en 72 mm, y
-              el recibo del PDV trae `width: 80mm` clavado en su div raíz: se salía 8 mm
-              y salía CORTADO A LA DERECHA (medido: se perdían la columna Total y el
-              final de cada importe). Por QZ no pasa porque ahí la página es la del
-              driver, de 80 mm con margen cero. El PDF tiene que tener la misma caja
-              que QZ, y del área imprimible real del cabezal se ocupa la impresora.
+            - La PÁGINA mide 72 mm, no 80, y sin márgenes.
+              🔴 Ese 72 no es una estimación: el propio PPD de CITIZEN declara el área
+              imprimible de la CT-S310II en 204 pt = 71,97 mm (576 puntos a 203 dpi).
+              Todo lo que se dibuje más ancho que eso se pierde por la derecha, y es
+              lo que pasaba: «COMPROBANTE FISCAL ELECTRONIC», la columna Total en
+              «2.4…», «DESCUENT». El recibo del PDV traía `width: 80mm` clavado en su
+              div raíz y por eso se salía; ahora usa `width: 100%` con tope de 80 mm,
+              así se adapta a la página que le toque en vez de suponerla.
+              Y la página va de 72 mm en vez de 80 con márgenes: si la página es más
+              ancha que el área imprimible, el sistema de impresión recorta igual, por
+              más que el contenido esté centrado dentro.
             - 🔴 dpi = 96 y no 203. El campo NO es la resolución del cabezal: Odoo le
               pasa a wkhtmltopdf un zoom de 96/dpi (ir_actions_report.py:306), así que
               un dpi de 203 sale con zoom 0,47 y el documento entero se imprime a
@@ -36,10 +40,10 @@
               del trabajo, y una página corta partiría el ticket en dos.
         -->
         <record id="paperformat_pos_thermal_80" model="report.paperformat">
-            <field name="name">Térmico 80 mm (PDV)</field>
+            <field name="name">Térmico 80 mm (PDV) — 72 mm imprimibles</field>
             <field name="default" eval="False"/>
             <field name="format">custom</field>
-            <field name="page_width">80</field>
+            <field name="page_width">72</field>
             <field name="page_height">297</field>
             <field name="orientation">Portrait</field>
             <field name="margin_top">0</field>
