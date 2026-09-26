@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="view_warehouse_form_branch" model="ir.ui.view">
+        <field name="name">stock.warehouse.form.branch</field>
+        <field name="model">stock.warehouse</field>
+        <field name="inherit_id" ref="stock.view_warehouse"/>
+        <field name="arch" type="xml">
+            <!-- La vista de core ya trae un notebook: se agrega una página, no otro. -->
+            <xpath expr="//notebook" position="inside">
+                <page string="Sucursal" name="branch" groups="stock.group_stock_manager">
+                    <group>
+                        <group string="Local">
+                            <field name="is_branch"/>
+                            <field name="branch_pos_company_id" readonly="1"
+                                   invisible="not branch_pos_config_ids"/>
+                        </group>
+                    </group>
+                    <group string="Puntos de venta" invisible="not is_branch">
+                        <field name="branch_pos_config_ids" nolabel="1"
+                               widget="many2many_tags"
+                               options="{'no_create': True}"/>
+                        <div colspan="2" class="text-muted">
+                            El PDV puede pertenecer a otra compañía que el almacén: es el
+                            caso de una sucursal de franquicia, que factura en la compañía
+                            del franquiciado y mueve inventario en un almacén de la casa
+                            central.
+                        </div>
+                    </group>
+                    <group string="Usuarios" invisible="not is_branch">
+                        <field name="branch_user_ids" nolabel="1"
+                               options="{'no_create': True}">
+                            <tree>
+                                <field name="name"/>
+                                <field name="login"/>
+                                <field name="company_id"/>
+                            </tree>
+                        </field>
+                    </group>
+                </page>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="view_warehouse_list_branch" model="ir.ui.view">
+        <field name="name">stock.warehouse.tree.branch</field>
+        <field name="model">stock.warehouse</field>
+        <field name="inherit_id" ref="stock.view_warehouse_tree"/>
+        <field name="arch" type="xml">
+            <field name="name" position="after">
+                <field name="is_branch" optional="show"/>
+                <field name="branch_pos_company_id" optional="hide"/>
+            </field>
+        </field>
+    </record>
+
+</odoo>
