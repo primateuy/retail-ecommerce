@@ -26,6 +26,31 @@ class ResUsers(models.Model):
         self.ensure_one()
         return self.branch_warehouse_ids.ids
 
+    def _branch_pos_picking_type_ids(self):
+        """Tipos de operación con los que el PDV del local mueve stock.
+
+        En el esquema de franquicias el PDV no mueve stock en el almacén del local
+        sino en el almacén técnico de la compañía del franquiciado: la mercadería es
+        de la casa central hasta que se vende, y la venta la hace el franquiciado.
+        Por eso el tipo de operación del PDV pertenece a otro almacén que el de la
+        sucursal, y sin él no se puede cerrar la caja.
+        """
+        self.ensure_one()
+        return self.branch_warehouse_ids.branch_pos_config_ids.picking_type_id.ids
+
+    def _branch_operating_warehouse_ids(self):
+        """Todos los almacenes en los que el local opera: el suyo y el del PDV."""
+        self.ensure_one()
+        warehouses = self.branch_warehouse_ids
+        warehouses |= warehouses.branch_pos_config_ids.picking_type_id.warehouse_id
+        return warehouses.ids
+
+    def _branch_view_location_ids(self):
+        """Ubicaciones raíz de esos almacenes, para los dominios por ubicación."""
+        self.ensure_one()
+        return self.env['stock.warehouse'].browse(
+            self._branch_operating_warehouse_ids()).view_location_id.ids
+
     def _sync_branch_companies(self):
         """Agrega a company_ids las compañías que la sucursal necesita.
 
