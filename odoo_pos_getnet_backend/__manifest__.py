@@ -16,7 +16,7 @@ Flujo contable de la integración Getnet/TransAct v4:
     "author": "PRIMATE",
     "website": "https://www.primate.com",
     "category": "Accounting/Payment",
-    "version": "17.0.1.0.0",
+    "version": "19.0.1.0.0",
     "depends": [
         "odoo_pos_getnet_core",
         "l10n_uy_einvoice_base",

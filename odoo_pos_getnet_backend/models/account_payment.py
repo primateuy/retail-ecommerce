@@ -14,7 +14,7 @@ import logging
 import threading
 
 from odoo import _, api, fields, models
-from odoo.exceptions import UserError
+from odoo.exceptions import UserError, ValidationError
 
 from odoo.addons.odoo_pos_getnet_core.models import getnet_utils
 
@@ -25,6 +25,14 @@ GETNET_FACTURA_NRO_SIN_FACTURA = getnet_utils.GETNET_FACTURA_NRO_SIN_FACTURA
 # Tipos de CFE que corresponden a consumidor final (e-Ticket y sus notas)
 GETNET_CFE_CONSUMIDOR_FINAL = (
     '101', '102', '103', '131', '132', '133', '151', '152', '153')
+
+# 19.0: account.payment tiene su PROPIA máquina de estados y el valor
+# 'posted' ya no existe. Confirmar deja el pago en 'in_process', o directo
+# en 'paid' cuando la cuenta pendiente del método es de caja
+# (``action_post`` en account/models/account_payment.py). Comparar contra
+# 'posted' no falla: devuelve False siempre, y la conciliación con las
+# facturas origen dejaría de correr en silencio.
+GETNET_PAYMENT_CONFIRMADO = ('in_process', 'paid')
 
 
 class AccountPayment(models.Model):
@@ -120,7 +128,12 @@ class AccountPayment(models.Model):
                  'payment_method_line_id.payment_provider_id')
     def _compute_getnet_is_getnet_payment_line(self):
         for pay in self:
-            provider = pay.payment_method_line_id.payment_provider_id
+            # sudo: payment.provider sólo tiene ACL de lectura para
+            # base.group_system (addons/payment/security). El contador que
+            # cobra no la tiene, y sin sudo el simple hecho de ABRIR el form
+            # del pago revienta con AccessError sobre payment.provider. Se
+            # lee únicamente 'code'; las credenciales no salen a la vista.
+            provider = pay.payment_method_line_id.payment_provider_id.sudo()
             pay.getnet_is_getnet_payment_line = bool(
                 provider and provider.code == 'getnet')
 
@@ -131,8 +144,9 @@ class AccountPayment(models.Model):
         for pay in self:
             lines = (pay.journal_id.inbound_payment_method_line_ids
                      + pay.journal_id.outbound_payment_method_line_ids)
+            # sudo por lo mismo que el compute de arriba.
             pay.getnet_is_integrated_journal = any(
-                ln.payment_provider_id.code == 'getnet'
+                ln.payment_provider_id.sudo().code == 'getnet'
                 for ln in lines if ln.payment_provider_id)
 
     @api.depends('getnet_transaction_id', 'getnet_transaction_id.state')
@@ -204,12 +218,20 @@ class AccountPayment(models.Model):
                     pay.partner_id = tx.partner_id
 
     def _getnet_provider(self):
-        """Proveedor Getnet resuelto SOLO desde la línea de método de pago."""
+        """
+        Proveedor Getnet resuelto SOLO desde la línea de método de pago.
+
+        Devuelto en sudo: payment.provider es de base.group_system y quien
+        opera el flujo es un contador. Además el posteo necesita leer las
+        credenciales TransAct y tomar el lock de la terminal, que es la
+        máquina actuando en nombre del usuario — el mismo criterio que el
+        sudo() sobre payment.transaction.
+        """
         self.ensure_one()
-        provider = self.payment_method_line_id.payment_provider_id
+        provider = self.payment_method_line_id.payment_provider_id.sudo()
         if provider and provider.code == 'getnet':
             return provider
-        return self.env['payment.provider']
+        return self.env['payment.provider'].sudo()
 
     def _getnet_terminal(self, provider):
         self.ensure_one()
@@ -240,7 +262,22 @@ class AccountPayment(models.Model):
             if line.display_type == 'product'
         ]
         vals = getnet_utils.getnet_montos_factura(lineas)
-        numero = move.numero_cfe()
+        # numero_cfe() no se comporta igual en toda la localización:
+        # l10n_uy_einvoice_base lo saca del nombre del asiento y devuelve ''
+        # si no hay, pero l10n_uy_einvoice_uruware lo sobrescribe y levanta
+        # ValidationError cuando la factura no tiene el CFE firmado. En una
+        # BD de cliente el que corre es el de uruware, así que el caso
+        # «factura sin CFE» llega como excepción y no como cadena vacía: sin
+        # esto el contador ve «No se ha emitido el cfe» sin saber qué factura
+        # ni que el cobro Getnet fue lo que se cayó.
+        try:
+            numero = move.numero_cfe()
+        except (UserError, ValidationError) as error:
+            raise UserError(_(
+                'No se pudo obtener el número de CFE de la factura '
+                '%(factura)s (%(error)s); no se puede enviar el cobro a la '
+                'terminal Getnet.',
+                factura=move.display_name, error=error)) from error
         if not numero:
             raise UserError(_(
                 'La factura %s no tiene número de CFE asignado; no se '
@@ -357,9 +394,11 @@ class AccountPayment(models.Model):
         terminal = self._getnet_terminal(provider)
         payload = self._getnet_prepare_transaccion_vals(provider, terminal)
         method = self.env.ref('odoo_pos_getnet_core.payment_method_getnet')
-        # sudo: payment.transaction solo tiene ACL para base.group_system
-        # en el core; el contador que cobra no la tiene. La transacción la
-        # crea la máquina en su nombre (el pago sí es suyo).
+        # sudo: la transacción la crea la máquina en nombre del usuario. El
+        # contador SÍ puede escribir payment.transaction (account_payment le
+        # da rwc a account.group_account_invoice), pero un operador de caja
+        # con sólo base.group_user no, y este mismo código corre desde el
+        # TPV.
         tx = self.env['payment.transaction'].sudo().create({
             'provider_id': provider.id,
             'payment_method_id': method.id,
@@ -511,6 +550,28 @@ class AccountPayment(models.Model):
                     '%s.', pay.display_name))
         return super().action_cancel()
 
+    def action_reject(self):
+        """Rechazar un pago en curso, botón nuevo de 19.0.
+
+        Lleva el pago a 'rejected' sin pasar por la terminal, o sea que es
+        otra puerta para revertir un cobro ya aprobado en el pinpad sin
+        DEV. Se cierra por el mismo criterio que Cancelar. En la vista no
+        hace falta término: el botón del core sólo aparece con
+        ``is_sent``, que un cobro de cliente no usa; el guard existe para
+        que tampoco entre por RPC.
+        """
+        for pay in self:
+            if pay.getnet_tx_is_done:
+                raise UserError(_(
+                    'El pago %s tiene un cobro Getnet aprobado en el '
+                    'pinpad: no puede rechazarse. Realice una devolución '
+                    '(DEV) con la transacción original.', pay.display_name))
+            if pay.getnet_async_terminal_pending:
+                raise UserError(_(
+                    'Hay una operación de terminal Getnet en curso para '
+                    '%s.', pay.display_name))
+        return super().action_reject()
+
     def action_draft(self):
         for pay in self:
             if pay.state == 'draft':
@@ -527,9 +588,15 @@ class AccountPayment(models.Model):
         return super().action_draft()
 
     @staticmethod
-    def _getnet_open_receivable_lines(record):
-        """Apuntes de deudores/acreedores del registro, sin conciliar."""
-        return record.line_ids.filtered(
+    def _getnet_open_receivable_lines(move):
+        """Apuntes de deudores/acreedores del asiento, sin conciliar.
+
+        Recibe un account.move, nunca un account.payment: en 19.0 el pago
+        dejó de ser ``_inherits`` del asiento, así que ``pay.line_ids`` no
+        existe y hay que entrar por ``pay.move_id``. Y ese asiento recién
+        nace al confirmar (``_generate_journal_entry``), no antes.
+        """
+        return move.line_ids.filtered(
             lambda l: l.account_id.account_type
             in ('asset_receivable', 'liability_payable')
             and not l.reconciled)
@@ -548,11 +615,12 @@ class AccountPayment(models.Model):
         administrativa que se puede terminar a mano.
         """
         for pay in self:
-            if not pay.getnet_source_invoice_ids or pay.state != 'posted':
+            if (not pay.getnet_source_invoice_ids
+                    or pay.state not in GETNET_PAYMENT_CONFIRMADO):
                 continue
             pendientes = pay.env['account.move']
             for move in pay.getnet_source_invoice_ids:
-                lines = pay._getnet_open_receivable_lines(pay)
+                lines = pay._getnet_open_receivable_lines(pay.move_id)
                 move_lines = pay._getnet_open_receivable_lines(move)
                 propias = lines.filtered(
                     lambda l: l.account_id in move_lines.account_id)

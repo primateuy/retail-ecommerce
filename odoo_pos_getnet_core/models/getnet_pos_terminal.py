@@ -82,13 +82,12 @@ class GetnetPosTerminal(models.Model):
         copy=False,
     )
 
-    _sql_constraints = [
-        (
-            'term_cod_provider_uniq',
-            'unique(term_cod, payment_provider_id)',
-            'Ya existe una terminal con ese TermCod para este proveedor.',
-        ),
-    ]
+    # En 19.0 las restricciones de base se declaran como atributos de clase;
+    # `_sql_constraints` fue retirado.
+    _term_cod_provider_uniq = models.Constraint(
+        'unique(term_cod, payment_provider_id)',
+        'Ya existe una terminal con ese TermCod para este proveedor.',
+    )
 
     def getnet_claim(self, origin, ref=''):
         """

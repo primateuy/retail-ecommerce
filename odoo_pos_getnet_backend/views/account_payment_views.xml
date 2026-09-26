@@ -75,11 +75,7 @@
                            widget="many2many_tags"
                            invisible="not getnet_is_getnet_payment_line or payment_type != 'inbound'"
                            readonly="state != 'draft'"
-                           domain="[('move_type', 'in', ('out_invoice', 'out_refund')),
-                                    ('state', '=', 'posted'),
-                                    ('payment_state', 'in', ('not_paid', 'partial')),
-                                    ('partner_id', '=', partner_id),
-                                    ('company_id', '=', company_id)]"/>
+                           domain="[('move_type', 'in', ('out_invoice', 'out_refund')), ('state', '=', 'posted'), ('payment_state', 'in', ('not_paid', 'partial')), ('partner_id', '=', partner_id), ('company_id', '=', company_id)]"/>
                     <field name="getnet_terminal_id"
                            invisible="not getnet_is_getnet_payment_line or not getnet_need_terminal_choice"
                            required="getnet_charge_on_pos and getnet_need_terminal_choice"

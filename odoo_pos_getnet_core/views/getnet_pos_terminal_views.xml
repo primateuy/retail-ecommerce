@@ -5,13 +5,13 @@
             <field name="name">getnet.pos.terminal.tree</field>
             <field name="model">getnet.pos.terminal</field>
             <field name="arch" type="xml">
-                <tree>
+                <list>
                     <field name="name"/>
                     <field name="term_cod"/>
                     <field name="payment_provider_id"/>
                     <field name="lock_origin"/>
                     <field name="lock_date"/>
-                </tree>
+                </list>
             </field>
         </record>
 
@@ -50,7 +50,7 @@
         <record id="getnet_pos_terminal_action" model="ir.actions.act_window">
             <field name="name">Terminales Getnet</field>
             <field name="res_model">getnet.pos.terminal</field>
-            <field name="view_mode">tree,form</field>
+            <field name="view_mode">list,form</field>
         </record>
 
         <menuitem id="menu_getnet_pos_terminal"

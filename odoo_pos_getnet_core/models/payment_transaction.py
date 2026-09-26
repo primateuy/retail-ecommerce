@@ -168,7 +168,8 @@ class PaymentTransaction(models.Model):
     def getnet_run_query_loop(self, driver, token, terminal=None,
                               initial_wait=None,
                               timeout_general=GETNET_POLL_TIMEOUT_GENERAL,
-                              hard_max=GETNET_POLL_HARD_MAX):
+                              hard_max=GETNET_POLL_HARD_MAX,
+                              commit_por_consulta=False):
         """
         Bucle ConsultarTransaccion hasta resolución. Contrato del driver:
         ``_getnet_soap_transaccion(method, params) -> (data, req, resp)``
@@ -189,18 +190,68 @@ class PaymentTransaction(models.Model):
           venció el timeout local: perder ese caso es un cobro real en el
           pinpad sin pago registrado en Odoo.
 
+        ``commit_por_consulta`` (OPT-IN, default False): consolida al final de
+        cada vuelta y arranca a contar el tiempo DESPUÉS de la primera espera.
+        Con el default en falso este método se comporta exactamente como
+        siempre —es lo que usan el flujo contable, el TPV y el cron de
+        recuperación—, y hay un test que lo fija. Para qué existe y contra qué
+        no puede chocar quien lo toque, ver el bloque de invariantes más abajo.
+
         :return: dict con 'data' (última respuesta), 'request_xml',
                  'response_xml', 'timeout' (bool: se agotó hard_max sin
                  respuesta final) y 'cancel_attempted'/'cancel_ok'.
         """
+        # ------------------------------------------------------------------
+        # LOS CINCO INVARIANTES DE LA «VENTANA DE GRACIA» (D1)
+        #
+        # `commit_por_consulta` existe para una sola cosa: que un llamador
+        # pueda esperar un rato CORTO por la respuesta de la terminal sin
+        # retener nada, y rendirse sin haber cambiado el significado de nada.
+        # El caso de uso es `terminal_authorize` del contrato de terminales,
+        # que corre dentro de la transacción de quien lo llama. Si alguna vez
+        # tocás esto, son cinco y ninguno es negociable:
+        #
+        #   1. LA VENTANA ES UNA OPTIMIZACIÓN, NO UN ESTADO. La semántica del
+        #      resultado es idéntica si la aprobación llega adentro o afuera:
+        #      mismo `getnet_persist_query_result`, mismos guards, y NINGUNA
+        #      rama de código que exista sólo «si llegó rápido». Por eso es un
+        #      parámetro de este motor y no un motor aparte.
+        #   2. ACOTADA Y POR DEBAJO DEL TIMEOUT DEL LLAMADOR. La cota es
+        #      `hard_max`, y tiene que quedar por debajo del timeout del
+        #      RPC/HTTP de quien llama: esta función no puede ser nunca la
+        #      causa de un pedido colgado.
+        #   3. NO RETIENE NADA. Es lo que paga este parámetro: el `sleep` de
+        #      cada vuelta pasa con la transacción YA consolidada, así que no
+        #      quedan cursores con trabajo abierto ni el row lock del
+        #      `getnet_touch` tomado mientras se duerme. El claim de la
+        #      terminal lo commitea el llamador ANTES de entrar acá.
+        #   4. EL LLAMADOR NO DISTINGUE. Si la ventana expira, el resultado
+        #      vuelve con 'timeout': True y el llamador informa «no sé»
+        #      —`desconocida` en el contrato de terminales—, que es
+        #      exactamente lo que informaría sin ventana. Nadie afuera puede
+        #      saber que la ventana existe.
+        #   5. PROBADA EN LAS DOS RAMAS, con el reloj del harness de tests
+        #      (`tests/common.py`), nunca con sleeps de verdad: aprobación
+        #      dentro de la ventana, y expiración resuelta después por
+        #      consulta o por el cron.
+        # ------------------------------------------------------------------
         self.ensure_one()
         start = time.monotonic()
         wait = initial_wait or GETNET_POLL_DEFAULT_WAIT
+        primera_vuelta = True
         cancel_attempted = False
         cancel_ok = False
         data, req_xml, resp_xml = {}, '', ''
         while True:
             time.sleep(min(max(wait, 1), GETNET_POLL_MAX_WAIT))
+            if commit_por_consulta and primera_vuelta:
+                # La ventana corre a partir de la PRIMERA consulta: esa
+                # primera espera es la que pidió el concentrador
+                # (TokenSegundosConsultar) y no se le descuenta. Descontarla
+                # sería consultarle más seguido de lo que él dijo, que el
+                # manual pide respetar.
+                start = time.monotonic()
+                primera_vuelta = False
             if terminal:
                 # Mantiene vivo el lock de la terminal mientras el flujo
                 # sigue en curso (aunque el polling se extienda).
@@ -262,6 +313,12 @@ class PaymentTransaction(models.Model):
                 }
             wait = getnet_utils.getnet_segundos_reconsulta(
                 data, GETNET_POLL_DEFAULT_WAIT)
+            if commit_por_consulta:
+                # Acá y no antes: el `getnet_touch` de esta vuelta ya está
+                # hecho y la próxima sentencia es el `sleep`. Pasa por
+                # getnet_safe_commit como TODO commit del módulo — el único
+                # cr.commit() crudo sigue siendo el de adentro de esa función.
+                getnet_utils.getnet_safe_commit(self.env)
 
     # ------------------------------------------------------------------
     # Post-procesamiento nativo

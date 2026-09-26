@@ -19,6 +19,10 @@ from odoo.exceptions import AccessError, UserError
 from odoo.tests import TransactionCase, tagged
 
 from odoo.addons.odoo_pos_getnet_core.models import getnet_utils
+from odoo.addons.odoo_pos_getnet_core.tests.common import (
+    _RelojDeLaboratorio,
+)
+from odoo.addons.odoo_pos_getnet_core.models import payment_provider as pp_mod
 from odoo.addons.odoo_pos_getnet_core.models import (
     payment_transaction as pt_mod,
 )
@@ -250,10 +254,108 @@ class TestGetnetCore(TransactionCase):
 
     def _run_loop(self, tx, driver, monotonic_seq, **kwargs):
         """Ejecuta el loop con tiempo controlado (sin sleeps reales)."""
-        with patch.object(pt_mod.time, 'sleep', lambda s: None), \
-                patch.object(pt_mod.time, 'monotonic',
-                             side_effect=list(monotonic_seq)):
+        with patch.object(pt_mod, 'time', _RelojDeLaboratorio(monotonic_seq)):
             return tx.getnet_run_query_loop(driver, tx.getnet_token, **kwargs)
+
+    # ------------------------------------------------------------------
+    # La ventana de gracia: commit_por_consulta (D1)
+    # ------------------------------------------------------------------
+    def _contar_commits(self):
+        """Cuenta las llamadas a getnet_safe_commit sin dejarlas pasar.
+
+        Se parchea la función en su módulo, que es por donde la llama el loop.
+        Un commit de verdad dentro de un test rompe el savepoint de la
+        TransactionCase y contamina la base: la lección ya está pagada.
+        """
+        llamadas = []
+        return llamadas, patch.object(
+            getnet_utils, 'getnet_safe_commit',
+            lambda env: llamadas.append(env))
+
+    def test_el_loop_por_defecto_no_commitea_nada(self):
+        """
+        REGRESIÓN DEL CAMINO DEFAULT. `commit_por_consulta` es opt-in y el
+        flujo contable, el TPV y el cron dependen de que sin pedirlo este
+        motor NO consolide nada: un commit inesperado ahí publica media
+        transacción del llamador.
+        """
+        tx = self._create_tx()
+        driver = FakeDriver([resp(APROBADA)])
+        llamadas, parche = self._contar_commits()
+        with parche:
+            result = self._run_loop(tx, driver, [0, 5])
+        self.assertFalse(result['timeout'])
+        self.assertFalse(result['cancel_attempted'])
+        self.assertEqual(llamadas, [], 'el camino default consolidó algo')
+
+    def test_con_la_ventana_se_commitea_en_cada_vuelta(self):
+        """
+        Invariante 3: el sleep de cada vuelta tiene que pasar con la
+        transacción ya consolidada, o la ventana retiene el row lock del
+        getnet_touch mientras duerme.
+        """
+        tx = self._create_tx()
+        driver = FakeDriver([resp(EN_PROCESO), resp(APROBADA)])
+        llamadas, parche = self._contar_commits()
+        with parche:
+            result = self._run_loop(
+                tx, driver, [0, 100, 101, 102],
+                hard_max=30, commit_por_consulta=True)
+        self.assertFalse(result['timeout'])
+        # Una vuelta no final = una consolidación antes de dormir otra vez.
+        self.assertEqual(len(llamadas), 1)
+
+    def test_la_ventana_no_cuenta_la_primera_espera(self):
+        """
+        La primera espera es la que pidió el concentrador
+        (TokenSegundosConsultar) y NO se le descuenta a la ventana. Con el
+        reloj saltando 100 s en esa primera espera, el camino default se da
+        por vencido en la primera consulta y el de la ventana no.
+        """
+        # Reloj: arranque, primera espera larguísima, y de ahí de a 1 segundo.
+        reloj = [0, 100] + [100 + n for n in range(1, 12)]
+        guion = [resp(EN_PROCESO) for _ in range(12)]
+
+        tx_default = self._create_tx()
+        driver_default = FakeDriver(list(guion))
+        result = self._run_loop(
+            tx_default, driver_default, list(reloj), hard_max=5)
+        self.assertTrue(result['timeout'])
+        consultas_default = [
+            c for c in driver_default.calls if c[0] == 'ConsultarTransaccion']
+        self.assertEqual(len(consultas_default), 1)
+
+        tx_ventana = self._create_tx()
+        driver_ventana = FakeDriver(list(guion))
+        llamadas, parche = self._contar_commits()
+        with parche:
+            result = self._run_loop(
+                tx_ventana, driver_ventana, list(reloj),
+                hard_max=5, commit_por_consulta=True)
+        self.assertTrue(result['timeout'])
+        consultas_ventana = [
+            c for c in driver_ventana.calls if c[0] == 'ConsultarTransaccion']
+        self.assertGreater(len(consultas_ventana), 1)
+
+    def test_la_ventana_corta_sin_cancelar_la_transaccion(self):
+        """
+        Invariantes 1 y 4: rendirse NO cambia el significado de nada. La
+        ventana vence mucho antes que `timeout_general`, así que no se manda
+        CancelarTransaccion —cancelar un cobro que el cliente está por
+        aprobar sería lo peor posible— y el resultado vuelve con
+        'timeout': True, que es lo que el llamador traduce a «no sé».
+        """
+        tx = self._create_tx()
+        driver = FakeDriver([resp(EN_PROCESO) for _ in range(6)])
+        llamadas, parche = self._contar_commits()
+        with parche:
+            result = self._run_loop(
+                tx, driver, [0, 10] + [10 + n for n in range(1, 10)],
+                hard_max=4, commit_por_consulta=True)
+        self.assertTrue(result['timeout'])
+        self.assertFalse(result['cancel_attempted'])
+        self.assertNotIn(
+            'CancelarTransaccion', [c[0] for c in driver.calls])
 
     # ------------------------------------------------------------------
     # Cliente SOAP
@@ -723,7 +825,7 @@ class TestGetnetCore(TransactionCase):
         ajeno = self.env['res.users'].create({
             'name': 'Sin contabilidad',
             'login': 'getnet_sin_conta_%s' % uuid.uuid4().hex[:8],
-            'groups_id': [(6, 0, [self.env.ref('base.group_user').id])],
+            'group_ids': [(6, 0, [self.env.ref('base.group_user').id])],
         })
         with self.assertRaises(AccessError):
             tx.with_user(ajeno).getnet_action_conciliada()
@@ -732,7 +834,7 @@ class TestGetnetCore(TransactionCase):
         contador = self.env['res.users'].create({
             'name': 'Contador',
             'login': 'getnet_conta_%s' % uuid.uuid4().hex[:8],
-            'groups_id': [(6, 0, [
+            'group_ids': [(6, 0, [
                 self.env.ref('base.group_user').id,
                 self.env.ref('account.group_account_user').id])],
         })
@@ -759,9 +861,8 @@ class TestGetnetCore(TransactionCase):
                 'no debe cortar antes del tope (pasada %s)' % pasada)
             with patch.object(type(self.provider), '_getnet_soap_transaccion',
                               fake_soap), \
-                    patch.object(pt_mod.time, 'sleep', lambda s: None), \
-                    patch.object(pt_mod.time, 'monotonic',
-                                 side_effect=itertools.count(0, 400)):
+                    patch.object(pt_mod, 'time',
+                                 _RelojDeLaboratorio(itertools.count(0, 400))):
                 self.env['payment.transaction']._getnet_cron_recover_inflight()
         self.assertEqual(tx.getnet_recovery_intentos,
                          pt_mod.GETNET_RECOVERY_MAX_INTENTOS)
@@ -1253,7 +1354,7 @@ class TestGetnetCore(TransactionCase):
         with patch.object(type(self.provider), '_getnet_soap_transaccion',
                           fake_soap), \
                 patch.object(pt_mod.time, 'sleep', lambda s: None), \
-                patch.object(pt_mod.time, 'monotonic', side_effect=[0, 5]):
+                patch.object(pt_mod, 'time', _RelojDeLaboratorio([0, 5])):
             self.env['payment.transaction']._getnet_cron_recover_inflight()
         self.assertEqual(tx.state, 'done')
         self.assertEqual(tx.getnet_ticket, '789')
@@ -1276,7 +1377,7 @@ class TestGetnetCore(TransactionCase):
         with patch.object(type(self.provider), '_getnet_soap_transaccion',
                           fake_soap), \
                 patch.object(pt_mod.time, 'sleep', lambda s: None), \
-                patch.object(pt_mod.time, 'monotonic', side_effect=[0, 5]):
+                patch.object(pt_mod, 'time', _RelojDeLaboratorio([0, 5])):
             self.env['payment.transaction']._getnet_cron_recover_inflight()
         self.assertEqual(calls, [])
         self.assertEqual(tx.state, 'draft')
@@ -1300,8 +1401,63 @@ class TestGetnetCore(TransactionCase):
         with patch.object(type(self.provider), '_getnet_soap_transaccion',
                           fake_soap), \
                 patch.object(pt_mod.time, 'sleep', lambda s: None), \
-                patch.object(pt_mod.time, 'monotonic', side_effect=[0, 5]):
+                patch.object(pt_mod, 'time', _RelojDeLaboratorio([0, 5])):
             self.env['payment.transaction']._getnet_cron_recover_inflight()
         self.assertEqual(calls, [])
         self.assertEqual(tx.state, 'draft')
         self.terminal.getnet_release()
+
+    # ------------------------------------------------------------------
+    # Runtime inválido: --test-enable en un server que opera
+    # ------------------------------------------------------------------
+    def test_aviso_runtime_test_enable_con_proveedor_activo(self):
+        """
+        Server levantado con --test-enable y proveedor Getnet activo: avisa.
+
+        Es el caso que el guard de ``getnet_safe_commit`` deja pasar en
+        silencio: la opción es del proceso, no del test, así que un server
+        que atiende pedidos reales con esa opción encendida se queda sin
+        ninguno de los commits del flujo.
+        """
+        # El proveedor nace 'disabled' (default de Odoo) y uno deshabilitado
+        # no puede operar: el aviso sólo tiene sentido con uno activo.
+        self.provider.state = 'enabled'
+        Provider = self.env['payment.provider']
+        with patch.object(pp_mod, 'config',
+                          {'test_enable': True, 'stop_after_init': False}):
+            with self.assertLogs(pp_mod._logger.name, level='WARNING') as capturado:
+                aviso = Provider._getnet_avisar_runtime_invalido()
+        self.assertTrue(aviso, 'con proveedor activo tiene que avisar')
+        self.assertTrue(
+            any('NO operar Getnet' in linea for linea in capturado.output),
+            'el aviso tiene que decir que no se opere en ese proceso: %s'
+            % capturado.output)
+
+    def test_no_avisa_durante_una_corrida_de_tests(self):
+        """
+        Corrida de tests (--stop-after-init): no avisa.
+
+        Distinguirlas importa: si avisara también acá, el aviso se volvería
+        ruido en cada suite y dejaría de leerse cuando de verdad importa.
+        """
+        self.provider.state = 'enabled'
+        Provider = self.env['payment.provider']
+        with patch.object(pp_mod, 'config',
+                          {'test_enable': True, 'stop_after_init': True}):
+            self.assertFalse(Provider._getnet_avisar_runtime_invalido())
+
+    def test_no_avisa_sin_proveedor_getnet_activo(self):
+        """Sin proveedor Getnet habilitado no hay nada que advertir.
+
+        Se apagan TODOS los proveedores Getnet de la base, no sólo el del
+        fixture: este test miraba únicamente el suyo y por eso sólo pasaba en
+        una base virgen. En cualquier base donde Getnet esté configurado de
+        verdad —que es donde el aviso importa— fallaba sin que nada estuviera
+        mal. Un test que depende de que la base esté vacía no prueba el
+        código: prueba la base.
+        """
+        Provider = self.env['payment.provider']
+        Provider.sudo().search([('code', '=', 'getnet')]).state = 'disabled'
+        with patch.object(pp_mod, 'config',
+                          {'test_enable': True, 'stop_after_init': False}):
+            self.assertFalse(Provider._getnet_avisar_runtime_invalido())

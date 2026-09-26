@@ -10,8 +10,9 @@ credenciales por método de pago.
 
 import logging
 
-from odoo import _, fields, models
+from odoo import _, api, fields, models
 from odoo.exceptions import UserError
+from odoo.tools import config
 
 from . import getnet_utils
 
@@ -20,6 +21,49 @@ _logger = logging.getLogger(__name__)
 
 class PaymentProvider(models.Model):
     _inherit = 'payment.provider'
+
+    @api.model
+    def _register_hook(self):
+        """Avisa al arrancar si el runtime no sirve para operar Getnet."""
+        res = super()._register_hook()
+        self._getnet_avisar_runtime_invalido()
+        return res
+
+    @api.model
+    def _getnet_avisar_runtime_invalido(self):
+        """
+        Grita si hay un proveedor Getnet activo en un server con
+        ``--test-enable``.
+
+        ``getnet_safe_commit`` se saltea los commits cuando esa opción está
+        puesta, porque durante una corrida de tests un commit destruye los
+        savepoints del caso. Pero la opción es del PROCESO, no del test: en un
+        server que atiende pedidos reales con esa opción encendida, el flujo
+        de Getnet se queda sin ninguno de sus commits y falla en silencio —el
+        claim de la terminal no se hace visible a los otros workers—.
+
+        No se levanta excepción a propósito: el que arranca así puede estar
+        corriendo tests contra una base con datos, y abortar el arranque sería
+        peor que avisar. Sólo se avisa cuando el proceso además se queda
+        sirviendo (``stop_after_init`` en falso), que es lo que distingue una
+        corrida de tests de un server encendido.
+        """
+        if not config.get('test_enable') or config.get('stop_after_init'):
+            return False
+        activos = self.sudo().search_count([
+            ('code', '=', 'getnet'), ('state', '!=', 'disabled'),
+        ])
+        if not activos:
+            return False
+        _logger.warning(
+            "Getnet: hay %s proveedor(es) activo(s) en un servidor levantado "
+            "con --test-enable. En ese runtime getnet_safe_commit NO commitea, "
+            "asi que el lock de terminal no se hace visible a otros workers y "
+            "lo persistido antes de hablar con el concentrador se pierde. NO "
+            "operar Getnet en este proceso.",
+            activos,
+        )
+        return True
 
     code = fields.Selection(
         selection_add=[('getnet', 'Getnet (TransAct)')],

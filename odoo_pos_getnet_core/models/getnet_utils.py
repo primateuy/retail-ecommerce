@@ -14,6 +14,8 @@ Referencias:
 import logging
 import threading
 
+from odoo.tools import config
+
 import requests
 from lxml import etree
 
@@ -207,11 +209,42 @@ def getnet_safe_commit(env):
 
     En producción los flujos de lock (claim/release) DEBEN commitear para
     hacerse visibles a otros workers antes de tocar el WS.
+
+    🔴 **Un servidor levantado con ``--test-enable`` NO sirve para operar
+    Getnet.** El guard mira ``config['test_enable']``, que es global del
+    proceso: si alguien deja esa opción puesta en un server que atiende
+    pedidos reales, acá se saltean TODOS los commits del flujo y el efecto es
+    silencioso — el claim de la terminal nunca se hace visible para los otros
+    workers (dos flujos creen tener el mismo pinpad) y lo que se persiste
+    antes de hablar con el concentrador se pierde al primer rollback.
+    ``PaymentProvider._getnet_avisar_runtime_invalido`` avisa al arrancar
+    cuando esa combinación existe.
     """
-    if (getattr(threading.current_thread(), 'testing', False)
-            or env.registry.in_test_mode()):
+    if getattr(threading.current_thread(), 'testing', False) or _en_modo_test(env):
         return
     env.cr.commit()
+
+
+def _en_modo_test(env):
+    """
+    ¿Estamos dentro de una corrida de tests?
+
+    En 17.0 alcanzaba con ``registry.in_test_mode()``. **En 19.0 ese método ya
+    no existe**: el modo test se implementa parcheando ``registry.cursor`` para
+    que devuelva un ``TestCursor`` (``odoo/tests/common.py``,
+    ``_registry_test_mode_patches``). Así que se pregunta por el cursor, que es
+    lo que de verdad distingue una corrida de tests, y se deja el camino viejo
+    para que el mismo archivo sirva en las dos versiones.
+    """
+    en_test = getattr(env.registry, 'in_test_mode', None)
+    if callable(en_test):
+        return en_test()
+    # 19.0: no hay bandera de registry, TransactionCase no marca el thread y el
+    # cursor del test es uno normal con ``commit`` parcheado — o sea que no se
+    # puede reconocer por su tipo. Lo que sí vale en las dos versiones es la
+    # opcion con la que corre el proceso: durante una corrida de tests no hay
+    # flujo productivo que necesite commitear.
+    return bool(config.get('test_enable'))
 
 
 # ---------------------------------------------------------------------------

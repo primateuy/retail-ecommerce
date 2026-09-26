@@ -24,7 +24,7 @@ y "Integración WebServices TransAct v4.0.09" (WS v02).
     "author": "PRIMATE",
     "website": "https://www.primate.com",
     "category": "Accounting/Payment",
-    "version": "17.0.1.0.0",
+    "version": "19.0.1.0.0",
     "depends": [
         "base",
         "bus",

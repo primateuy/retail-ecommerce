@@ -20,12 +20,12 @@
                           name="getnet_terminals"
                           invisible="code != 'getnet'">
                         <field name="getnet_terminal_ids" nolabel="1">
-                            <tree editable="bottom">
+                            <list editable="bottom">
                                 <field name="name"/>
                                 <field name="term_cod"/>
                                 <field name="lock_origin" readonly="1"/>
                                 <field name="lock_date" readonly="1"/>
-                            </tree>
+                            </list>
                         </field>
                     </page>
                 </xpath>
