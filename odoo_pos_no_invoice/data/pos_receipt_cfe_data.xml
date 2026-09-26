@@ -20,6 +20,11 @@
         <field name="name">Recibo con CFE (FORUM)</field>
         <field name="design_receipt"><![CDATA[<!-- FORUM v2 -->
         <style>@page { size: 80mm auto; margin: 0; } @media print { body { margin: 0; } }</style>
+        <!-- El símbolo se lee de la MISMA moneda que usa formatCurrency para dar
+             formato a los importes. Si se tomara de otra fuente, la etiqueta y los
+             números podrían no coincidir y el símbolo quedaría duplicado adentro
+             de las cifras. Nunca está clavado: sale de la moneda, no de un literal. -->
+        <t t-set="simbolo" t-value="(props.pos &amp;&amp; props.pos.currency &amp;&amp; props.pos.currency.symbol) || (props.data &amp;&amp; props.data.currency &amp;&amp; props.data.currency.symbol) || '$'"/>
         <div style="position:relative; width:100%; max-width:80mm; margin:0; padding:0; font-family:'Courier New',monospace; font-size:12px; box-sizing:border-box" class="pos-receipt">
 
             <!-- ===================== ENCABEZADO ===================== -->
@@ -123,62 +128,79 @@
              </div>
 
             <!-- ===================== CUERPO ===================== -->
-            <!-- 2.5 Tabla de productos — notas y combos a ancho completo, sin precio -->
+            <!-- ============ 2.5 PRODUCTOS, IVA, TOTAL Y PAGOS (diseño A) ============
+
+                 Una fila por producto, cuatro columnas. Los anchos de las tres
+                 columnas de números van en `ch` (anchos de carácter) porque la
+                 tipografía es monoespaciada: así «1.234.567,89» entra siempre y
+                 no hay que adivinar milímetros. Sobre los 576 puntos que imprime
+                 el cabezal entran unos 44 caracteres por renglón, de los que 25
+                 se llevan Cant (4), P.Unit (10) y Total (11); el resto es para el
+                 nombre, que puede ocupar varios renglones dentro de su columna.
+
+                 Todo el bloque es negro puro y con estilos en línea: el gris se
+                 pierde al binarizar para la térmica, y el envoltorio térmico
+                 borra los assets del PDV, así que las clases de CSS no llegan al
+                 papel.
+            -->
             <div style="width:100%">
-                <table class='receipt-orderlines' style="font-size:13px; border-style:double; border-left:none; border-right:none; border-bottom:none; width:100%; table-layout:fixed">
-                    <!-- Tres columnas para los números. El nombre del producto va en su
-                         propia fila a todo el ancho: en 72 mm no entra junto a los importes,
-                         y al apretarlo se partían tanto los títulos como las cifras. -->
+                <table style="font-size:12px; width:100%; table-layout:fixed; border-collapse:collapse; color:#000">
                     <colgroup>
-                        <col style="width:26%"/>
-                        <col style="width:34%"/>
-                        <col style="width:40%"/>
+                        <col/>
+                        <col style="width:4ch"/>
+                        <col style="width:10ch"/>
+                        <col style="width:11ch"/>
                     </colgroup>
-                    <tr style="border-bottom:1px dashed black">
-                        <th style="text-align:right; white-space:nowrap; padding-right:3mm">Cant.</th>
-                        <th style="text-align:right; white-space:nowrap; padding-right:3mm">P. Unit.</th>
-                        <th style="text-align:right; white-space:nowrap">Total</th>
+                    <tr style="border-bottom:1px dashed #000">
+                        <th style="text-align:left; font-weight:700; white-space:nowrap">Producto</th>
+                        <th style="text-align:right; font-weight:700; white-space:nowrap; padding-left:1ch">Cant</th>
+                        <th style="text-align:right; font-weight:700; white-space:nowrap">P.Unit</th>
+                        <th style="text-align:right; font-weight:700; white-space:nowrap">Total</th>
                     </tr>
                     <t t-if="props.orderlines and props.orderlines.length">
                         <t t-foreach="props.orderlines" t-as="orderline" t-key="orderline_index">
-                            <!-- Nota o combo: línea a ancho completo sin cantidades ni precios -->
+                            <!-- Notas y combos: a ancho completo, sin cantidades ni precios -->
                             <t t-if="orderline.is_note or orderline.is_combo">
                                 <tr>
-                                    <td colspan="3" style="padding-top:2%; padding-bottom:2%; text-align:left; font-size:10px; font-style:italic">
+                                    <td colspan="4" style="padding-top:2px; padding-bottom:2px; text-align:left; font-size:11px; font-style:italic; color:#000">
                                         <t t-esc="orderline.productName"/>
                                     </td>
                                 </tr>
                             </t>
                             <t t-else="">
-                                <!-- Línea normal -->
-                                <!-- Fila 1: el producto entero (código, descripción y variante) -->
+                                <!-- El código viene pegado al nombre entre corchetes; se separa
+                                     para dejarlo en su propio renglón y sin corchetes. -->
+                                <!-- Sin expresiones regulares: el tokenizador de plantillas de OWL
+                                     no las acepta y rompe el render entero del recibo. -->
+                                <t t-set="crudo" t-value="orderline.productName || ''"/>
+                                <t t-set="corte" t-value="crudo.indexOf(']')"/>
+                                <t t-set="codigo" t-value="crudo.charAt(0) === '[' &amp;&amp; corte > 0 ? crudo.slice(1, corte) : ''"/>
+                                <t t-set="nombre" t-value="codigo ? crudo.slice(corte + 1).trim() : crudo"/>
                                 <tr>
-                                    <td colspan="3" style="padding-top:1%; text-align:left; font-size:12px">
-                                        <t t-esc="orderline.productName"/>
+                                    <td style="padding-top:3px; padding-bottom:3px; text-align:left; vertical-align:top; font-size:12px; word-wrap:break-word; overflow-wrap:break-word; color:#000">
+                                        <t t-esc="nombre"/>
+                                        <t t-if="codigo">
+                                            <div style="font-size:12px; color:#000"><t t-esc="codigo"/></div>
+                                        </t>
                                         <t t-if="orderline.discount > 0">
-                                            <div style="font-size:11px; font-style:italic; color:#808080; width:100%">
-                                                <t t-esc="orderline.discount"/>% desc.
-                                            </div>
+                                            <div style="font-size:11px; font-style:italic; color:#000"><t t-esc="orderline.discount"/>% desc.</div>
                                         </t>
                                         <t t-if="orderline.customerNote">
-                                            <div style="font-size:11px; width:100%" t-esc="orderline.customerNote"/>
+                                            <div style="font-size:11px; color:#000" t-esc="orderline.customerNote"/>
                                         </t>
                                     </td>
-                                </tr>
-                                <!-- Fila 2: cantidad, precio unitario y total, a la derecha y sin cortar -->
-                                <tr>
-                                    <td style="padding-bottom:1%; text-align:right; font-size:12px; white-space:nowrap; padding-right:3mm"><t t-esc="orderline.qty"/></td>
-                                    <td style="padding-bottom:1%; text-align:right; font-size:12px; white-space:nowrap; padding-right:3mm">
+                                    <td style="padding-top:3px; padding-left:1ch; text-align:right; vertical-align:top; font-size:12px; white-space:nowrap; color:#000"><t t-esc="orderline.qty"/></td>
+                                    <td style="padding-top:3px; text-align:right; vertical-align:top; font-size:12px; white-space:nowrap; color:#000">
                                         <t t-if="typeof orderline.unitPrice === 'number'">
-                                            <t t-esc="props.pos.env.utils.formatCurrency(orderline.unitPrice).replace('$', '').trim()"/>
+                                            <t t-esc="props.pos.env.utils.formatCurrency(orderline.unitPrice).replace(simbolo, '').trim()"/>
                                         </t>
-                                        <t t-else=""><t t-esc="(orderline.unitPrice || '').replace('$', '').trim()"/></t>
+                                        <t t-else=""><t t-esc="(orderline.unitPrice || '').replace(simbolo, '').trim()"/></t>
                                     </td>
-                                    <td style="padding-bottom:1%; text-align:right; font-size:12px; white-space:nowrap">
+                                    <td style="padding-top:3px; text-align:right; vertical-align:top; font-size:12px; white-space:nowrap; color:#000">
                                         <t t-if="typeof orderline.price === 'number'">
-                                            <t t-esc="props.pos.env.utils.formatCurrency(orderline.price).replace('$', '').trim()"/>
+                                            <t t-esc="props.pos.env.utils.formatCurrency(orderline.price).replace(simbolo, '').trim()"/>
                                         </t>
-                                        <t t-else=""><t t-esc="(orderline.price || '').replace('$', '').trim()"/></t>
+                                        <t t-else=""><t t-esc="(orderline.price || '').replace(simbolo, '').trim()"/></t>
                                     </td>
                                 </tr>
                             </t>
@@ -186,81 +208,75 @@
                     </t>
                 </table>
             </div>
-            <br />
 
-            <!-- Detalle de impuestos con nombres requeridos -->
+            <!-- IVA: una fila por tasa, como hasta ahora -->
             <t t-if="props.data.tax_details and props.data.tax_details.length">
-                <div style="font-size:12px; border-top:1px dashed; padding-top:5px; width:100%">
-                    <table style="width:100%">
+                <div style="font-size:12px; border-top:1px dashed #000; padding-top:5px; margin-top:5px; width:100%; color:#000">
+                    <table style="width:100%; table-layout:fixed; border-collapse:collapse">
+                        <colgroup>
+                            <col/>
+                            <col style="width:11ch"/>
+                            <col style="width:12ch"/>
+                        </colgroup>
                         <tr>
-                            <th style="text-align:left">Tasa 22%</th>
-                            <th style="text-align:right">IVA</th>
-                            <th style="text-align:right">Neto</th>
+                            <th style="text-align:left; font-weight:700; white-space:nowrap">Tasa</th>
+                            <th style="text-align:right; font-weight:700; white-space:nowrap">IVA</th>
+                            <th style="text-align:right; font-weight:700; white-space:nowrap">Neto</th>
                         </tr>
                         <tr t-foreach="props.data.tax_details" t-as="tax_detail" t-key="tax_detail_index">
-                            <td style="text-align:left; font-size:12px">
-                            <t t-if="tax_detail.tax_group_rate !== undefined &amp;&amp; tax_detail.tax_group_rate !== null">
-                                    Tasa 22%: <t t-esc="tax_detail.tax_group_rate"/>%
+                            <td style="text-align:left; font-size:12px; color:#000">
+                                <t t-if="tax_detail.tax_group_rate !== undefined &amp;&amp; tax_detail.tax_group_rate !== null">
+                                    <t t-esc="tax_detail.tax_group_rate"/>%
                                 </t>
-                                <t t-else="">
-                                    <t t-esc="tax_detail.tax_group_name"/>
-                                </t>
+                                <t t-else=""><t t-esc="tax_detail.tax_group_name"/></t>
                             </td>
-                            <td style="text-align:right; font-size:12px">
+                            <td style="text-align:right; font-size:12px; white-space:nowrap; color:#000">
                                 <t t-if="typeof tax_detail.tax_group_amount === 'number'">
-                                    <t t-esc="props.pos.env.utils.formatCurrency(tax_detail.tax_group_amount)"/>
+                                    <t t-esc="props.pos.env.utils.formatCurrency(tax_detail.tax_group_amount).replace(simbolo, '').trim()"/>
                                 </t>
                             </td>
-                            <td style="text-align:right; font-size:12px">
+                            <td style="text-align:right; font-size:12px; white-space:nowrap; color:#000">
                                 <t t-if="typeof tax_detail.tax_group_base_amount === 'number'">
-                                    <t t-esc="props.pos.env.utils.formatCurrency(tax_detail.tax_group_base_amount)"/>
+                                    <t t-esc="props.pos.env.utils.formatCurrency(tax_detail.tax_group_base_amount).replace(simbolo, '').trim()"/>
                                 </t>
                             </td>
                         </tr>
                     </table>
                 </div>
-                <br/>
             </t>
 
-            <!-- Totales -->
-            <div style="padding-top:6px; width:100%">
-                <div style="font-weight:700; font-size:14px; border-top:1px solid black; padding-top:5px; width:100%">
-                    <span style="">TOTAL: </span>
-                    <t t-if="typeof props.data.amount_total === 'number'">
-                        <span t-esc='props.pos.env.utils.formatCurrency(props.data.amount_total)' class="pos-receipt-right-align"/>
-                    </t>
-                </div>
-                <br/>
-            </div>
-
-            <!-- 2.3 Múltiples medios de pago (nombres normalizados por JS/Python) -->
-            <t t-foreach='props.paymentlines' t-as='line' t-key="line_index">
-                <!-- La alineación va en línea, no por clase: el envoltorio térmico quita
-                     los assets del PDV y con ellos el CSS de pos-receipt-right-align, así que
-                     el importe quedaba pegado a la etiqueta en el papel. -->
-                <div style="font-size:13px; border-top:1px dashed; padding-top:5px; width:100%; display:table; table-layout:fixed">
-                    <span style="display:table-cell; text-align:left"><t t-esc='line.name' /></span>
-                    <t t-if="typeof line.amount === 'number'">
-                        <span style="display:table-cell; text-align:right; white-space:nowrap" t-esc='props.pos.env.utils.formatCurrency(line.amount)'/>
-                    </t>
-                </div>
-            </t>
-
-            <!-- Cambio -->
-            <div class="receipt-change" style="font-size:13px; border-top:1px dashed; padding-top:5px; width:100%">
-                <span style="">CAMBIO: </span>
-                <t t-if="typeof props.receipt.change === 'number'">
-                    <span t-esc='props.pos.env.utils.formatCurrency(props.receipt.change)' class="pos-receipt-right-align"/>
+            <!-- TOTAL: el símbolo sale de la moneda de la orden, no está clavado -->
+            <div style="font-weight:700; font-size:14px; border-top:1px dashed #000; padding-top:5px; margin-top:5px; width:100%; display:table; table-layout:fixed; color:#000">
+                <span style="display:table-cell; text-align:left; white-space:nowrap">TOTAL <t t-esc="simbolo"/></span>
+                <t t-if="typeof props.data.amount_total === 'number'">
+                    <span style="display:table-cell; text-align:right; white-space:nowrap" t-esc="props.pos.env.utils.formatCurrency(props.data.amount_total).replace(simbolo, '').trim()"/>
                 </t>
             </div>
 
-            <!-- 2.2 Total Recibido -->
-            <t t-if="typeof props.data.total_received === 'number' and props.data.total_received > 0">
-                <div style="font-weight:700; font-size:13px; border-top:1px dashed; padding-top:5px; width:100%">
-                    <span style="">TOTAL RECIBIDO: </span>
-                    <span t-esc='props.pos.env.utils.formatCurrency(props.data.total_received)' class="pos-receipt-right-align"/>
+            <!-- Pagos: uno por medio, y sin subrayado propio; el separador del bloque
+                 es el de arriba, para que haya un solo estilo de línea en todo el recibo. -->
+            <div style="border-top:1px dashed #000; padding-top:5px; margin-top:5px; width:100%; color:#000">
+                <t t-foreach='props.paymentlines' t-as='line' t-key="line_index">
+                    <div style="font-size:13px; width:100%; display:table; table-layout:fixed">
+                        <span style="display:table-cell; text-align:left"><t t-esc='line.name'/></span>
+                        <t t-if="typeof line.amount === 'number'">
+                            <span style="display:table-cell; text-align:right; white-space:nowrap" t-esc="props.pos.env.utils.formatCurrency(line.amount).replace(simbolo, '').trim()"/>
+                        </t>
+                    </div>
+                </t>
+                <div class="receipt-change" style="font-size:13px; width:100%; display:table; table-layout:fixed">
+                    <span style="display:table-cell; text-align:left">Cambio</span>
+                    <t t-if="typeof props.receipt.change === 'number'">
+                        <span style="display:table-cell; text-align:right; white-space:nowrap" t-esc="props.pos.env.utils.formatCurrency(props.receipt.change).replace(simbolo, '').trim()"/>
+                    </t>
                 </div>
-            </t>
+                <t t-if="typeof props.data.total_received === 'number' and props.data.total_received > 0">
+                    <div style="font-weight:700; font-size:13px; width:100%; display:table; table-layout:fixed">
+                        <span style="display:table-cell; text-align:left">Total recibido</span>
+                        <span style="display:table-cell; text-align:right; white-space:nowrap" t-esc="props.pos.env.utils.formatCurrency(props.data.total_received).replace(simbolo, '').trim()"/>
+                    </div>
+                </t>
+            </div>
             <br/>
 
             <!-- ===================== ADENDA ===================== -->
