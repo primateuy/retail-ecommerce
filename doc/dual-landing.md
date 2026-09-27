@@ -17,7 +17,7 @@ decir *commiteado* con su hash.
 | DL-1 | `17.0_getnet` | commiteado en `b3f2226` (local, sin push) — incluye el wizard |
 | DL-1b | `19.0_getnet` | commiteado en `dd071b1` (local, sin publicar) — el wizard «Registrar pago» (ver DL-1) |
 | DL-2 | `19.0_getnet` | commiteado en `a740ddd` (antes `c719fc5`, squasheado) |
-| DL-2 | `17.0_getnet` | **pendiente en 17.0** — programado para la próxima ventana de trabajo sobre v17 |
+| DL-2 | `17.0_getnet` | commiteado en `0a60c7b` (local, sin publicar) |
 | DL-3 | `19.0_getnet` | commiteado en `a740ddd` (antes `c719fc5`, squasheado) |
 | DL-3 | `17.0_getnet` | **pendiente en 17.0** — programado para la próxima ventana de trabajo sobre v17 |
 | DL-5 | `19.0_getnet` | commiteado (ver la entrada) |
@@ -114,9 +114,16 @@ que en el cliente no se ejecuta nunca.
 
 - **19.0** — commiteado en `a740ddd` (antes `c719fc5`, squasheado) (`odoo_pos_getnet_backend`, rama
   `19.0_getnet`).
-- **17.0** — **pendiente en 17.0**, programado para la próxima ventana de
-  trabajo sobre v17. Mismo código; se dispara en cuanto uruware está
-  instalado, que es siempre en producción.
+- **17.0** — commiteado en `0a60c7b` (`17.0_getnet`, local, sin publicar),
+  27/09/2026. Para probarlo con el `numero_cfe()` real se instaló
+  `l10n_uy_einvoice_uruware` en la base de test v17 (`test_getnet_backend`),
+  con `fe_activa` vacío en las tres compañías, así que `_post` no firma. Con
+  uruware instalado y **sin** el fixture, la suite daba **2 errores de 95**:
+  `test_factura_vals_anexo_regresion` y `test_payload_completo_inbound` daban
+  verde sólo porque corría el `numero_cfe()` de base. Diferencia con 19.0: en
+  17.0 `cfe_type` es `related` del tipo de documento latam, así que
+  `_sellar_cfe` escribe sólo `cfe`. Test nuevo sin el arreglo: 1 fallo de
+  34. Suite v17 completa: **96/96**.
 
 ---
 

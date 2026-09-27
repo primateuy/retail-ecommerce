@@ -68,7 +68,7 @@ va en commits propios **encima** de la entrega. No forma parte del `[ADD]`.
 > hardware.** Ese día se publica todo de una vez, en este orden. Decisión de Daryl, 27/09/2026.
 > Este bloque se actualiza en cada entrega.
 
-Actualizado: 27/09/2026 — entrega DL-1 / DL-1b.
+Actualizado: 27/09/2026 — entrega DL-2.
 
 **1. `pos_backend` de Campera** — dependencia de despliegue de P3 (hook 7 de cierre, arreglo de
 liberación, texto del contrato). Va primero: P3 publicado sin esto no cierra.
@@ -86,9 +86,9 @@ P3, y el sha de cualquier commit de arriba depende del de éste. El comando comp
 va en el reporte de cada entrega; el definitivo sale del squash.
 
 **3. `retail-ecommerce` · `17.0_getnet`** — dual-landing sobre `origin @ 2371fb1`: DL-1 (con el
-wizard).
+wizard, `b3f2226`) → DL-2 (`0a60c7b`).
 
-    cd ~/Odoo/shared/primateuy/retail-ecommerce-17.0_getnet && git push origin b3f222683763d3fa29123e491bdf08676e409583:refs/heads/17.0_getnet
+    cd ~/Odoo/shared/primateuy/retail-ecommerce-17.0_getnet && git push origin 0a60c7bf53a6c6ac4f5c693a38002e361cd596cd:refs/heads/17.0_getnet
 
 **4. Puntero del submódulo en Campera** — **después** del paso 2 y sólo a un sha ya publicado en
 `19.0_getnet` (regla 3 de abajo). Se commitea al momento y el comando se arma con ese sha:
