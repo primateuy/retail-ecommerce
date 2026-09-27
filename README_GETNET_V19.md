@@ -62,6 +62,45 @@ día hace falta, el punto de partida es ese y la sección 6.6 del checklist de v
 `odoo_pos_getnet_pos_backend` —la terminal Getnet para el **POS Backend** de campera (Sprint 12)—
 va en commits propios **encima** de la entrega. No forma parte del `[ADD]`.
 
+## Pendiente de publicar
+
+> **Nada se publica hasta que P3 (`odoo_pos_getnet_pos_backend`) esté completo y validado con
+> hardware.** Ese día se publica todo de una vez, en este orden. Decisión de Daryl, 27/09/2026.
+> Este bloque se actualiza en cada entrega.
+
+Actualizado: 27/09/2026 — entrega DL-1 / DL-1b.
+
+**1. `pos_backend` de Campera** — dependencia de despliegue de P3 (hook 7 de cierre, arreglo de
+liberación, texto del contrato). Va primero: P3 publicado sin esto no cierra.
+
+    cd ~/Odoo/clients/campera/pos_backend && git push origin b5cbea59ea975e020d2ea331d9d20ed72daa18f7:refs/heads/19.0
+
+**2. `retail-ecommerce` · `19.0_getnet`** — sobre `origin @ 1184177`, en este orden:
+`[FIX]` DL-1b (`dd071b1`) → los `[DOC]` de estado, convención e incidente → `[ADD]` P3 (squash
+de los 6 commits de P3 y evidencia, con respaldo previo).
+
+    cd ~/Odoo/shared/primateuy/retail-ecommerce-19.0 && git push origin <sha de la punta tras el squash>:refs/heads/19.0_getnet
+
+El sha de la punta **no puede escribirse acá**: este archivo vive en un commit que está debajo de
+P3, y el sha de cualquier commit de arriba depende del de éste. El comando completo, con el sha,
+va en el reporte de cada entrega; el definitivo sale del squash.
+
+**3. `retail-ecommerce` · `17.0_getnet`** — dual-landing sobre `origin @ 2371fb1`: DL-1 (con el
+wizard).
+
+    cd ~/Odoo/shared/primateuy/retail-ecommerce-17.0_getnet && git push origin b3f222683763d3fa29123e491bdf08676e409583:refs/heads/17.0_getnet
+
+**4. Puntero del submódulo en Campera** — **después** del paso 2 y sólo a un sha ya publicado en
+`19.0_getnet` (regla 3 de abajo). Se commitea al momento y el comando se arma con ese sha:
+
+    cd ~/Odoo/clients/campera && git push origin <sha del commit del puntero>:refs/heads/staging.27.08.2026v2
+
+**Aparte, fuera de Getnet:** `LocalizacionUy` @ `effbe0c` (fix del botón «Restablecer a
+borrador», rama `19.0_staging`). Es módulo compartido — afecta a todos los proyectos —, así que
+su push es una decisión propia y no forma parte de esta secuencia.
+
+    cd ~/Odoo/shared/primateuy/LocalizacionUy-19.0 && git push origin effbe0c6a3fd37eb496e48f8fba96ac5222001ea:refs/heads/19.0_staging
+
 ## Convenciones de push
 
 Los pushes los corre Daryl. Quien entrega deja el comando **armado**, listo para copiar:
@@ -102,7 +141,7 @@ repo: en un clon nuevo hay que volver a ponerla.
 - **Consecuencia de hacerlo en ese orden:** Campera quedó apuntando a un sha que ninguna rama
   contenía. Se corrigió con `0339edb` («[FIX] Submódulo retail-ecommerce vuelve a 1184177 (P3
   no validado)»), publicado en `staging.27.08.2026v2` y verificado a las 16:09.
-- **Nada se perdió.** Los 6 commits siguen en la rama local `19.0_getnet` (HEAD `2bde13e`),
+- **Nada se perdió.** Los 6 commits siguen en la rama local `19.0_getnet`,
   en `respaldo-getnet-v19-2026-09-27-b @ 2bde13e` de este repo y en
   `respaldo-p3-2bde13e-2026-09-27` del submódulo de Campera. La `19.0_getnet` local del
   submódulo quedó en `1184177` siguiendo a origin.

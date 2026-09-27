@@ -15,7 +15,7 @@ decir *commiteado* con su hash.
 |---|---|---|
 | DL-1 | `19.0_getnet` | commiteado en `a740ddd` (antes `c719fc5`, squasheado) |
 | DL-1 | `17.0_getnet` | commiteado en `b3f2226` (local, sin push) — incluye el wizard |
-| DL-1b | `19.0_getnet` | **pendiente en 19.0** — el wizard «Registrar pago» quedó sin `sudo()` (ver DL-1) |
+| DL-1b | `19.0_getnet` | commiteado en `dd071b1` (local, sin publicar) — el wizard «Registrar pago» (ver DL-1) |
 | DL-2 | `19.0_getnet` | commiteado en `a740ddd` (antes `c719fc5`, squasheado) |
 | DL-2 | `17.0_getnet` | **pendiente en 17.0** — programado para la próxima ventana de trabajo sobre v17 |
 | DL-3 | `19.0_getnet` | commiteado en `a740ddd` (antes `c719fc5`, squasheado) |
@@ -80,10 +80,11 @@ al elegir el diario Getnet, recibe `AccessError`. Se vio al portar DL-1 a
 error en v17 antes del `sudo()` y verde después.
 
 - **17.0** — arreglado en el mismo `b3f2226`, con ese test.
-- **19.0** — **pendiente en 19.0**. El código publicado (`a740ddd`) tiene el
-  hueco. El arreglo es la misma línea y el mismo test; queda para decidir
-  dónde aterriza, porque la rama local `19.0_getnet` lleva P3 encima y un
-  commit nuevo quedaría detrás de él.
+- **19.0** — commiteado en `dd071b1` (local, **sin publicar**), 27/09/2026,
+  como `[FIX]` propio directamente sobre `1184177` y **debajo** de P3: la
+  entrega final es `[FIX]` DL-1b + `[ADD]` P3 sin mezclar. Antes del arreglo:
+  1 error de 42 (`AccessError`). Suite core + backend: **103/103**. El código
+  publicado (`a740ddd`) sigue con el hueco hasta que se publique.
 
 ---
 
