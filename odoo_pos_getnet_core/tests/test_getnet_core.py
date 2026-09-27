@@ -358,6 +358,58 @@ class TestGetnetCore(TransactionCase):
             'CancelarTransaccion', [c[0] for c in driver.calls])
 
     # ------------------------------------------------------------------
+    # El proveedor que crea la instalación
+    # ------------------------------------------------------------------
+    def test_la_instalacion_crea_el_proveedor(self):
+        """
+        Hasta que esto existió, instalar el módulo NO creaba ningún
+        `payment.provider`: en staging se había creado a mano y nadie lo
+        notó, y en una instalación limpia no aparecía nada. La guía decía
+        «creá el proveedor», que es pedirle a quien implanta que adivine el
+        `code`.
+        """
+        provider = self.env.ref(
+            'odoo_pos_getnet_core.payment_provider_getnet')
+        self.assertEqual(provider.code, 'getnet')
+        self.assertTrue(provider.module_id,
+                        'sin module_id, Odoo no lo duplica al crear una '
+                        'compañía nueva')
+        self.assertEqual(provider.module_id.name, 'odoo_pos_getnet_core')
+
+    def test_el_proveedor_nace_apagado_y_sin_credenciales(self):
+        """
+        NO es prolijidad: un proveedor activo con credenciales vacías es un
+        medio de cobro que parece disponible y no cobra. Y el modo emulación
+        encendido sería un cobro que aprueba sin tarjeta.
+        """
+        provider = self.env.ref(
+            'odoo_pos_getnet_core.payment_provider_getnet')
+        self.assertEqual(provider.state, 'disabled')
+        self.assertFalse(provider.getnet_emp_cod)
+        self.assertFalse(provider.getnet_emp_hash)
+        self.assertFalse(provider.getnet_url_webservice)
+        self.assertFalse(provider.getnet_modo_emulacion)
+        self.assertFalse(provider.getnet_is_multiple)
+
+    def test_una_compania_nueva_recibe_su_propio_proveedor_apagado(self):
+        """
+        Comportamiento real de 19.0: `payment/models/res_company.create`
+        copia los proveedores instalados a cada compañía NUEVA. Las que ya
+        existían al instalar NO reciben ninguno — eso queda documentado en
+        la guía de instalación, porque en una base multi-compañía sorprende.
+        """
+        Provider = self.env['payment.provider'].sudo()
+        antes = Provider.search_count([('code', '=', 'getnet')])
+        nueva = self.env['res.company'].create({'name': 'Cia Getnet Test'})
+        copia = Provider.search([('code', '=', 'getnet'),
+                                 ('company_id', '=', nueva.id)])
+        self.assertTrue(copia, 'la compañía nueva se quedó sin proveedor')
+        self.assertEqual(
+            Provider.search_count([('code', '=', 'getnet')]), antes + 1)
+        self.assertEqual(copia.state, 'disabled')
+        self.assertFalse(copia.getnet_emp_hash)
+
+    # ------------------------------------------------------------------
     # Cliente SOAP
     # ------------------------------------------------------------------
     def test_soap_envelope_build(self):

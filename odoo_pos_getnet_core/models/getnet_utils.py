@@ -121,7 +121,19 @@ GETNET_CIERRE_CONTRACT = 'ITarjetasCierre_400'
 
 GETNET_URL_TESTING = 'https://testing-concentrador.getnet.com.uy'
 
-GETNET_HTTP_TIMEOUT = 15  # por invocación; el manual sugiere <= 15 segundos
+# Timeout HTTP en DOS TRAMOS, que no es lo mismo que uno solo.
+#
+# `requests` acepta (connect, read) y la diferencia la paga el cajero: con un
+# único valor de 15 s, un concentrador caído lo deja esperando los 15 s
+# completos antes de decirle nada. Medido con el concentrador de integración
+# fuera de servicio: 10,6 s hasta el mensaje de error, con un cliente enfrente.
+#
+# CONECTAR es rápido o no va a pasar: si el TCP/TLS no se establece en 4
+# segundos, el servicio no está. LEER es otra cosa — ahí el concentrador está
+# trabajando y hay que darle el tiempo que el manual sugiere.
+GETNET_HTTP_CONNECT_TIMEOUT = 4
+GETNET_HTTP_READ_TIMEOUT = 15  # el manual sugiere <= 15 segundos por invocación
+GETNET_HTTP_TIMEOUT = (GETNET_HTTP_CONNECT_TIMEOUT, GETNET_HTTP_READ_TIMEOUT)
 
 SOAP_ENV_NS = 'http://schemas.xmlsoap.org/soap/envelope/'
 

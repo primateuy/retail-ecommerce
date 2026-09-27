@@ -67,14 +67,37 @@ También: los crons de e-factura (`cron_check_cfe_state`, `cron_download_receive
 `service_send_invoices_email_automatically_cron`) **desactivados**, y **cero `ir_mail_server`
 activos** — una base copiada arrastra la cola de correo con destinatarios reales.
 
-## 3 · El proveedor de pago
+## 3 · El proveedor de pago — **la instalación ya lo creó**
 
-**Contabilidad > Configuración > Proveedores de pago**, o el menú de Getnet.
+**No hay que crearlo.** Al instalar el módulo aparece solo, en
+**Contabilidad > Configuración > Proveedores de pago**, con el nombre *Getnet (TransAct)*,
+**deshabilitado y sin credenciales**. Lo que falta es completarlo.
+
+Que nazca apagado no es prolijidad: un proveedor activo con credenciales vacías es un medio de
+cobro que **parece disponible y no cobra**. Habilitarlo es un acto deliberado de quien tiene las
+credenciales.
+
+### 🔴 En una base multi-compañía, el proveedor NO aparece en todas
+
+Comportamiento real de 19.0, verificado: `payment/models/res_company.create` copia los proveedores
+instalados **a cada compañía NUEVA**. Las compañías que **ya existían** cuando se instaló el módulo
+**no reciben ninguno**.
+
+| situación | qué pasa |
+|---|---|
+| Base de una sola compañía | el proveedor se crea en ella |
+| Se crea una compañía **después** de instalar | recibe su propia copia, también apagada y sin credenciales |
+| Compañías que **ya existían** al instalar | **se quedan sin proveedor** — hay que duplicarlo a mano |
+
+En una base con varias compañías, instalar crea el proveedor **sólo en la compañía activa** al
+momento del `-i`. Si Getnet se va a usar en otra, duplicá el registro y cambiale la compañía.
+
+### Completar las credenciales
 
 | campo | qué va | de dónde sale |
 |---|---|---|
-| Código | `getnet` | lo pone el módulo |
-| Estado | **Test** en integración, **Habilitado** en producción | 🔴 un proveedor nace *Deshabilitado* y así el medio no cobra |
+| Código | `getnet` | ya viene puesto |
+| Estado | **Test** en integración, **Habilitado** en producción | viene *Deshabilitado*: así el medio no cobra |
 | URL del webservice | la del concentrador | integración: `https://testing-concentrador.getnet.com.uy` |
 | EmpCod | código de comercio | **lo da New Age Data** |
 | EmpHASH | la credencial | **lo da New Age Data** |
@@ -144,6 +167,14 @@ montaje, no un detalle.
 
 1. `select name, state from ir_module_module where name like 'odoo_pos_getnet%';` → los dos
    `installed`.
+1b. El proveedor **existe y está apagado**, sin que nadie lo haya creado:
+   ```sql
+   select p.state, p.getnet_emp_cod, d.module||'.'||d.name
+     from payment_provider p
+     join ir_model_data d on d.model='payment.provider' and d.res_id=p.id
+    where p.code='getnet';
+   -- esperado: disabled | (vacío) | odoo_pos_getnet_core.payment_provider_getnet
+   ```
 2. Abrir **un pago nuevo con el diario Getnet** y ver que aparezcan «Cobrar en terminal Getnet»,
    «Facturas origen (Getnet)» y el botón «Crear transacción Getnet».
 3. Hacerlo **con un usuario de Contabilidad sin Ajustes**. Que el módulo instale no significa que

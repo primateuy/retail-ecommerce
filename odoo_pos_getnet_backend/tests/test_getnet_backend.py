@@ -6,6 +6,7 @@ devoluciones outbound y worker sincrónico con SOAP mockeado.
 """
 
 import uuid
+from contextlib import contextmanager
 from unittest.mock import patch
 
 from lxml import etree
@@ -79,6 +80,15 @@ class TestGetnetBackend(TransactionCase):
             'journal_id': cls.journal.id,
             'payment_method_id': cls.apm.id,
             'payment_provider_id': cls.provider.id,
+            # LA CUENTA DE COBROS PENDIENTES SE FIJA A PROPÓSITO. En 19.0 un
+            # pago cuyo método NO la tiene se confirma SIN generar asiento
+            # (`_compute_outstanding_account_id` la copia de acá, y
+            # `_generate_journal_entry` sólo corre si existe). Sin asiento no
+            # hay apuntes, y sin apuntes no hay nada que conciliar: los tests
+            # de conciliación pasaban o fallaban según qué defaults tuviera la
+            # base. Dejarlo al azar del plan de cuentas es probar la base y no
+            # el módulo — ya nos pasó con el test del aviso de runtime.
+            'payment_account_id': cls._cuenta_pendiente().id,
         })
         cls.tax22 = cls.env['account.tax'].create({
             'name': 'IVA 22 test', 'amount': 22.0, 'type_tax_use': 'sale'})
@@ -89,6 +99,22 @@ class TestGetnetBackend(TransactionCase):
             ('state', 'in', ('draft', 'pending')),
             ('getnet_token', '!=', False),
         ]).write({'getnet_token': False})
+
+    @classmethod
+    def _cuenta_pendiente(cls):
+        """Cuenta de cobros pendientes propia, para no depender del plan."""
+        cuenta = cls.env['account.account'].search([
+            ('code', '=', 'GETNPEND'),
+            *cls.env['account.account']._check_company_domain(cls.env.company),
+        ], limit=1)
+        if not cuenta:
+            cuenta = cls.env['account.account'].create({
+                'name': 'Getnet cobros pendientes (test)',
+                'code': 'GETNPEND',
+                'account_type': 'asset_current',
+                'reconcile': True,
+            })
+        return cuenta
 
     def _create_payment(self, **vals):
         base = {
@@ -527,6 +553,134 @@ class TestGetnetBackend(TransactionCase):
         # Con la tx aprobada, ahora sí se puede confirmar
         payment.action_post()
         self._assert_confirmado(payment)
+
+    # ------------------------------------------------------------------
+    # Transporte caído != rechazo
+    # ------------------------------------------------------------------
+    def test_un_fallo_de_transporte_no_cierra_la_transaccion_como_error(self):
+        """
+        🔴 El rc 999 lo pone nuestro cliente SOAP cuando no hubo respuesta
+        usable —timeout, 502, cable—. El posteo PUDO haber llegado igual, así
+        que cerrarla como `error` la da por no ocurrida, y con ella un cobro
+        que quizá pasó por el pinpad. Queda `pending`, a la vista.
+
+        Lo encontró un dry-run con el concentrador de integración caído de
+        verdad; el mock de este test reproduce exactamente lo que devolvió.
+        """
+        payment = self._create_payment()
+
+        def fake_soap(prov, method_name, params):
+            return ({
+                'Resp_CodigoRespuesta': getnet_utils.GETNET_RC_TRANSPORTE,
+                'Resp_MensajeError': 'HTTP 504 del concentrador',
+            }, '<req/>', '<resp/>')
+
+        # Se observa QUÉ transición se pide, no el estado final: el UserError
+        # revierte el savepoint de la TransactionCase y la transacción creada
+        # adentro desaparece. En producción no desaparece —el flujo commitea
+        # antes de levantar— pero acá no se puede mirar de otra forma.
+        decisiones = []
+        Tx = type(self.env['payment.transaction'])
+        with patch.object(type(self.provider), '_getnet_soap_transaccion',
+                          fake_soap), \
+                patch.object(Tx, '_set_pending',
+                             lambda s, **kw: decisiones.append('pending')), \
+                patch.object(Tx, '_set_error',
+                             lambda s, *a, **kw: decisiones.append('error')), \
+                self.assertRaises(UserError) as capturado:
+            payment.action_getnet_create_transaction()
+
+        self.assertIn('504', str(capturado.exception))
+        self.assertIn('NO vuelvas a cobrar sin verificar',
+                      str(capturado.exception))
+        self.assertEqual(decisiones, ['pending'],
+                         'un transporte caído no puede quedar en error')
+
+    def test_un_rechazo_del_concentrador_si_cierra_la_transaccion(self):
+        """El concentrador contestó y dijo que no: ahí sí es error."""
+        payment = self._create_payment()
+
+        def fake_soap(prov, method_name, params):
+            return ({'Resp_CodigoRespuesta': '2',
+                     'Resp_MensajeError': 'CAMPO NO VALIDO'},
+                    '<req/>', '<resp/>')
+
+        decisiones = []
+        Tx = type(self.env['payment.transaction'])
+        with patch.object(type(self.provider), '_getnet_soap_transaccion',
+                          fake_soap), \
+                patch.object(Tx, '_set_pending',
+                             lambda s, **kw: decisiones.append('pending')), \
+                patch.object(Tx, '_set_error',
+                             lambda s, *a, **kw: decisiones.append('error')), \
+                self.assertRaises(UserError):
+            payment.action_getnet_create_transaction()
+        self.assertEqual(decisiones, ['error'])
+
+    # ------------------------------------------------------------------
+    # El timeout del cliente HTTP
+    # ------------------------------------------------------------------
+    def test_el_timeout_http_separa_conectar_de_leer(self):
+        """
+        Un concentrador caído tiene que fallar RÁPIDO. Con un único timeout de
+        15 s el cajero esperaba los 15 completos (medido: 10,6 s con el
+        concentrador de integración fuera de servicio). Conectar es rápido o
+        no va a pasar; leer es donde el concentrador trabaja.
+        """
+        conectar, leer = getnet_utils.GETNET_HTTP_TIMEOUT
+        self.assertLessEqual(conectar, 5, 'conectar tiene que fallar rápido')
+        self.assertGreaterEqual(leer, conectar)
+        self.assertLessEqual(leer, 15, 'el manual sugiere <= 15 s por invocación')
+
+    # ------------------------------------------------------------------
+    # El cursor propio del worker
+    # ------------------------------------------------------------------
+    def test_el_worker_abre_su_cursor_con_la_api_de_19(self):
+        """
+        REGRESIÓN: en 19.0 `odoo.registry` YA NO EXISTE, y el cuerpo del hilo
+        lo usaba. No lo cazaba ninguna prueba porque el hilo nunca corre en la
+        suite —se lanza aparte— así que el error aparecía recién en vivo, con
+        un `AttributeError: module 'odoo' has no attribute 'registry'` en un
+        worker que nadie está mirando: el cobro se postea al pinpad y el
+        polling no arranca nunca.
+
+        Acá se ejecuta el cuerpo de verdad, con el Registry sustituido para
+        que reuse el cursor del test. Lo que se prueba es la plomería —abrir
+        cursor, armar el Environment, liberar la terminal en el finally—, no
+        el polling, que tiene sus propias pruebas.
+        """
+        payment = self._create_payment()
+        tx = self._create_done_tx(payment)
+        self.terminal.getnet_claim('account_payment', ref='TEST')
+
+        cursor = self.env.cr
+
+        class _RegistroFalso:
+            @contextmanager
+            def cursor(self):
+                # Se cede el cursor del test y NO se lo cierra: cerrarlo
+                # dejaría la TransactionCase sin transacción.
+                yield cursor
+
+        llamadas = []
+
+        def sin_polling(self, *args, **kwargs):
+            llamadas.append(True)
+
+        with patch('odoo.modules.registry.Registry',
+                   lambda dbname: _RegistroFalso()), \
+                patch.object(type(payment), '_getnet_worker_inner',
+                             sin_polling):
+            payment._getnet_worker_thread_entry(
+                self.env.cr.dbname, self.env.uid, payment.id, tx.id,
+                self.terminal.id, self.provider.id, 1)
+
+        self.assertTrue(llamadas, 'el cuerpo del worker no llegó a correr')
+        self.terminal.invalidate_recordset()
+        self.assertFalse(self.terminal.lock_origin,
+                         'el finally tiene que liberar la terminal')
+        payment.invalidate_recordset()
+        self.assertFalse(payment.getnet_async_terminal_pending)
 
     # ------------------------------------------------------------------
     # Multi-terminal en el flujo contable

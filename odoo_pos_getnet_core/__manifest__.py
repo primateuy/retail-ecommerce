@@ -36,6 +36,9 @@ y "Integración WebServices TransAct v4.0.09" (WS v02).
         "security/ir.model.access.csv",
         "data/getnet_cron.xml",
         "data/getnet_payment_method.xml",
+        # Después del payment.method: el proveedor no lo referencia, pero el
+        # orden del manifest es el orden de carga y así se lee la dependencia.
+        "data/payment_provider_data.xml",
         "views/getnet_pos_terminal_views.xml",
         "views/payment_provider_views.xml",
         "views/payment_transaction_views.xml",

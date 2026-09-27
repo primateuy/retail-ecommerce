@@ -21,8 +21,14 @@ decir *commiteado* con su hash.
 | DL-3 | `17.0_getnet` | **pendiente en 17.0** — programado para la próxima ventana de trabajo sobre v17 |
 | DL-5 | `19.0_getnet` | commiteado (ver la entrada) |
 | DL-5 | `17.0_getnet` | **pendiente en 17.0** — programado para la próxima ventana de trabajo sobre v17 |
+| DL-6 | `19.0_getnet` | commiteado (ver la entrada) |
+| DL-6 | `17.0_getnet` | **pendiente en 17.0** — programado para la próxima ventana de trabajo sobre v17 |
+| DL-7 | `19.0_getnet` | commiteado (ver la entrada) |
+| DL-7 | `17.0_getnet` | **pendiente en 17.0** — programado para la próxima ventana de trabajo sobre v17 |
+| DL-8 | `19.0_getnet` | commiteado (ver la entrada) |
+| DL-8 | `17.0_getnet` | **pendiente en 17.0** — programado para la próxima ventana de trabajo sobre v17 |
 
-«Pendiente en 17.0» es un estado con dueño y fecha, no una duda: los cuatro
+«Pendiente en 17.0» es un estado con dueño y fecha, no una duda: los siete
 aterrizan como commits locales en `17.0_getnet` en la próxima sesión que toque
 v17 —puede ser la reanudación de la sección 6— y hasta entonces esta tabla dice
 pendiente. Cuando aterricen, la fila lleva el hash y deja de decir pendiente.
@@ -197,6 +203,106 @@ no puede chocar.
   la rama 17 no tiene la ventana (y tampoco tiene POS Backend, así que no la
   necesita todavía) — pero el parámetro conviene que viaje junto para que los dos
   motores no divergan.
+
+---
+
+---
+
+## DL-6 · Un fallo de transporte se persistía como rechazo definitivo
+
+**Qué se rompe.** `getnet_soap_call` nunca levanta por transporte: devuelve una respuesta
+sintética con `Resp_CodigoRespuesta = 999`. Quien la recibe tiene que distinguirla de un rc de
+negocio, y no lo hacía: cualquier `rc != 0` cerraba la transacción con `_set_error`.
+
+**Por qué importa.** Un 999 es un timeout, un 502 o un cable. **El posteo pudo haber llegado al
+concentrador igual.** Cerrarlo como `error` lo da por no ocurrido, y con él cualquier cobro que sí
+haya pasado por el pinpad. Es el error del §3.3 del contrato de terminales —el que separa una
+integración que pierde plata de una que no— y además, sin token, el cron de recuperación tampoco
+lo puede resolver: queda invisible.
+
+**Dónde.** `odoo_pos_getnet_backend/models/account_payment.py`, en
+`action_getnet_create_transaction`, justo después del posteo.
+
+**Arreglo.** El 999 deja la transacción en `pending` y el mensaje al usuario dice *«no se pudo
+confirmar si el cobro llegó… NO vuelvas a cobrar sin verificar»*. Cualquier otro rc distinto de
+cero sigue siendo `error`: ahí el concentrador CONTESTÓ y dijo que no.
+
+**Cómo apareció.** Un dry-run con el concentrador de integración caído de verdad. No se puede
+simular con convicción: uno escribe el mock creyendo saber qué devuelve.
+
+- **19.0** — arreglado en `odoo_pos_getnet_backend` (y el mismo criterio en el módulo del POS
+  Backend, que no está publicado).
+- **17.0** — **pendiente en 17.0**. Mismo código, mismo cliente SOAP: se rompe igual.
+
+---
+
+## DL-7 · El timeout HTTP era uno solo, y el cajero lo esperaba entero
+
+**Qué se rompe.** `GETNET_HTTP_TIMEOUT` era un único valor de 15 s. `requests` acepta
+`(connect, read)`, y con un solo número los dos tramos comparten el mismo techo.
+
+**Cómo se ve.** Con el concentrador caído, el cajero espera el timeout completo antes de que le
+digan nada. **Medido: 10,6 s** con el concentrador de integración fuera de servicio, con un
+cliente enfrente.
+
+**Arreglo.** `GETNET_HTTP_CONNECT_TIMEOUT = 4` y `GETNET_HTTP_READ_TIMEOUT = 15`. Conectar es
+rápido o no va a pasar: si el TCP/TLS no se establece en 4 segundos, el servicio no está. Leer es
+otra cosa — ahí el concentrador está trabajando y el manual pide darle hasta 15 s.
+
+- **19.0** — arreglado en `odoo_pos_getnet_core/models/getnet_utils.py`.
+- **17.0** — **pendiente en 17.0**. Es el mismo archivo y el mismo cliente.
+
+---
+
+---
+
+## DL-8 · Instalar el módulo NO creaba el `payment.provider`
+
+**Qué se rompe.** El módulo declaraba el `payment.method` y los dos `account.payment.method`, pero
+**nunca el proveedor**. Instalar en una base limpia no deja ningún proveedor Getnet.
+
+**Por qué no se había visto.** En staging estaba creado **a mano**, de una configuración vieja, y
+nadie notó que la instalación no lo hacía. Se descubrió cuando Daryl instaló core+backend en una
+v19 nueva y no apareció. Evidencia: en las dos bases de prueba, **ningún** proveedor getnet tenía
+xmlid del módulo — todos habían nacido a mano.
+
+**Qué costaba.** La guía decía «creá el proveedor», que es pedirle a quien implanta que adivine el
+`code` y el resto. Y un proveedor creado a mano puede quedar con cualquier cosa: el `code` mal
+escrito no falla, simplemente el medio nunca encuentra su terminal.
+
+**Arreglo.** `data/payment_provider_data.xml` con el patrón de los módulos `payment_*` del core:
+`noupdate="1"` para que una actualización no pise lo que el cliente configuró, `module_id` para que
+Odoo lo reconozca como el proveedor de este módulo, `state='disabled'`, credenciales vacías y
+defaults seguros (sin modo emulación, sin multi-terminal).
+
+**Y una cosa que hay que saber en multi-compañía:** `payment/models/res_company.create` copia los
+proveedores instalados a cada compañía **nueva**; las que **ya existían** al instalar **no reciben
+ninguno**. Verificado, y documentado en la guía de instalación.
+
+- **19.0** — arreglado en `odoo_pos_getnet_core`, con tres tests (existe por xmlid, nace apagado y
+  sin credenciales, y una compañía nueva recibe su copia apagada).
+- **17.0** — **pendiente en 17.0**. El árbol de `2371fb1` tiene los mismos dos archivos de datos y
+  ningún `payment.provider`: **el hueco es idéntico**.
+
+---
+
+## Diferido y escrito: los módulos v17 no portados siguen instalables
+
+> **Módulos v17 no portados (`odoo_pos_getnet_pos`, `odoo_pos_getnet_fiserv_flags`) siguen
+> instalables en la rama v19 — riesgo aceptado temporalmente, mitigado sólo por el README; aplicar
+> `installable=False` cuando se retome.**
+
+Decisión de Daryl, 26-09-2026: el `[FIX]` que los marcaría como no instalables **queda diferido**.
+Los dos módulos vienen de `2371fb1` —la base de v17— y viajaron a la rama v19 sin portarse ni
+tocarse. Hoy nada impide que alguien los instale en una base 19.
+
+**Qué lo mitiga hoy:** sólo el README de la rama, que dice qué entra en la entrega y qué no. Es
+documentación, no un freno: un `-i` no lee el README.
+
+**Qué habría que hacer cuando se retome:** `"installable": False` en los dos manifests, que es el
+freno real.
+
+Está acá para que sea una decisión con fecha y no un olvido que alguien descubre instalando.
 
 ---
 

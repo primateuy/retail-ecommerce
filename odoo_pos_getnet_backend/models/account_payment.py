@@ -425,15 +425,38 @@ class AccountPayment(models.Model):
             self._getnet_clear_pending()
             raise
         rc = getnet_utils.getnet_rc(data)
+        mensaje = data.get('Resp_MensajeError') or ''
+        if rc == getnet_utils.GETNET_RC_TRANSPORTE:
+            # 🔴 UN FALLO DE TRANSPORTE NO ES UN RECHAZO. El rc 999 lo pone
+            # nuestro propio cliente SOAP cuando no hubo respuesta usable: un
+            # timeout, un 502, un cable. El posteo PUDO haber llegado al
+            # concentrador igual, así que marcar la transacción como `error`
+            # —definitivo— la da por no ocurrida, y con ella cualquier cobro
+            # que sí haya pasado por el pinpad. Queda `pending`: sin token no
+            # hay a quién consultarle, pero la transacción sigue a la vista
+            # para que alguien la concilie contra el cierre del adquirente.
+            self._getnet_clear_pending()
+            tx._set_pending(state_message=_(
+                'Getnet: no hubo respuesta del concentrador al postear '
+                '(%(rc)s): %(msg)s', rc=rc, msg=mensaje))
+            getnet_utils.getnet_safe_commit(self.env)
+            raise UserError(_(
+                'No se pudo confirmar si el cobro llegó a la terminal Getnet '
+                '(%(rc)s): %(msg)s. NO vuelvas a cobrar sin verificar: la '
+                'transacción quedó registrada como sin confirmar.',
+                rc=rc, msg=mensaje))
         if rc != getnet_utils.GETNET_RC_OK:
+            # El concentrador CONTESTÓ y dijo que no (campo inválido, comercio
+            # mal, terminal desconocida): no hay nada en el pinpad y acá sí se
+            # puede cerrar la transacción como error sin riesgo.
             self._getnet_clear_pending()
             tx._set_error(_(
                 'Getnet: el posteo fue rechazado (%(rc)s): %(msg)s',
-                rc=rc, msg=data.get('Resp_MensajeError') or ''))
+                rc=rc, msg=mensaje))
             getnet_utils.getnet_safe_commit(self.env)
             raise UserError(_(
                 'La terminal Getnet rechazó el posteo (%(rc)s): %(msg)s',
-                rc=rc, msg=data.get('Resp_MensajeError') or ''))
+                rc=rc, msg=mensaje))
         return True
 
     def _getnet_clear_pending(self):
@@ -460,10 +483,15 @@ class AccountPayment(models.Model):
     def _getnet_worker_thread_entry(self, dbname, uid, payment_id, tx_id,
                                     terminal_id, provider_id, initial_wait):
         """Cuerpo del hilo: cursor propio + worker + liberación en finally."""
-        import odoo
-        registry = odoo.registry(dbname)
+        # 19.0: `odoo.registry` YA NO EXISTE — el core usa
+        # `odoo.modules.registry.Registry`. El import va acá adentro, como
+        # estaba, para no arrastrar el registry al import del módulo.
+        from odoo.api import Environment
+        from odoo.modules.registry import Registry
+
+        registry = Registry(dbname)
         with registry.cursor() as cr:
-            env = odoo.api.Environment(cr, uid, {})
+            env = Environment(cr, uid, {})
             payment = env['account.payment'].browse(payment_id)
             # sudo: el hilo corre con el uid del operador y
             # payment.transaction solo tiene ACL de sistema.
