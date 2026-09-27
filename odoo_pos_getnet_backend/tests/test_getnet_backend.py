@@ -262,6 +262,31 @@ class TestGetnetBackend(TransactionCase):
             payment._getnet_factura_vals_from_move(invoice)
         self.assertIn(invoice.name, str(capturado.exception))
 
+    # Cómo guarda `cfe` una factura firmada ANTES de la migración de Campera a
+    # 19.0: no el XML de Uruware sino el repr de un dict. Recortado del real
+    # (101-A-175216, 14/07/2026): lo que importa es el formato, no el contenido.
+    CFE_MIGRADO = (
+        "{'CFE': {'@xmlns': 'http://cfe.dgi.gub.uy', '@version': '1.0', "
+        "'eTck': {'TmstFirma': '2026-07-14T14:30:30-03:00', 'Encabezado': "
+        "{'IdDoc': {'TipoCFE': '101', 'Serie': 'A', 'Nro': '175216'}}}}}")
+
+    def test_factura_migrada_de_v17_da_error_claro_y_no_un_error_crudo(self):
+        """
+        15.639 de las 15.700 facturas firmadas de Campera guardan `cfe` en el
+        formato de v17 (repr de un dict), y el numero_cfe() de uruware en
+        19.0 lo parsea como XML: ExpatError. El envoltorio atrapaba sólo
+        UserError/ValidationError, así que el contador que cobraba una factura
+        vieja recibía un error crudo del parser. Visto con datos reales de
+        Campera contra el concentrador simulado el 27/09/2026.
+        """
+        invoice = self._create_invoice_anexo()
+        invoice.sudo().write({'cfe': self.CFE_MIGRADO})
+        payment = self._create_payment(
+            getnet_source_invoice_ids=[(6, 0, invoice.ids)])
+        with self.assertRaises(UserError) as capturado:
+            payment._getnet_factura_vals_from_move(invoice)
+        self.assertIn(invoice.name, str(capturado.exception))
+
     def test_consumidor_final_viaja_segun_el_cfe_de_la_factura(self):
         """e-Ticket => consumidor final; e-Factura => no."""
         ticket = self._create_invoice_anexo()

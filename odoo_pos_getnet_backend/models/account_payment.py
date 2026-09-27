@@ -14,7 +14,7 @@ import logging
 import threading
 
 from odoo import _, api, fields, models
-from odoo.exceptions import UserError, ValidationError
+from odoo.exceptions import UserError
 
 from odoo.addons.odoo_pos_getnet_core.models import getnet_utils
 
@@ -270,13 +270,21 @@ class AccountPayment(models.Model):
         # «factura sin CFE» llega como excepción y no como cadena vacía: sin
         # esto el contador ve «No se ha emitido el cfe» sin saber qué factura
         # ni que el cobro Getnet fue lo que se cayó.
+        #
+        # Y no sólo UserError/ValidationError: las facturas firmadas antes de
+        # migrar a 19.0 guardan `cfe` en otro formato (el repr de un dict) y
+        # el parser de uruware revienta con ExpatError. Cualquier falla acá
+        # tiene que llegarle al contador como un mensaje que nombre la
+        # factura, no como un error crudo del parser.
         try:
             numero = move.numero_cfe()
-        except (UserError, ValidationError) as error:
+        except Exception as error:  # noqa: BLE001 - se re-levanta con contexto
             raise UserError(_(
                 'No se pudo obtener el número de CFE de la factura '
                 '%(factura)s (%(error)s); no se puede enviar el cobro a la '
-                'terminal Getnet.',
+                'terminal Getnet. Si es una factura anterior a la migración, '
+                'cobrala sin cargarla en «Facturas origen (Getnet)» (sale con '
+                'FacturaNro=0).',
                 factura=move.display_name, error=error)) from error
         if not numero:
             raise UserError(_(
