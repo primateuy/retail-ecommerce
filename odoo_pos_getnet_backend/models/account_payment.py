@@ -496,8 +496,13 @@ class AccountPayment(models.Model):
             # sudo: el hilo corre con el uid del operador y
             # payment.transaction solo tiene ACL de sistema.
             tx = env['payment.transaction'].sudo().browse(tx_id)
-            terminal = env['getnet.pos.terminal'].browse(terminal_id)
-            provider = env['payment.provider'].browse(provider_id)
+            # sudo también en terminal y proveedor, por lo mismo: el hilo es
+            # la máquina consultando en nombre del contador, y payment.provider
+            # es de base.group_system. Sin esto el primer ConsultarTransaccion
+            # revienta con AccessError y el polling muere con el cobro ya
+            # posteado al pinpad (DL-1 cubrió el form, no este camino).
+            terminal = env['getnet.pos.terminal'].sudo().browse(terminal_id)
+            provider = env['payment.provider'].sudo().browse(provider_id)
             try:
                 payment._getnet_worker_inner(
                     tx, terminal, provider, initial_wait)

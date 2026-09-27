@@ -682,6 +682,63 @@ class TestGetnetBackend(TransactionCase):
         payment.invalidate_recordset()
         self.assertFalse(payment.getnet_async_terminal_pending)
 
+    def test_el_worker_consulta_como_contador_sin_ajustes(self):
+        """
+        REGRESIÓN: el hilo de polling corre con el uid del operador —el
+        contador— y leía el proveedor SIN sudo. Al primer
+        ConsultarTransaccion, `_getnet_soap_transaccion` lee
+        `getnet_url_webservice` y revienta con AccessError sobre
+        payment.provider: el cobro ya está posteado al pinpad y el polling
+        muere. Visto contra el concentrador simulado el 27/09/2026.
+
+        No lo cazaba ninguna prueba porque todas mockean
+        `_getnet_soap_transaccion`, que es justo donde se lee el proveedor.
+        Acá se mockea POR DEBAJO (`getnet_utils.getnet_soap_call`) y el cuerpo
+        del hilo corre de verdad, con el uid del contador.
+        """
+        contador = self._contador()
+        payment = self._create_payment()
+        method = self.env.ref('odoo_pos_getnet_core.payment_method_getnet')
+        tx = self.env['payment.transaction'].create({
+            'provider_id': self.provider.id,
+            'payment_method_id': method.id,
+            'reference': 'GETNET-BK-%s' % uuid.uuid4().hex[:10],
+            'amount': payment.amount,
+            'currency_id': payment.currency_id.id,
+            'partner_id': self.partner.id,
+            'getnet_token': 'TOK-HILO',
+            'getnet_terminal_id': self.terminal.id,
+            'getnet_account_payment_id': payment.id,
+        })
+        self.terminal.getnet_claim('account_payment', ref='TOK-HILO')
+        cursor = self.env.cr
+        # El hilo de verdad abre un cursor NUEVO: nada en caché, todo se lee
+        # de la base y pasa por las ACL. Sin esto el test lee el proveedor que
+        # el setup dejó en la caché como superusuario y no prueba nada.
+        self.env.flush_all()
+        self.env.invalidate_all()
+
+        class _RegistroFalso:
+            @contextmanager
+            def cursor(self):
+                yield cursor
+
+        def soap(base_url, svc_path, contract, method, params, **kw):
+            return dict(APROBADA), '<req/>', '<resp/>'
+
+        with patch('odoo.modules.registry.Registry',
+                   lambda dbname: _RegistroFalso()), \
+                patch.object(getnet_utils, 'getnet_soap_call', soap), \
+                patch.object(pt_mod.time, 'sleep', lambda s: None), \
+                patch.object(pt_mod, 'time', _RelojDeLaboratorio([0, 1, 2])):
+            payment._getnet_worker_thread_entry(
+                self.env.cr.dbname, contador.id, payment.id, tx.id,
+                self.terminal.id, self.provider.id, 1)
+
+        tx.invalidate_recordset()
+        self.assertEqual(tx.state, 'done',
+                         'el hilo del contador tiene que poder consultar')
+
     # ------------------------------------------------------------------
     # Multi-terminal en el flujo contable
     # ------------------------------------------------------------------
