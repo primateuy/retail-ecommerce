@@ -13,10 +13,13 @@ sobreescribe los position=attributes, por eso los flags son compartidos).
     "website": "https://www.primate.com",
     "category": "Accounting/Payment",
     "version": "17.0.1.0.0",
+    # No portado a 19.0: freno explícito. El "17.0" de la versión ya lo
+    # vuelve no instalable en 19, pero eso depende de que nadie la suba.
+    "installable": False,
     "depends": [
         "odoo_pos_getnet_backend",
         "odoo_pos_fiserv_backend",
     ],
-    "auto_install": True,
+    "auto_install": False,
     "license": "LGPL-3",
 }

@@ -13,6 +13,9 @@ con fallback por monto.
     "website": "https://www.primate.com",
     "category": "Sales/Point of Sale",
     "version": "17.0.1.0.0",
+    # No portado a 19.0: freno explícito. El "17.0" de la versión ya lo
+    # vuelve no instalable en 19, pero eso depende de que nadie la suba.
+    "installable": False,
     "depends": [
         "odoo_pos_getnet_core",
         "point_of_sale",
