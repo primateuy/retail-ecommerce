@@ -64,11 +64,13 @@ va en commits propios **encima** de la entrega. No forma parte del `[ADD]`.
 
 ## Pendiente de publicar
 
-> **Nada se publica hasta que P3 (`odoo_pos_getnet_pos_backend`) esté completo y validado con
-> hardware.** Ese día se publica todo de una vez, en este orden. Decisión de Daryl, 27/09/2026.
-> Este bloque se actualiza en cada entrega.
+> **Decisión de Daryl, 27/09/2026:** P3 y el backend se validan contra un **concentrador
+> simulado** y se publica todo para el go-live de Campera (jueves 01/10/2026). La validación con
+> hardware queda para el primer cobro real en producción. Lo que el simulador no pudo validar está
+> en la sección «Validación». Este bloque se actualiza en cada entrega; **no se pushea nada sin
+> que Daryl lo revise**.
 
-Actualizado: 27/09/2026 — entrega DL-2.
+Actualizado: 27/09/2026 — entrega de validación con simulador.
 
 **1. `pos_backend` de Campera** — dependencia de despliegue de P3 (hook 7 de cierre, arreglo de
 liberación, texto del contrato). Va primero: P3 publicado sin esto no cierra.
@@ -76,30 +78,31 @@ liberación, texto del contrato). Va primero: P3 publicado sin esto no cierra.
     cd ~/Odoo/clients/campera/pos_backend && git push origin b5cbea59ea975e020d2ea331d9d20ed72daa18f7:refs/heads/19.0
 
 **2. `retail-ecommerce` · `19.0_getnet`** — sobre `origin @ 1184177`, en este orden:
-`[FIX]` DL-1b (`dd071b1`) → los `[DOC]` de estado, convención e incidente → `[ADD]` P3 (squash
-de los 6 commits de P3 y evidencia, con respaldo previo).
+`[FIX]` DL-1b (`dd071b1`) → `[FIX]` módulos v17 no instalables (`4a35d91`) → `[FIX]` núcleo, lock
+a nombre del token (`3a17e8d`) → `[FIX]` backend, polling como contador (`71d364a`) → `[FIX]` backend, facturas migradas de v17 (`41cbd38`) → los `[DOC]` de estado → **`[ADD]` P3** (un solo commit) → los
+`[DOC]` de evidencia de la Parte A y de la validación con simulador.
 
-    cd ~/Odoo/shared/primateuy/retail-ecommerce-19.0 && git push origin <sha de la punta tras el squash>:refs/heads/19.0_getnet
+    cd ~/Odoo/shared/primateuy/retail-ecommerce-19.0 && git push origin <sha de la punta>:refs/heads/19.0_getnet
 
-El sha de la punta **no puede escribirse acá**: este archivo vive en un commit que está debajo de
-P3, y el sha de cualquier commit de arriba depende del de éste. El comando completo, con el sha,
-va en el reporte de cada entrega; el definitivo sale del squash.
+El sha de la punta **no puede escribirse acá**: este archivo vive en un commit que está debajo, y
+el sha de cualquier commit de arriba depende del de éste. El comando completo, con el sha, va en el
+reporte de cada entrega.
 
-**3. `retail-ecommerce` · `17.0_getnet`** — dual-landing sobre `origin @ 2371fb1`: DL-1 (con el
-wizard, `b3f2226`) → DL-2 (`0a60c7b`).
+**3. Puntero del submódulo en Campera** — **después** del paso 2 y sólo a un sha ya publicado en
+`19.0_getnet` (regla 3 de abajo). Se commitea al momento y el comando se arma con ese sha. La rama
+es la del entorno donde se despliega (hoy staging: `staging.27.08.2026v2`; la de producción v19 la
+define Daryl):
 
-    cd ~/Odoo/shared/primateuy/retail-ecommerce-17.0_getnet && git push origin 0a60c7bf53a6c6ac4f5c693a38002e361cd596cd:refs/heads/17.0_getnet
+    cd ~/Odoo/clients/campera && git push origin <sha del commit del puntero>:refs/heads/<rama de Campera>
 
-**4. Puntero del submódulo en Campera** — **después** del paso 2 y sólo a un sha ya publicado en
-`19.0_getnet` (regla 3 de abajo). Se commitea al momento y el comando se arma con ese sha:
+**No va en esta secuencia:**
 
-    cd ~/Odoo/clients/campera && git push origin <sha del commit del puntero>:refs/heads/staging.27.08.2026v2
+- `17.0_getnet` — **congelado** (DL-1 `b3f2226` y DL-2 `0a60c7b` locales). v17 no tiene destino por
+  ahora; se retoma después de Campera.
+- `LocalizacionUy` @ `effbe0c` (botón «Restablecer a borrador», `19.0_staging`) — módulo
+  compartido, afecta a todos los proyectos: decisión aparte.
 
-**Aparte, fuera de Getnet:** `LocalizacionUy` @ `effbe0c` (fix del botón «Restablecer a
-borrador», rama `19.0_staging`). Es módulo compartido — afecta a todos los proyectos —, así que
-su push es una decisión propia y no forma parte de esta secuencia.
-
-    cd ~/Odoo/shared/primateuy/LocalizacionUy-19.0 && git push origin effbe0c6a3fd37eb496e48f8fba96ac5222001ea:refs/heads/19.0_staging
+      cd ~/Odoo/shared/primateuy/LocalizacionUy-19.0 && git push origin effbe0c6a3fd37eb496e48f8fba96ac5222001ea:refs/heads/19.0_staging
 
 ## Convenciones de push
 

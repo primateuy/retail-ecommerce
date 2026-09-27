@@ -18,21 +18,27 @@ decir *commiteado* con su hash.
 | DL-1b | `19.0_getnet` | commiteado en `dd071b1` (local, sin publicar) — el wizard «Registrar pago» (ver DL-1) |
 | DL-2 | `19.0_getnet` | commiteado en `a740ddd` (antes `c719fc5`, squasheado) |
 | DL-2 | `17.0_getnet` | commiteado en `0a60c7b` (local, sin publicar) |
+| DL-2b | `19.0_getnet` | commiteado en `41cbd38` (local, sin publicar) — facturas migradas de v17: error claro |
+| DL-2b | `17.0_getnet` | no aplica: en v17 las facturas se guardan en el formato que v17 lee |
 | DL-3 | `19.0_getnet` | commiteado en `a740ddd` (antes `c719fc5`, squasheado) |
-| DL-3 | `17.0_getnet` | **pendiente en 17.0** — programado para la próxima ventana de trabajo sobre v17 |
+| DL-3 | `17.0_getnet` | **no portado — v17 sin destino por ahora, se retoma después de Campera** |
 | DL-5 | `19.0_getnet` | commiteado (ver la entrada) |
-| DL-5 | `17.0_getnet` | **pendiente en 17.0** — programado para la próxima ventana de trabajo sobre v17 |
+| DL-5 | `17.0_getnet` | **no portado — v17 sin destino por ahora, se retoma después de Campera** |
 | DL-6 | `19.0_getnet` | commiteado (ver la entrada) |
-| DL-6 | `17.0_getnet` | **pendiente en 17.0** — programado para la próxima ventana de trabajo sobre v17 |
+| DL-6 | `17.0_getnet` | **no portado — v17 sin destino por ahora, se retoma después de Campera** |
 | DL-7 | `19.0_getnet` | commiteado (ver la entrada) |
-| DL-7 | `17.0_getnet` | **pendiente en 17.0** — programado para la próxima ventana de trabajo sobre v17 |
+| DL-7 | `17.0_getnet` | **no portado — v17 sin destino por ahora, se retoma después de Campera** |
 | DL-8 | `19.0_getnet` | commiteado (ver la entrada) |
-| DL-8 | `17.0_getnet` | **pendiente en 17.0** — programado para la próxima ventana de trabajo sobre v17 |
+| DL-8 | `17.0_getnet` | **no portado — v17 sin destino por ahora, se retoma después de Campera** |
+| DL-9 | `19.0_getnet` | commiteado en `3a17e8d` (local, sin publicar) — lock de la terminal a nombre del token |
+| DL-9 | `17.0_getnet` | **no portado — v17 sin destino por ahora, se retoma después de Campera** |
+| DL-10 | `19.0_getnet` | commiteado en `71d364a` (local, sin publicar) — el hilo de polling del backend como contador |
+| DL-10 | `17.0_getnet` | **no portado — v17 sin destino por ahora, se retoma después de Campera** |
 
-«Pendiente en 17.0» es un estado con dueño y fecha, no una duda: los siete
-aterrizan como commits locales en `17.0_getnet` en la próxima sesión que toque
-v17 —puede ser la reanudación de la sección 6— y hasta entonces esta tabla dice
-pendiente. Cuando aterricen, la fila lleva el hash y deja de decir pendiente.
+**17.0 está congelado** (decisión de Daryl, 27/09/2026): Campera sale en v19 y todo el trabajo
+va ahí. En `17.0_getnet` quedan `b3f2226` (DL-1) y `0a60c7b` (DL-2) como commits locales, sin
+publicar. El resto dice «no portado» con esa frase exacta: no es un pendiente con fecha, es una
+rama sin destino hasta que se retome después de Campera.
 
 ---
 
@@ -127,6 +133,17 @@ que en el cliente no se ejecuta nunca.
 
 ---
 
+**DL-2b · Facturas firmadas antes de migrar a 19.0.** En Campera, **15.639 de las 15.700** facturas
+firmadas de la compañía 1 guardan `cfe` como el *repr* de un dict (formato de v17); sólo las 61
+emitidas desde el 23/07/2026 lo guardan como el XML de Uruware. El `numero_cfe()` de uruware en
+19.0 parsea XML y revienta con `ExpatError`, que el envoltorio de DL-2 no atrapaba: el contador
+recibía un error crudo del parser. Ahora cualquier falla llega como un error que nombra la factura
+y dice qué hacer (cobrarla sin cargarla como origen, `FacturaNro=0`). Commiteado en `41cbd38`, con
+un test que usa el formato real. **El problema de fondo —que la localización no lea las facturas
+migradas— es del módulo compartido (`LocalizacionUy`) y no se toca desde acá**: ver «Reportado».
+
+---
+
 ## DL-3 · `domain` de `getnet_source_invoice_ids` partido en cinco líneas
 
 **Qué se rompe.** El `domain` del campo estaba escrito en cinco líneas dentro
@@ -137,8 +154,7 @@ explícita: un `domain` o `context` partido en dos líneas no se escribe.
 **Arreglo.** Colapsado a una línea. No cambia el filtro.
 
 - **19.0** — commiteado en `a740ddd` (antes `c719fc5`, squasheado).
-- **17.0** — **pendiente en 17.0**, programado para la próxima ventana de
-  trabajo sobre v17 (mismo archivo, mismo campo).
+- **17.0** — **no portado — v17 sin destino por ahora, se retoma después de Campera** (mismo archivo, mismo campo).
 
 ---
 
@@ -224,7 +240,7 @@ no puede chocar.
 - **19.0** — commiteado en `odoo_pos_getnet_core` (rama `19.0_getnet`). Suites:
   núcleo 58/58, contable 37/37, 95/95 corriendo las dos juntas (la línea de base
   era 91/91: nada cayó).
-- **17.0** — **pendiente en 17.0**, programado para la próxima ventana de trabajo
+- **17.0** — **no portado — v17 sin destino por ahora, se retoma después de Campera**, programado para la próxima ventana de trabajo
   sobre v17. El motor es el mismo archivo en las dos ramas; mientras no aterrice,
   la rama 17 no tiene la ventana (y tampoco tiene POS Backend, así que no la
   necesita todavía) — pero el parámetro conviene que viaje junto para que los dos
@@ -258,7 +274,7 @@ simular con convicción: uno escribe el mock creyendo saber qué devuelve.
 
 - **19.0** — arreglado en `odoo_pos_getnet_backend` (y el mismo criterio en el módulo del POS
   Backend, que no está publicado).
-- **17.0** — **pendiente en 17.0**. Mismo código, mismo cliente SOAP: se rompe igual.
+- **17.0** — **no portado — v17 sin destino por ahora, se retoma después de Campera**. Mismo código, mismo cliente SOAP: se rompe igual.
 
 ---
 
@@ -276,7 +292,7 @@ rápido o no va a pasar: si el TCP/TLS no se establece en 4 segundos, el servici
 otra cosa — ahí el concentrador está trabajando y el manual pide darle hasta 15 s.
 
 - **19.0** — arreglado en `odoo_pos_getnet_core/models/getnet_utils.py`.
-- **17.0** — **pendiente en 17.0**. Es el mismo archivo y el mismo cliente.
+- **17.0** — **no portado — v17 sin destino por ahora, se retoma después de Campera**. Es el mismo archivo y el mismo cliente.
 
 ---
 
@@ -307,28 +323,74 @@ ninguno**. Verificado, y documentado en la guía de instalación.
 
 - **19.0** — arreglado en `odoo_pos_getnet_core`, con tres tests (existe por xmlid, nace apagado y
   sin credenciales, y una compañía nueva recibe su copia apagada).
-- **17.0** — **pendiente en 17.0**. El árbol de `2371fb1` tiene los mismos dos archivos de datos y
+- **17.0** — **no portado — v17 sin destino por ahora, se retoma después de Campera**. El árbol de `2371fb1` tiene los mismos dos archivos de datos y
   ningún `payment.provider`: **el hueco es idéntico**.
 
 ---
 
-## Diferido y escrito: los módulos v17 no portados siguen instalables
+## DL-9 · Tras un kill de Odoo, la terminal quedaba bloqueada hasta el TTL
 
-> **Módulos v17 no portados (`odoo_pos_getnet_pos`, `odoo_pos_getnet_fiserv_flags`) siguen
-> instalables en la rama v19 — riesgo aceptado temporalmente, mitigado sólo por el README; aplicar
-> `installable=False` cuando se retome.**
+**Qué se rompe.** `getnet_postear_transaccion_con_lock` toma la terminal con la referencia del
+flujo (el nombre del pago en el backend, la referencia del POS en el POS Backend), porque el
+token recién lo devuelve el posteo. El cron de recuperación, en cambio, reconoce el lock de un
+worker muerto comparándolo con el **token** de la transacción (`lock_ref == getnet_token`). El
+lock nunca estaba a nombre del token, así que ese camino no se activaba nunca.
 
-Decisión de Daryl, 26-09-2026: el `[FIX]` que los marcaría como no instalables **queda diferido**.
-Los dos módulos vienen de `2371fb1` —la base de v17— y viajaron a la rama v19 sin portarse ni
-tocarse. Hoy nada impide que alguien los instale en una base 19.
+**Cómo se ve.** Si Odoo muere a mitad de un cobro (deploy, reinicio, worker caído), la terminal
+queda **bloqueada 10 minutos** (TTL del claim) en lugar de liberarse a los 2 (heartbeat), y la
+transacción queda sin resolver durante ese tiempo. Todo cobro en esa caja falla con «terminal
+ocupada». Plata no se pierde: vencido el TTL, el cron la toma y la resuelve.
 
-**Qué lo mitiga hoy:** sólo el README de la rama, que dice qué entra en la entrega y qué no. Es
-documentación, no un freno: un `-i` no lee el README.
+**Cómo apareció.** Validando P3 contra el concentrador simulado (27/09/2026), en el punto «matar
+Odoo a mitad de un cobro». La suite no lo cazaba: los tests de recuperación armaban el lock **a
+mano con el token**, algo que ningún flujo real hace.
 
-**Qué habría que hacer cuando se retome:** `"installable": False` en los dos manifests, que es el
-freno real.
+**Arreglo.** Con el posteo OK, el lock pasa a nombre del token (`getnet_lock_rebind`,
+condicionado al origen del lock). Dos tests que siguen la cadena real: el lock queda a nombre del
+token, y un worker muerto con la referencia real se recupera antes del TTL. Sin el arreglo: 2
+fallos de 63.
 
-Está acá para que sea una decisión con fecha y no un olvido que alguien descubre instalando.
+- **19.0** — commiteado en `3a17e8d` (`odoo_pos_getnet_core`, local, sin publicar), debajo de P3.
+  Suite core + backend: **105/105**.
+- **17.0** — **no portado — v17 sin destino por ahora, se retoma después de Campera.** El código
+  es el mismo (`payment_provider.py`, `getnet_postear_transaccion_con_lock`): el defecto existe.
+
+---
+
+## DL-10 · El hilo de polling del backend revienta como contador (AccessError en `payment.provider`)
+
+**Qué se rompe.** El worker de `account.payment` corre con el uid del operador —el contador— y
+leía la terminal y el proveedor sin `sudo()`. Al primer `ConsultarTransaccion`,
+`_getnet_soap_transaccion` lee `getnet_url_webservice` y revienta con `AccessError`.
+
+**Cómo se ve.** El cobro se postea al pinpad —la tarjeta se cobra— y el polling muere. El pago queda
+«esperando respuesta de la terminal» hasta que el cron de recuperación, que corre como
+superusuario, resuelve la transacción minutos después. DL-1 cubrió el form, no este camino.
+
+**Cómo apareció.** Corriendo el checklist del backend contra el concentrador simulado (27/09/2026),
+como `contador.getnet`. Ninguna prueba lo cazaba porque todas mockean `_getnet_soap_transaccion`,
+justo donde se lee el proveedor; el ensayo en seco de v17 (22/08) mockeaba lo mismo.
+
+**Arreglo.** `sudo()` en terminal y proveedor dentro del hilo, igual que ya se hacía con la
+transacción. Test que corre el cuerpo real del hilo con el uid del contador, la caché vacía y el
+SOAP mockeado por debajo del proveedor. Sin el arreglo: 1 fallo de 43.
+
+- **19.0** — commiteado en `71d364a` (`odoo_pos_getnet_backend`, local, sin publicar).
+- **17.0** — **no portado — v17 sin destino por ahora, se retoma después de Campera** El código es el mismo
+  (`account_payment.py:462`, `env['payment.provider'].browse(provider_id)`): el defecto existe.
+
+---
+
+## Resuelto: los módulos v17 no portados NO son instalables en 19.0
+
+`odoo_pos_getnet_pos` y `odoo_pos_getnet_fiserv_flags` llevan `"installable": False` desde `4a35d91`,
+y `fiserv_flags` dejó de ser `auto_install`.
+
+**Corrección de lo que decía esta entrada:** no «seguían instalables». Odoo 19 ya los marcaba
+`uninstallable` en las cuatro bases v19, pero sólo porque sus manifests dicen `17.0.1.0.0` y 19
+descarta los módulos de otra serie (`odoo/modules/module.py`). El freno dependía de un número de
+versión; ahora es explícito. Verificado con el `_load_manifest` de 19: con la versión subida a 19.0
+siguen no instalables, y sin el freno pasarían a instalables.
 
 ---
 
@@ -349,4 +411,8 @@ punto de partida es la sección 6.6 del `staging_checklist.md` de v17.
 
 ## Reportado, NO se toca desde acá
 
-Por ahora, nada.
+- **`LocalizacionUy` · `numero_cfe()` no lee las facturas migradas de v17.** Las facturas firmadas
+  en v17 guardan `cfe` como repr de un dict; el `numero_cfe()` de `l10n_uy_einvoice_uruware` en 19.0
+  hace `xmltodict.parse` y revienta. Afecta a todo lo que pida el número de CFE de una factura
+  anterior a la migración, no sólo a Getnet. Módulo compartido: decisión de Daryl (arreglarlo en la
+  localización leyendo los dos formatos, o migrar el campo).
