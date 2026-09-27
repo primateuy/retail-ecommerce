@@ -1413,6 +1413,71 @@ class TestGetnetCore(TransactionCase):
         self.terminal.invalidate_recordset()
         self.assertFalse(self.terminal.lock_origin)
 
+    def test_postear_con_lock_ata_el_lock_al_token(self):
+        """
+        Los flujos reales toman la terminal con SU referencia (el nombre del
+        pago, la referencia del POS): el token todavía no existe. Con el
+        posteo OK el lock tiene que pasar a nombre del TOKEN, que es lo único
+        que el cron de recuperación sabe comparar.
+        """
+        def fake_soap(prov, method, params):
+            return resp({'Resp_CodigoRespuesta': '0', 'TokenNro': 'TOK-OK',
+                         'TokenSegundosConsultar': '5'})
+
+        with patch.object(type(self.provider), '_getnet_soap_transaccion',
+                          fake_soap):
+            self.provider.getnet_postear_transaccion_con_lock(
+                self.terminal, {'EmpCod': 'NEWAGE'}, 'pos_backend',
+                ref='POS/Local/00001-1')
+        self.terminal.invalidate_recordset()
+        self.assertEqual(self.terminal.lock_ref, 'TOK-OK')
+        self.assertEqual(self.terminal.lock_origin, 'pos_backend')
+        self.terminal.getnet_release()
+
+    def test_cron_recupera_worker_muerto_con_la_referencia_real(self):
+        """
+        La cadena REAL, no un lock armado a mano con el token: el flujo
+        toma la terminal con su referencia, postea, y el worker muere (kill
+        de Odoo) con el lock tomado. Pasado el heartbeat —y ANTES del TTL—
+        el cron tiene que reconocer el lock como de un worker muerto,
+        resolver la transacción y liberar la terminal.
+
+        Con el lock a nombre de la referencia del flujo, el cron no lo
+        reconocía y la terminal quedaba bloqueada hasta el TTL (600 s):
+        visto contra el concentrador simulado el 27/09/2026.
+        """
+        tx = self._create_tx(getnet_token=False, getnet_terminal_id=False)
+
+        def fake_post(prov, method, params):
+            return resp({'Resp_CodigoRespuesta': '0', 'TokenNro': 'TOKEN-1',
+                         'TokenSegundosConsultar': '5'})
+
+        with patch.object(type(self.provider), '_getnet_soap_transaccion',
+                          fake_post):
+            self.provider.getnet_postear_transaccion_con_lock(
+                self.terminal, {'EmpCod': 'NEWAGE'}, 'pos_backend',
+                ref='POS/Local/00001-1', tx=tx)
+        self.assertEqual(tx.getnet_token, 'TOKEN-1')
+        # El worker muere acá: nadie hace touch. Heartbeat vencido (>120 s),
+        # TTL del claim todavía vigente (<600 s).
+        self.env.cr.execute(
+            "UPDATE getnet_pos_terminal SET lock_date = %s WHERE id = %s",
+            (fields.Datetime.now() - timedelta(seconds=300), self.terminal.id),
+        )
+        self.terminal.invalidate_recordset()
+
+        def fake_soap(prov, method, params):
+            return resp(APROBADA)
+
+        with patch.object(type(self.provider), '_getnet_soap_transaccion',
+                          fake_soap), \
+                patch.object(pt_mod.time, 'sleep', lambda s: None), \
+                patch.object(pt_mod, 'time', _RelojDeLaboratorio([0, 5])):
+            self.env['payment.transaction']._getnet_cron_recover_inflight()
+        self.assertEqual(tx.state, 'done')
+        self.terminal.invalidate_recordset()
+        self.assertFalse(self.terminal.lock_origin)
+
     def test_cron_saltea_hilo_vivo(self):
         """
         Transacción cuyo hilo sigue vivo (touch reciente del lock con su

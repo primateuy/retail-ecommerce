@@ -330,11 +330,18 @@ class PaymentProvider(models.Model):
             getnet_utils.getnet_safe_commit(self.env)
             return data, req, resp
         token = data.get('TokenNro')
+        if token:
+            # El lock pasa a nombre del token: es lo que el cron de
+            # recuperación compara para reconocer un worker muerto. Si quedara
+            # a nombre de la referencia del flujo, un kill de Odoo a mitad del
+            # cobro dejaría la terminal bloqueada hasta el TTL.
+            terminal.getnet_lock_rebind(origin, token)
         if tx is not None and token:
             tx.write({
                 'getnet_token': token,
                 'getnet_terminal_id': terminal.id,
             })
+        if token:
             getnet_utils.getnet_safe_commit(self.env)
         if start_worker is not None:
             try:

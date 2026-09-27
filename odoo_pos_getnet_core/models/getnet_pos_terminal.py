@@ -154,6 +154,30 @@ class GetnetPosTerminal(models.Model):
             (self.id,),
         )
 
+    def getnet_lock_rebind(self, origin, ref):
+        """
+        Pasa el lock a nombre de ``ref`` (el token), sin soltarlo.
+
+        Los flujos toman la terminal ANTES de tener token —con la referencia
+        del pago o del POS— porque el token lo devuelve recién el posteo.
+        Pero el cron de recuperación identifica un worker muerto comparando
+        el lock con el token de la transacción: si el lock sigue a nombre de
+        la referencia del flujo, el cron no lo reconoce y la terminal queda
+        bloqueada hasta el TTL.
+
+        Condicionado al origen: sólo el dueño del lock lo re-nombra.
+        """
+        self.ensure_one()
+        self.env.cr.execute(
+            """
+            UPDATE getnet_pos_terminal
+               SET lock_ref = %s
+             WHERE id = %s AND lock_origin = %s
+            """,
+            (ref, self.id, origin),
+        )
+        self.invalidate_recordset(['lock_ref'])
+
     def getnet_heartbeat_alive(self, ref, seconds=GETNET_HEARTBEAT_SECONDS):
         """
         True si la terminal está tomada por la operación ``ref`` y su lock
