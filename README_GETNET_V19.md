@@ -61,3 +61,49 @@ día hace falta, el punto de partida es ese y la sección 6.6 del checklist de v
 
 `odoo_pos_getnet_pos_backend` —la terminal Getnet para el **POS Backend** de campera (Sprint 12)—
 va en commits propios **encima** de la entrega. No forma parte del `[ADD]`.
+
+## Convenciones de push
+
+Los pushes los corre Daryl. Quien entrega deja el comando **armado**, listo para copiar:
+
+    cd <ruta absoluta del repo> && git push origin <sha completo>:refs/heads/<rama>
+
+1. **Siempre con sha explícito y `refs/heads/<rama>`.** Nunca `git push` a secas desde este
+   worktree: la rama local `19.0_getnet` lleva encima el trabajo en curso (P3, evidencia) y un
+   push sin refspec lo publica entero como fast-forward. Eso fue exactamente el incidente de abajo.
+2. **Siempre con `cd` explícito en la misma línea.** El sha corto de un repo no existe en otro;
+   correr el comando en el directorio equivocado falla o, peor, publica otra cosa.
+3. **El puntero del submódulo en Campera sólo apunta a commits publicados en `19.0_getnet`.**
+   Nada local, nada que pueda desaparecer con una reversión.
+4. **Orden dependiente-primero cuando hay submódulo.** Si una reversión o reescritura de
+   `19.0_getnet` deja fuera un commit al que apunta Campera, primero se mueve y publica el
+   puntero de Campera, después se reescribe `19.0_getnet`. Nunca al revés.
+
+**Guard mecánico.** `push.default = nothing` está configurado con `--local` en el repo de
+retail-ecommerce (config compartida: vale para este worktree y para el clon de v17) y en el
+clon de Campera. Un `git push` sin refspec falla con
+`fatal: You didn't specify any refspecs to push, and push.default is "nothing".`
+El comando con `sha:refs/heads/<rama>` sigue funcionando (verificado con `--dry-run` el
+27/09/2026 en los dos repos: `Everything up-to-date`). Es configuración local, no viaja con el
+repo: en un clon nuevo hay que volver a ponerla.
+
+## Incidente de publicación — 27/09/2026
+
+- **15:29:30** — un `git push` sin refspec desde este worktree publicó `19.0_getnet` hasta
+  `2bde13e`: 8 commits sobre `2371fb1` en lugar de 2. De más: los 4 de P3
+  (`7cc86d8`, `8a723e1`, `c8a5f86`, `2fa33e5`) y los 2 de evidencia (`a865bd7`, `2bde13e`),
+  incluido el video de la Parte A. P3 no estaba validado con hardware.
+- **15:33:32** — Campera commiteó y publicó el puntero del submódulo en `2bde13e`
+  (`869b9b1` en `staging.27.08.2026v2`).
+- **entre 16:00:00 y 16:03:58** (ls-remote antes y después) — reversión: `git push --force-with-lease=19.0_getnet:2bde13e origin
+  1184177:19.0_getnet` desde este worktree. Quedó `origin/19.0_getnet @ 1184177`
+  ([ADD] `a740ddd` + [FIX] `1184177`), sin archivos de P3 ni de evidencia. Un primer
+  intento desde el clon de Campera falló sin tocar nada (el sha no existe en ese repo).
+- **Consecuencia de hacerlo en ese orden:** Campera quedó apuntando a un sha que ninguna rama
+  contenía. Se corrigió con `0339edb` («[FIX] Submódulo retail-ecommerce vuelve a 1184177 (P3
+  no validado)»), publicado en `staging.27.08.2026v2` y verificado a las 16:09.
+- **Nada se perdió.** Los 6 commits siguen en la rama local `19.0_getnet` (HEAD `2bde13e`),
+  en `respaldo-getnet-v19-2026-09-27-b @ 2bde13e` de este repo y en
+  `respaldo-p3-2bde13e-2026-09-27` del submódulo de Campera. La `19.0_getnet` local del
+  submódulo quedó en `1184177` siguiendo a origin.
+- **Qué se cambió para que no se repita:** las cuatro reglas y el guard de arriba.
