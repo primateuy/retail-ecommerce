@@ -8,21 +8,20 @@ Rama `19.0_getnet`. Port de la integración Getnet/TransAct desde `17.0_getnet @
 |---|---|
 | `odoo_pos_getnet_core` | proveedor, terminal con lock entre flujos, transacción, motor de polling, cliente SOAP, cron de recuperación, cierre de lote |
 | `odoo_pos_getnet_backend` | el flujo contable: cobrar y devolver desde **Contabilidad > Pagos** |
+| `odoo_pos_getnet_pos_backend` | la terminal Getnet para los medios integrados del **POS Backend** de Campera (P3). Depende de `pos_backend` @ `b5cbea5` |
 
 ## Suites
 
-Medido en `o19_getnet_test` (v19, con `l10n_uy_einvoice_base` y `l10n_uy_einvoice_uruware`
-instalados y todo endpoint en modo testing):
+Medido el 27/09/2026 sobre la punta de la rama, sólo resultado:
 
-| suite | resultado |
-|---|---|
-| `odoo_pos_getnet_core` | **58 / 58** |
-| `odoo_pos_getnet_backend` | **37 / 37** |
-| las dos juntas | **95 / 95** |
+| base | módulos | resultado |
+|---|---|---|
+| `o19_getnet_test` (v19, `l10n_uy_einvoice_uruware`, endpoints en testing) | core + backend | **107 / 107** |
+| `o19_getnet_pb_test` (copia de Campera staging con `pos_backend`) | core + backend + POS Backend | **145 / 145** |
 
 ```bash
-odoo-bin -c <conf> -d o19_getnet_test -u odoo_pos_getnet_core,odoo_pos_getnet_backend \
-  --test-enable --test-tags /odoo_pos_getnet_core,/odoo_pos_getnet_backend \
+odoo-bin -c <conf> -d <base> -u odoo_pos_getnet_core,odoo_pos_getnet_backend[,odoo_pos_getnet_pos_backend] \
+  --test-tags /odoo_pos_getnet_core,/odoo_pos_getnet_backend[,/odoo_pos_getnet_pos_backend] \
   --stop-after-init --max-cron-threads=0
 ```
 
@@ -49,18 +48,120 @@ día hace falta, el punto de partida es ese y la sección 6.6 del checklist de v
 
 ### Otros
 
-- **Puente con Fiserv** (`odoo_pos_getnet_fiserv_flags`): fuera de esta entrega.
+- **Puente con Fiserv** (`odoo_pos_getnet_fiserv_flags`) y **TPV estándar** (`odoo_pos_getnet_pos`):
+  fuera de esta entrega, y **no instalables** en 19.0 (`installable: False`, `4a35d91`).
 - **Botón en la factura**: el camino soportado es Contabilidad > Pagos. El wizard «Registrar pago»
   de la factura no sirve para este flujo y no es un defecto.
 - **Refresco automático del form del pago**: hay que refrescar a mano. Backlog conocido, está
   documentado en la guía de usuario sin disimulo.
-- **Validación con pinpad**: pendiente de agenda. El smoke contra el concentrador de integración
-  del 26/09/2026 no se pudo completar porque el concentrador devolvía 502/504 — ver `smoke_v19.md`.
+- **Validación con pinpad**: queda para el primer cobro real en producción. Lo validado contra el
+  concentrador simulado, y lo que no se pudo validar, está en la sección «Validación».
 
-## Trabajo en curso, fuera de la entrega
+## Validación — contra un concentrador SIMULADO
 
-`odoo_pos_getnet_pos_backend` —la terminal Getnet para el **POS Backend** de campera (Sprint 12)—
-va en commits propios **encima** de la entrega. No forma parte del `[ADD]`.
+> **P3 y el backend se validaron contra un concentrador simulado, no contra el de New Age Data**,
+> que está caído desde el 26/09/2026 (502/504 sostenido). La validación con hardware queda para el
+> **primer cobro real en producción**. Decisión de Daryl, 27/09/2026.
+
+**El simulador.** Un servidor SOAP local que implementa `TarjetasTransaccion_401` y
+`TarjetasCierre_400` en las rutas del concentrador. Odoo se apuntó a él **por configuración**
+(`getnet_url_webservice`), sin tocar código. Vive fuera del repo, en
+`Desarrollos Documentos/Getnet Campera/simulador/` (su `ESCENARIOS.md` dice de dónde sale cada
+respuesta). **Sólo 2 respuestas son capturas reales completas** (la aprobada y la tarjeta vencida
+del 17/08, con el titular anonimizado) más el 504 real; **el resto está construido** con la forma de
+esas capturas. El cierre con lotes es **circular**: su estructura sale del fixture de los tests, así
+que el simulador le devuelve al parser lo que el parser espera.
+
+**Qué se corrió.** Los dos checklists completos, en la UI real, con video:
+
+| checklist | base | quién opera | resultado | video |
+|---|---|---|---|---|
+| `checklist_pinpad_p3.md` (7 escenarios + contingencia) | `o19_getnet_pb_test` | cajero sin Ajustes; Supervisor para forzar | **46 / 51** | `2026-09-27_1856_p3_simulador.webm` (18:25) |
+| `checklist_validacion_v19_backend.md` (8 bloques) | `o19_campera_staging` | `contador.getnet`, sin Ajustes | **36 / 41** | `2026-09-27_1952_backend_simulador.webm` (19:02) |
+
+Los videos, los resultados por verificación (`*_resultados.json`) y el log de cada llamada al
+simulador (`llamadas.jsonl`, con el EmpHASH siempre como `***`) están junto al simulador. No van al
+repo: pesan 72 MB y 45 MB.
+
+**Defectos que encontró la validación, todos corregidos con su test** (sin el arreglo, el test
+nuevo falla; con el arreglo, la suite completa en verde):
+
+| | qué pasaba | commit |
+|---|---|---|
+| núcleo | tras un kill de Odoo a mitad de un cobro, la terminal quedaba bloqueada 10 min (TTL) en vez de 2 (heartbeat): el lock nunca estaba a nombre del token (DL-9) | `3a17e8d` |
+| backend | el hilo de polling revienta como contador sin Ajustes (`AccessError` en `payment.provider`) con el cobro ya posteado (DL-10) | `71d364a` |
+| backend | cobrar una factura firmada en v17 daba un error crudo del parser (DL-2b) | `41cbd38` |
+| P3 | un cobro aprobado sin línea en el POS (kill antes de guardar el pedido) quedaba salteado para siempre: pasa a conciliación a los 15 min | en el `[ADD]` |
+| P3 | una devolución a medias se reintentaba creando otra DEV (`UniqueViolation`), y esa excepción cortaba el cron de huérfanos para siempre | en el `[ADD]` |
+
+**Lo que el simulador NO puede validar** (queda para el primer cobro real):
+
+- cuánto tarda el pinpad de verdad y si la ventana de gracia de 4 s alcanza;
+- el texto exacto de un rechazo real, de «no hay cierres pendientes» y del rc 9;
+- la estructura real de `DatosCierre`;
+- los centavos (el simulador devuelve el `Monto` que recibe);
+- que el concentrador acepte el `TicketOriginal` y que el pinpad procese la DEV;
+- que el pinpad no pida datos de factura con `FacturaNro=0`, y el voucher impreso;
+- la corrida verde del smoke.
+
+**Hallazgos abiertos, sin arreglar** (decisión de Daryl):
+
+1. **«No sé» cuesta hasta 3 minutos.** Consultar, liberar un pedido o cerrar la caja con un cobro
+   sin resolver usan el motor completo de consulta (hasta 180 s). El cajero espera con la pantalla
+   trabada y, pasados ~170 s, la UI muestra «Se perdió la conexión». Con workers y un
+   `limit_time_real` menor, esas llamadas se cortan. Además, el modal de cierre no avisa del
+   pedido con cobro en vuelo antes de empezar.
+2. **El cajero no puede liberar un pedido desde la UI** (`pos_backend`): la app no tiene botón y
+   la ficha del pedido le da `AccessError` sobre `stock.picking`. Sólo se libera al cerrar la caja.
+3. **Un claim fallido se contesta como «no sé»** aunque no se haya posteado nada, y la
+   disponibilidad no detecta un lock zombie del mismo origen. Menor: con el arreglo del lock, el
+   zombie vence a los 2 minutos.
+4. **El backend no tiene botón de cierre de lote**; en Campera lo cierra el POS Backend al cerrar
+   la caja.
+5. **`LocalizacionUy`: `numero_cfe()` no lee las facturas migradas de v17** (15.639 de 15.700). Ver
+   `doc/dual-landing.md`, «Reportado».
+6. **La URL del concentrador no se valida** (acepta `http://`). Verificar a mano en producción.
+
+## Contingencia del día 1 — si Getnet falla en la caja
+
+Para el cajero, en este orden. **Regla de oro: si hay duda de si la tarjeta se cobró, NO se vuelve
+a pasar.** Un cobro que quizá existe se resuelve consultando, no cobrando dos veces.
+
+### A · El cobro con Getnet dio error o quedó «SIN CONFIRMAR»
+
+1. **No vuelvas a pasar la tarjeta.**
+2. En la línea de Getnet tocá **Consultar**. Esperá la respuesta: puede tardar hasta 3 minutos.
+3. Según lo que diga:
+   - **Autorizado** → seguí normal y **Finalizá**.
+   - **Descartado** (con el motivo de la terminal) → la tarjeta NO se cobró. Cobrá con otro medio.
+   - **Sigue sin confirmar** → tocá **Descartar**, cobrá con otro medio y **avisá al supervisor**
+     con el número de pedido. El cobro queda anotado: si después resulta aprobado, el sistema lo
+     **devuelve solo** (cron de cobros huérfanos) y aparece en *Contabilidad > Pagos > «Getnet:
+     requieren conciliación»* si no lo pudo resolver.
+4. Si el mensaje dice que la terminal está **ocupada por otra operación**, esperá un minuto y
+   volvé a intentar; si persiste, avisá al supervisor.
+
+### B · Getnet no anda para nadie (concentrador caído, pinpad sin conexión)
+
+**Lo decide y lo hace el supervisor o quien tenga Ajustes, no el cajero:**
+
+1. *Contabilidad > Configuración > Proveedores de pago* (o *Ajustes > Facturación > Proveedores de
+   pago*) → **Getnet (TransAct)** → estado **Deshabilitado** → Guardar.
+2. Efecto inmediato en **todas** las cajas: el medio *Getnet (pinpad)* aparece gris con el motivo
+   «El proveedor Getnet de la terminal … está deshabilitado». Verificado contra el simulador.
+3. Los cajeros cobran con los otros medios (efectivo, transferencia, y **tarjeta manual** si se
+   configuró antes de salir — ver go-live, ítem 1.23 del go-live).
+4. Cuando Getnet vuelve: mismo camino, estado **Habilitado**.
+
+### C · Antes de cerrar la caja
+
+- **Antes de cerrar, ningún cobro Getnet puede quedar «SIN CONFIRMAR».** Resolvelo con
+  **Consultar** (A.2) o con **Descartar** (A.3). Cerrar la caja con un cobro en vuelo deja la
+  pantalla esperando hasta 3 minutos mientras le pregunta a la terminal, y puede terminar en «Se
+  perdió la conexión» (hallazgo 1 de «Validación»). Si pasa, **no cierres de nuevo**: esperá, recargá
+  la página y avisá al supervisor.
+- El cierre de caja **cierra el lote de la terminal**. Si la terminal no contesta, la caja se cierra
+  igual (con un Supervisor, que queda registrado) y el lote se cierra después.
 
 ## Pendiente de publicar
 
