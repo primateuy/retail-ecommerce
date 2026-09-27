@@ -808,6 +808,25 @@ class TestGetnetBackend(TransactionCase):
             payment.action_post()
         self.assertNotIsInstance(capturado.exception, AccessError)
 
+    def test_el_wizard_registrar_pago_abre_para_el_contador(self):
+        """
+        Mismo AccessError que el form del pago, en el wizard «Registrar
+        pago»: su compute lee code y getnet_terminal_ids del proveedor. El
+        wizard no es el camino soportado para cobrar con Getnet, pero el
+        contador lo abre desde cualquier factura y no puede reventar.
+        """
+        contador = self._contador()
+        invoice = self._create_invoice_anexo()
+        wizard = self.env['account.payment.register'].with_user(
+            contador).with_context(
+                active_model='account.move', active_ids=invoice.ids).create({
+                    'journal_id': self.journal.id,
+                    'payment_method_line_id': self.apm_line.id,
+                })
+        self.assertTrue(wizard.getnet_is_getnet_journal)
+        self.assertEqual(wizard.getnet_selectable_terminal_ids, self.terminal)
+        self.assertEqual(wizard.getnet_terminal_id, self.terminal)
+
     def test_el_contador_confirma_y_concilia(self):
         """Camino completo con la tx ya aprobada, corrido como contador."""
         invoice = self._create_invoice_anexo()

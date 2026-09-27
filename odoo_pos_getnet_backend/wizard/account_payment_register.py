@@ -28,7 +28,11 @@ class AccountPaymentRegister(models.TransientModel):
     @api.depends('journal_id', 'payment_method_line_id')
     def _compute_getnet_is_getnet_journal(self):
         for wizard in self:
-            provider = wizard.payment_method_line_id.payment_provider_id
+            # sudo: el mismo AccessError que en el form del pago. El
+            # contador abre este wizard desde cualquier factura y no lee
+            # payment.provider; acá sólo se usan code, terminales y el flag
+            # de multi-terminal.
+            provider = wizard.payment_method_line_id.payment_provider_id.sudo()
             es_getnet = bool(provider and provider.code == 'getnet')
             wizard.getnet_is_getnet_journal = es_getnet
             terminals = provider.getnet_terminal_ids if es_getnet else \
