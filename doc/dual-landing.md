@@ -13,11 +13,12 @@ decir *commiteado* con su hash.
 
 | | rama | estado |
 |---|---|---|
-| DL-1 | `19.0_getnet` | commiteado en `c719fc5` |
-| DL-1 | `17.0_getnet` | **pendiente en 17.0** — programado para la próxima ventana de trabajo sobre v17 |
-| DL-2 | `19.0_getnet` | commiteado en `c719fc5` |
+| DL-1 | `19.0_getnet` | commiteado en `a740ddd` (antes `c719fc5`, squasheado) |
+| DL-1 | `17.0_getnet` | commiteado en `b3f2226` (local, sin push) — incluye el wizard |
+| DL-1b | `19.0_getnet` | **pendiente en 19.0** — el wizard «Registrar pago» quedó sin `sudo()` (ver DL-1) |
+| DL-2 | `19.0_getnet` | commiteado en `a740ddd` (antes `c719fc5`, squasheado) |
 | DL-2 | `17.0_getnet` | **pendiente en 17.0** — programado para la próxima ventana de trabajo sobre v17 |
-| DL-3 | `19.0_getnet` | commiteado en `c719fc5` |
+| DL-3 | `19.0_getnet` | commiteado en `a740ddd` (antes `c719fc5`, squasheado) |
 | DL-3 | `17.0_getnet` | **pendiente en 17.0** — programado para la próxima ventana de trabajo sobre v17 |
 | DL-5 | `19.0_getnet` | commiteado (ver la entrada) |
 | DL-5 | `17.0_getnet` | **pendiente en 17.0** — programado para la próxima ventana de trabajo sobre v17 |
@@ -61,11 +62,28 @@ expondría `getnet_emp_hash` por ORM a todos los contadores.
 `test_el_contador_no_puede_leer_payment_provider` (el segundo avisa si algún
 día se ampliara la ACL y los `sudo()` pudieran revisarse).
 
-- **19.0** — commiteado en `c719fc5` (`odoo_pos_getnet_backend`, rama
+- **19.0** — commiteado en `a740ddd` (antes `c719fc5`, squasheado) (`odoo_pos_getnet_backend`, rama
   `19.0_getnet`).
-- **17.0** — **pendiente en 17.0**, programado para la próxima ventana de
-  trabajo sobre v17. Mismo código y mismas ACLs: se rompe igual, y hoy un
-  contador de Forum no puede abrir un pago Getnet.
+- **17.0** — commiteado en `b3f2226` (`17.0_getnet`, local, sin push),
+  27/09/2026. Verificado en rojo antes del arreglo: con los tests portados,
+  el form y los flags dieron `AccessError` sobre `payment.provider` en v17
+  igual que en 19. Suite v17 completa: **95/95**.
+
+**DL-1b · Lo que el arreglo de 19.0 no cubrió: el wizard «Registrar pago».**
+`_compute_getnet_is_getnet_journal` en
+`odoo_pos_getnet_backend/wizard/account_payment_register.py` lee `code`,
+`getnet_terminal_ids` y `getnet_is_multiple` del proveedor sin `sudo()`. El
+código es idéntico en las dos ramas. El wizard no es el camino soportado
+para cobrar con Getnet, pero el contador lo abre desde cualquier factura y,
+al elegir el diario Getnet, recibe `AccessError`. Se vio al portar DL-1 a
+17.0: el test `test_el_wizard_registrar_pago_abre_para_el_contador` dio
+error en v17 antes del `sudo()` y verde después.
+
+- **17.0** — arreglado en el mismo `b3f2226`, con ese test.
+- **19.0** — **pendiente en 19.0**. El código publicado (`a740ddd`) tiene el
+  hueco. El arreglo es la misma línea y el mismo test; queda para decidir
+  dónde aterriza, porque la rama local `19.0_getnet` lleva P3 encima y un
+  commit nuevo quedaría detrás de él.
 
 ---
 
@@ -93,7 +111,7 @@ tests (`_sellar_cfe`) ahora deja la factura como si Uruware la hubiera
 firmado: probar contra el `numero_cfe()` de base daba verde sobre un camino
 que en el cliente no se ejecuta nunca.
 
-- **19.0** — commiteado en `c719fc5` (`odoo_pos_getnet_backend`, rama
+- **19.0** — commiteado en `a740ddd` (antes `c719fc5`, squasheado) (`odoo_pos_getnet_backend`, rama
   `19.0_getnet`).
 - **17.0** — **pendiente en 17.0**, programado para la próxima ventana de
   trabajo sobre v17. Mismo código; se dispara en cuanto uruware está
@@ -110,7 +128,7 @@ explícita: un `domain` o `context` partido en dos líneas no se escribe.
 
 **Arreglo.** Colapsado a una línea. No cambia el filtro.
 
-- **19.0** — commiteado en `c719fc5`.
+- **19.0** — commiteado en `a740ddd` (antes `c719fc5`, squasheado).
 - **17.0** — **pendiente en 17.0**, programado para la próxima ventana de
   trabajo sobre v17 (mismo archivo, mismo campo).
 
