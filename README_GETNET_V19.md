@@ -50,7 +50,12 @@ día hace falta, el punto de partida es ese y la sección 6.6 del checklist de v
 ### Otros
 
 - **Puente con Fiserv** (`odoo_pos_getnet_fiserv_flags`) y **TPV estándar** (`odoo_pos_getnet_pos`):
-  fuera de esta entrega, y **no instalables** en 19.0 (`installable: False`, `4a35d91`).
+  fuera de esta entrega.
+- **Esta rama sólo lleva los módulos de v19**: `odoo_pos_getnet_core`, `odoo_pos_getnet_backend`,
+  `odoo_pos_getnet_pos_backend` y `odoo_pos_getnet_promociones`. Los 45 módulos de v17 que venían
+  del repo (Fiserv, OCA, `pos_forum_*`, el TPV estándar de Getnet y el resto) se **sacaron** con un
+  `[REM]`, para que nadie los instale por error en v19. Siguen en las ramas de v17. En las bases v19
+  medidas ninguno estaba instalado: todos figuraban `uninstallable`.
 - **Botón en la factura**: el camino soportado es Contabilidad > Pagos. El wizard «Registrar pago»
   de la factura no sirve para este flujo y no es un defecto.
 - **Refresco automático del form del pago**: hay que refrescar a mano. Backlog conocido, está
@@ -198,7 +203,7 @@ a nombre del token → `[FIX]` backend, polling como contador → `[FIX]` backen
 v17 (error claro) → `[FIX]` estándar, facturas de v17 con su FacturaNro real → `[FIX]` núcleo, URL
 sólo https → los `[DOC]` de estado → **`[ADD]` P3** (un solo commit, con la consulta corta y la
 puesta al día de la línea) → los `[DOC]` de evidencia de la Parte A (guion, sin video) y de la validación con simulador
-→ **`[ADD]` promociones** → este `[DOC]`.
+→ **`[ADD]` promociones** → este `[DOC]` → **`[REM]`** de los módulos de v17.
 
     cd ~/Odoo/shared/primateuy/retail-ecommerce-19.0 && git push origin <sha de la punta>:refs/heads/19.0_getnet
 
