@@ -3,7 +3,7 @@
 /**
  * Parchea ReceiptScreen para usar QZ Tray cuando está habilitado en pos.config.
  *
- * - Rutina: recibo + ticket de cambio + voucher OCA + cupón promoción (hasta 4 HTML, QZ).
+ * - Rutina: recibo + voucher OCA + ticket de cambio + cupón promoción (hasta 4 HTML, QZ).
  * - T-Cambio: solo ticket de cambio.
  * - Voucher: solo voucher OCA.
  * - Cupon PC: HTML del reporte «Código de cupón» (loyalty.card).
@@ -221,7 +221,11 @@ patch(ReceiptScreen.prototype, {
     },
 
     /**
-     * Rutina QZ: recibo + ticket de cambio + voucher OCA + cupón de promoción (si aplica).
+     * Rutina QZ: recibo + voucher OCA + ticket de cambio + cupón de promoción (si aplica).
+     *
+     * El orden lo pidió el cliente (28-09-2026): el voucher va pegado al recibo,
+     * antes del ticket de cambio. Es el mismo orden que usa la descarga en PDF
+     * cuando QZ falla (``routine_download_controller.py``).
      */
     async printChangeTicketRoutine() {
         const cfg = this.pos.config;
@@ -274,12 +278,14 @@ patch(ReceiptScreen.prototype, {
             if (!couponHtml || !String(couponHtml).trim()) {
                 couponHtml = "";
             }
-            const parts = [receiptHtml, html];
-            const labels = ["recibo", "ticket de cambio"];
+            const parts = [receiptHtml];
+            const labels = ["recibo"];
             if (voucherHtml && String(voucherHtml).trim()) {
                 parts.push(voucherHtml);
                 labels.push("voucher OCA");
             }
+            parts.push(html);
+            labels.push("ticket de cambio");
             if (couponHtml && String(couponHtml).trim()) {
                 parts.push(couponHtml);
                 labels.push("cupón de promoción");
@@ -293,10 +299,11 @@ patch(ReceiptScreen.prototype, {
                 parts,
                 { labels }
             );
-            const desc = ["recibo", "ticket de cambio"];
+            const desc = ["recibo"];
             if (voucherHtml && String(voucherHtml).trim()) {
                 desc.push("voucher OCA");
             }
+            desc.push("ticket de cambio");
             if (couponHtml && String(couponHtml).trim()) {
                 desc.push("cupón de promoción");
             }

@@ -44,7 +44,7 @@ class PosForumQzRoutineDownloadController(http.Controller):
     Cuando QZ Tray no responde y ``pos.config.qz_tray_download_on_failure``
     está activo, el frontend POS hace un POST a este endpoint con el HTML del
     recibo y el id del ``pos.order``. El servidor renderiza los reportes que
-    apliquen (ticket de cambio, voucher OCA, cupón de próxima compra), los
+    apliquen (voucher OCA, ticket de cambio, cupón de próxima compra), los
     combina con saltos de página y devuelve un único PDF descargable. Esto
     evita el bloqueo del navegador a múltiples descargas consecutivas en el
     mismo evento de usuario.
@@ -136,20 +136,21 @@ class PosForumQzRoutineDownloadController(http.Controller):
                     "pos_forum_qz_print: routine pdf | error obteniendo HTML del cupón de próxima compra."
                 )
 
-            # Bloque: armar lista ordenada de fragmentos (recibo, ticket de cambio,
-            # voucher OCA, cupón próxima compra). Solo se incluyen los que tienen
-            # contenido — voucher y cupón pueden no aplicar.
+            # Bloque: armar lista ordenada de fragmentos (recibo, voucher OCA,
+            # ticket de cambio, cupón próxima compra), el mismo orden que la rutina
+            # por QZ (pedido del cliente, 28-09-2026). Solo se incluyen los que
+            # tienen contenido — voucher y cupón pueden no aplicar.
             fragments = []
             etiquetas = []
             if receipt_html and receipt_html.strip():
                 fragments.append(_strip_html_envelope(receipt_html))
                 etiquetas.append("recibo")
-            if change_ticket_html and str(change_ticket_html).strip():
-                fragments.append(_strip_html_envelope(change_ticket_html))
-                etiquetas.append("ticket de cambio")
             if voucher_html and str(voucher_html).strip():
                 fragments.append(_strip_html_envelope(voucher_html))
                 etiquetas.append("voucher OCA")
+            if change_ticket_html and str(change_ticket_html).strip():
+                fragments.append(_strip_html_envelope(change_ticket_html))
+                etiquetas.append("ticket de cambio")
             if coupon_html and str(coupon_html).strip():
                 fragments.append(_strip_html_envelope(coupon_html))
                 etiquetas.append("cupón próxima compra")
