@@ -15,7 +15,7 @@ from unittest.mock import patch
 from lxml import etree
 
 from odoo import fields
-from odoo.exceptions import AccessError, UserError
+from odoo.exceptions import AccessError, UserError, ValidationError
 from odoo.tests import TransactionCase, tagged
 
 from odoo.addons.odoo_pos_getnet_core.models import getnet_utils
@@ -1412,6 +1412,29 @@ class TestGetnetCore(TransactionCase):
         self.assertEqual(tx.getnet_ticket, '789')
         self.terminal.invalidate_recordset()
         self.assertFalse(self.terminal.lock_origin)
+
+    def test_la_url_del_concentrador_exige_https(self):
+        """
+        El sobre SOAP lleva el EmpHash: por HTTP plano viaja legible. La URL
+        del concentrador tiene que ser https; la única excepción es loopback
+        (127.0.0.1, localhost, ::1), donde el hash no sale de la máquina —es
+        como se prueba contra el concentrador simulado—.
+        """
+        for mala in ('http://concentrador.getnet.com.uy',
+                     'ftp://testing-concentrador.getnet.com.uy',
+                     'testing-concentrador.getnet.com.uy',
+                     'http://10.0.0.5:8080'):
+            with self.assertRaises(ValidationError, msg=mala):
+                self.provider.getnet_url_webservice = mala
+                self.provider.flush_recordset()
+        for buena in ('https://testing-concentrador.getnet.com.uy',
+                      'https://concentrador.getnet.com.uy/',
+                      'http://127.0.0.1:18401', 'http://localhost:18401',
+                      'http://[::1]:18401'):
+            self.provider.getnet_url_webservice = buena
+            self.provider.flush_recordset()
+        self.provider.getnet_url_webservice = False
+        self.provider.flush_recordset()
 
     def test_postear_con_lock_ata_el_lock_al_token(self):
         """

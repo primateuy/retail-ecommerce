@@ -9,9 +9,10 @@ credenciales por método de pago.
 """
 
 import logging
+from urllib.parse import urlparse
 
 from odoo import _, api, fields, models
-from odoo.exceptions import UserError
+from odoo.exceptions import UserError, ValidationError
 from odoo.tools import config
 
 from . import getnet_utils
@@ -76,6 +77,28 @@ class PaymentProvider(models.Model):
              '%s. La URL de producción la entrega New Age Data.'
              % getnet_utils.GETNET_URL_TESTING,
     )
+
+    @api.constrains('getnet_url_webservice')
+    def _check_getnet_url_https(self):
+        """
+        El sobre SOAP lleva el EmpHash: por HTTP plano viaja legible. Se
+        exige https; la única excepción es loopback, donde el hash no sale
+        de la máquina (es como se prueba contra un concentrador simulado).
+        """
+        for provider in self:
+            url = (provider.getnet_url_webservice or '').strip()
+            if not url:
+                continue
+            partes = urlparse(url)
+            loopback = partes.hostname in ('127.0.0.1', 'localhost', '::1')
+            if partes.scheme == 'https' and partes.hostname:
+                continue
+            if partes.scheme == 'http' and loopback:
+                continue
+            raise ValidationError(_(
+                'La URL del concentrador Getnet tiene que empezar con '
+                'https:// (%s). El pedido lleva el EmpHash y por http viaja '
+                'legible.', url))
     getnet_emp_cod = fields.Char(
         string='EmpCod',
         size=6,
