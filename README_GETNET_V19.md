@@ -8,20 +8,21 @@ Rama `19.0_getnet`. Port de la integración Getnet/TransAct desde `17.0_getnet @
 |---|---|
 | `odoo_pos_getnet_core` | proveedor, terminal con lock entre flujos, transacción, motor de polling, cliente SOAP, cron de recuperación, cierre de lote |
 | `odoo_pos_getnet_backend` | el flujo contable: cobrar y devolver desde **Contabilidad > Pagos** |
-| `odoo_pos_getnet_pos_backend` | la terminal Getnet para los medios integrados del **POS Backend** de Campera (P3). Depende de `pos_backend` @ `b5cbea5` |
+| `odoo_pos_getnet_pos_backend` | la terminal Getnet para los medios integrados del **POS Backend** de Campera (P3). Depende de `pos_backend` @ `b5cbea5`; el cobro automático usa `b20023a` |
+| `odoo_pos_getnet_promociones` | **promociones por tarjeta** en el cobro del POS Backend: lectura de la tarjeta (B), selección manual (A), PROMO NO APLICADA / NO COINCIDE. Depende de `pos_backend` @ `eb18622`. Ver su `doc/promociones.md` |
 
 ## Suites
 
-Medido el 27/09/2026 sobre la punta de la rama, sólo resultado:
+Medido el 28/09/2026 sobre la punta de la rama (fase 1 + promociones como línea de descuento), sólo resultado:
 
 | base | módulos | resultado |
 |---|---|---|
-| `o19_getnet_test` (v19, `l10n_uy_einvoice_uruware`, endpoints en testing) | core + backend | **107 / 107** |
-| `o19_getnet_pb_test` (copia de Campera staging con `pos_backend`) | core + backend + POS Backend | **145 / 145** |
+| `o19_getnet_test` (v19, `l10n_uy_einvoice_uruware`, endpoints en testing) | core + backend | **110 / 110** |
+| `o19_getnet_pb_test` (copia de Campera staging, `pos_backend` @ `eb18622`) | core + backend + POS Backend + promociones + `pos_backend` entero | **690 / 690** |
 
 ```bash
-odoo-bin -c <conf> -d <base> -u odoo_pos_getnet_core,odoo_pos_getnet_backend[,odoo_pos_getnet_pos_backend] \
-  --test-tags /odoo_pos_getnet_core,/odoo_pos_getnet_backend[,/odoo_pos_getnet_pos_backend] \
+odoo-bin -c <conf> -d <base> -u odoo_pos_getnet_core,odoo_pos_getnet_backend[,odoo_pos_getnet_pos_backend,odoo_pos_getnet_promociones,pos_backend] \
+  --test-tags /odoo_pos_getnet_core,/odoo_pos_getnet_backend[,/odoo_pos_getnet_pos_backend,/odoo_pos_getnet_promociones,/pos_backend] \
   --stop-after-init --max-cron-threads=0
 ```
 
@@ -130,11 +131,12 @@ a pasar.** Un cobro que quizá existe se resuelve consultando, no cobrando dos v
 ### A · El cobro con Getnet dio error o quedó «SIN CONFIRMAR»
 
 1. **No vuelvas a pasar la tarjeta.**
-2. En la línea de Getnet tocá **Consultar**. Esperá la respuesta: puede tardar hasta 3 minutos.
+2. **Esperá: la pantalla consulta sola** («Esperando el pinpad…») hasta el tope del pinpad (3
+   minutos). **Consultar** hace lo mismo al instante; no hace falta tocarlo.
 3. Según lo que diga:
    - **Autorizado** → seguí normal y **Finalizá**.
    - **Descartado** (con el motivo de la terminal) → la tarjeta NO se cobró. Cobrá con otro medio.
-   - **Sigue sin confirmar** → tocá **Descartar**, cobrá con otro medio y **avisá al supervisor**
+   - **Sigue sin confirmar** («se sigue verificando solo») → tocá **Descartar**, cobrá con otro medio y **avisá al supervisor**
      con el número de pedido. El cobro queda anotado: si después resulta aprobado, el sistema lo
      **devuelve solo** (cron de cobros huérfanos) y aparece en *Contabilidad > Pagos > «Getnet:
      requieren conciliación»* si no lo pudo resolver.
@@ -155,13 +157,23 @@ a pasar.** Un cobro que quizá existe se resuelve consultando, no cobrando dos v
 
 ### C · Antes de cerrar la caja
 
-- **Antes de cerrar, ningún cobro Getnet puede quedar «SIN CONFIRMAR».** Resolvelo con
-  **Consultar** (A.2) o con **Descartar** (A.3). Cerrar la caja con un cobro en vuelo deja la
-  pantalla esperando hasta 3 minutos mientras le pregunta a la terminal, y puede terminar en «Se
-  perdió la conexión» (hallazgo 1 de «Validación»). Si pasa, **no cierres de nuevo**: esperá, recargá
-  la página y avisá al supervisor.
+- **Antes de cerrar, ningún cobro Getnet debería quedar «SIN CONFIRMAR».** Resolvelo con
+  **Consultar** (A.2) o con **Descartar** (A.3). Desde la fase 1 cerrar ya no se cuelga (cada
+  consulta dura segundos), pero la caja no cierra limpio con plata sin saber.
 - El cierre de caja **cierra el lote de la terminal**. Si la terminal no contesta, la caja se cierra
   igual (con un Supervisor, que queda registrado) y el lote se cierra después.
+
+### D · Promociones por tarjeta
+
+- **«No se pudo leer la tarjeta… pasa a promociones manuales»**: si la tarjeta tiene promo, tocá
+  «Getnet · <promo>» y cobrá; si no, tocá **Agregar** de nuevo y se cobra el total.
+- **PROMO NO APLICADA**: **Seguir sin promo**, o **Reversar (DEV) y cobrar con promo** y volver a
+  cobrar con la misma tarjeta.
+- **PROMO NO COINCIDE**: **Reversar (DEV) y cobrar sin promo**, y cobrar el total.
+- **Rechazada con la promo aplicada** y se va a pagar de otra forma: **Quitar promo** primero.
+- **Si en una caja la lectura falla siempre**: un Manager POS la pasa a **Manual** (*Configuración
+  › Cajas › la caja › Medios de pago › fila Getnet › Modo de promociones Getnet*). Rige desde el
+  próximo cobro.
 
 ## Pendiente de publicar
 
@@ -171,17 +183,22 @@ a pasar.** Un cobro que quizá existe se resuelve consultando, no cobrando dos v
 > en la sección «Validación». Este bloque se actualiza en cada entrega; **no se pushea nada sin
 > que Daryl lo revise**.
 
-Actualizado: 27/09/2026 — entrega de validación con simulador.
+Actualizado: 28/09/2026 — fase 1 + promociones (línea de descuento). La rama publicada no lleva evidencia binaria: los videos quedan en «Desarrollos Documentos/Getnet Campera».
 
-**1. `pos_backend` de Campera** — dependencia de despliegue de P3 (hook 7 de cierre, arreglo de
-liberación, texto del contrato). Va primero: P3 publicado sin esto no cierra.
+**1. `pos_backend` de Campera** — dependencia de despliegue de P3 y de las promociones. Sobre
+`origin @ cb4223f`: `b5cbea5` (hook 7 de cierre, liberación) → `4935540` [FIX] descuento global con
+cobros confirmados → `b20023a` cobro automático → `927d4e0` Liberar para el cajero → `8b8356d`
+operaciones opcionales 8 → `eb18622` recarga tras un cobro que no arrancó. Va primero.
 
-    cd ~/Odoo/clients/campera/pos_backend && git push origin b5cbea59ea975e020d2ea331d9d20ed72daa18f7:refs/heads/19.0
+    cd ~/Odoo/clients/campera/pos_backend && git push origin <sha de la punta>:refs/heads/19.0
 
 **2. `retail-ecommerce` · `19.0_getnet`** — sobre `origin @ 1184177`, en este orden:
 `[FIX]` DL-1b (`dd071b1`) → `[FIX]` módulos v17 no instalables (`4a35d91`) → `[FIX]` núcleo, lock
-a nombre del token (`3a17e8d`) → `[FIX]` backend, polling como contador (`71d364a`) → `[FIX]` backend, facturas migradas de v17 (`41cbd38`) → los `[DOC]` de estado → **`[ADD]` P3** (un solo commit) → los
-`[DOC]` de evidencia de la Parte A y de la validación con simulador.
+a nombre del token → `[FIX]` backend, polling como contador → `[FIX]` backend, facturas migradas de
+v17 (error claro) → `[FIX]` estándar, facturas de v17 con su FacturaNro real → `[FIX]` núcleo, URL
+sólo https → los `[DOC]` de estado → **`[ADD]` P3** (un solo commit, con la consulta corta y la
+puesta al día de la línea) → los `[DOC]` de evidencia de la Parte A (guion, sin video) y de la validación con simulador
+→ **`[ADD]` promociones** → este `[DOC]`.
 
     cd ~/Odoo/shared/primateuy/retail-ecommerce-19.0 && git push origin <sha de la punta>:refs/heads/19.0_getnet
 
@@ -189,12 +206,9 @@ El sha de la punta **no puede escribirse acá**: este archivo vive en un commit 
 el sha de cualquier commit de arriba depende del de éste. El comando completo, con el sha, va en el
 reporte de cada entrega.
 
-**3. Puntero del submódulo en Campera** — **después** del paso 2 y sólo a un sha ya publicado en
-`19.0_getnet` (regla 3 de abajo). Se commitea al momento y el comando se arma con ese sha. La rama
-es la del entorno donde se despliega (hoy staging: `staging.27.08.2026v2`; la de producción v19 la
-define Daryl):
-
-    cd ~/Odoo/clients/campera && git push origin <sha del commit del puntero>:refs/heads/<rama de Campera>
+**3. Puntero del submódulo en Campera** — **lo mueve Daryl a mano**, después del paso 2 y sólo a
+un sha ya publicado en `19.0_getnet` (regla 3 de abajo). Quien entrega no lo commitea ni arma su
+comando.
 
 **No va en esta secuencia:**
 
