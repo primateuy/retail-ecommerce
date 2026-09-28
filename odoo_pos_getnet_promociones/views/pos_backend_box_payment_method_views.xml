@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Mismo lugar que la terminal Getnet: la lista embutida en el form de la caja. -->
+    <record id="view_box_form_getnet_promociones" model="ir.ui.view">
+        <field name="name">pos_backend.box.form.getnet.promociones</field>
+        <field name="model">pos_backend.box</field>
+        <field name="inherit_id" ref="odoo_pos_getnet_pos_backend.view_box_form_getnet_terminal"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='payment_method_ids']//field[@name='getnet_terminal_id']" position="after">
+                <field name="getnet_modo_promociones"
+                       invisible="terminal_provider != 'getnet'"/>
+            </xpath>
+        </field>
+    </record>
+</odoo>

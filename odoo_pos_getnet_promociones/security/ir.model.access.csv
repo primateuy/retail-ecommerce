@@ -1,0 +1,5 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_getnet_promocion_seller,getnet.promocion.seller,model_getnet_promocion,pos_backend.group_pos_seller,1,0,0,0
+access_getnet_promocion_manager,getnet.promocion.manager,model_getnet_promocion,pos_backend.group_pos_manager,1,1,1,1
+access_getnet_promocion_evento_seller,getnet.promocion.evento.seller,model_getnet_promocion_evento,pos_backend.group_pos_seller,1,0,0,0
+access_getnet_lectura_tarjeta_supervisor,getnet.lectura.tarjeta.supervisor,model_getnet_lectura_tarjeta,pos_backend.group_pos_supervisor,1,0,0,0

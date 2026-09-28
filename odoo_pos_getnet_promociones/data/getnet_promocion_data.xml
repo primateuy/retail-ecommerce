@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo noupdate="1">
+    <!-- Producto de la línea de descuento de las promociones. La cuenta la pone
+         cada promoción (según quién la financia), no este producto. -->
+    <record id="producto_descuento_promocion" model="product.product">
+        <field name="name">Descuento promoción Getnet</field>
+        <field name="type">service</field>
+        <field name="sale_ok" eval="True"/>
+        <field name="purchase_ok" eval="False"/>
+        <field name="list_price">0</field>
+        <field name="taxes_id" eval="[(5, 0, 0)]"/>
+    </record>
+</odoo>

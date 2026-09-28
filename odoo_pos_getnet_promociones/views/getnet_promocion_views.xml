@@ -1,0 +1,136 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_getnet_promocion_list" model="ir.ui.view">
+        <field name="name">getnet.promocion.list</field>
+        <field name="model">getnet.promocion</field>
+        <field name="arch" type="xml">
+            <list>
+                <field name="sequence" widget="handle"/>
+                <field name="name"/>
+                <field name="tarjeta_id"/>
+                <field name="emisor_id"/>
+                <field name="tarjeta_tipo"/>
+                <field name="bines" optional="show"/>
+                <field name="porcentaje"/>
+                <field name="financia"/>
+                <field name="cuenta_id"/>
+                <field name="date_from"/>
+                <field name="date_to"/>
+                <field name="company_id" groups="base.group_multi_company"/>
+                <field name="active" column_invisible="1"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_getnet_promocion_form" model="ir.ui.view">
+        <field name="name">getnet.promocion.form</field>
+        <field name="model">getnet.promocion</field>
+        <field name="arch" type="xml">
+            <form>
+                <sheet>
+                    <widget name="web_ribbon" title="Archivada" bg_color="text-bg-danger" invisible="active"/>
+                    <div class="oe_title">
+                        <label for="name"/>
+                        <h1><field name="name" placeholder="p. ej. OCA 20 %"/></h1>
+                    </div>
+                    <group>
+                        <group string="Tarjeta">
+                            <field name="tarjeta_id"/>
+                            <field name="emisor_id"/>
+                            <field name="tarjeta_tipo"/>
+                            <field name="bines" placeholder="421301, 454600-454699"/>
+                        </group>
+                        <group string="Descuento">
+                            <field name="porcentaje"/>
+                            <field name="financia" widget="radio"/>
+                            <field name="cuenta_id"/>
+                            <field name="producto_descuento_id"
+                                   domain="[('type', '=', 'service')]"/>
+                            <field name="date_from"/>
+                            <field name="date_to"/>
+                            <field name="sequence"/>
+                            <field name="company_id" groups="base.group_multi_company"/>
+                            <field name="active" invisible="1"/>
+                        </group>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_getnet_promocion_search" model="ir.ui.view">
+        <field name="name">getnet.promocion.search</field>
+        <field name="model">getnet.promocion</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="name"/>
+                <filter name="archivadas" string="Archivadas" domain="[('active', '=', False)]"/>
+                <group>
+                    <filter name="por_financia" string="Quién financia" context="{'group_by': 'financia'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_getnet_promocion" model="ir.actions.act_window">
+        <field name="name">Promociones Getnet</field>
+        <field name="res_model">getnet.promocion</field>
+        <field name="view_mode">list,form</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">Cargá las promociones por tarjeta</p>
+            <p>Sello, emisor, tipo y BIN opcional. La misma lista la usa la
+               lectura automática de la tarjeta y la selección manual del cajero.</p>
+        </field>
+    </record>
+
+    <menuitem id="menu_getnet_promocion" name="Promociones Getnet"
+              parent="pos_backend.menu_pos_backend_configuration"
+              action="action_getnet_promocion"
+              groups="pos_backend.group_pos_manager" sequence="60"/>
+
+    <record id="view_pos_backend_order_form_getnet_promo" model="ir.ui.view">
+        <field name="name">pos_backend.order.form.getnet.promo</field>
+        <field name="model">pos_backend.order</field>
+        <field name="inherit_id" ref="pos_backend.view_pos_backend_order_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//sheet" position="inside">
+                <group string="Promoción Getnet" invisible="not getnet_promocion_evento_ids and not getnet_promocion_id">
+                    <field name="getnet_promocion_id"/>
+                    <field name="getnet_promocion_modo" invisible="not getnet_promocion_id"/>
+                    <field name="getnet_promocion_evento_ids" nolabel="1" colspan="2">
+                        <list>
+                            <field name="create_date" string="Cuándo"/>
+                            <field name="evento"/>
+                            <field name="promocion_id"/>
+                            <field name="tarjeta"/>
+                            <field name="ticket"/>
+                            <field name="importe_descuento"/>
+                            <field name="detalle"/>
+                            <field name="user_id"/>
+                        </list>
+                    </field>
+                    <field name="getnet_lectura_ids" nolabel="1" colspan="2"
+                           groups="pos_backend.group_pos_supervisor">
+                        <list>
+                            <field name="create_date" string="Cuándo"/>
+                            <field name="state"/>
+                            <field name="motivo"/>
+                            <field name="datos"/>
+                            <field name="token" optional="hide"/>
+                        </list>
+                        <form>
+                            <group>
+                                <field name="state"/>
+                                <field name="motivo"/>
+                                <field name="datos"/>
+                                <field name="token"/>
+                                <field name="fecha_lectura"/>
+                            </group>
+                            <field name="respuesta"/>
+                        </form>
+                    </field>
+                </group>
+            </xpath>
+        </field>
+    </record>
+</odoo>
