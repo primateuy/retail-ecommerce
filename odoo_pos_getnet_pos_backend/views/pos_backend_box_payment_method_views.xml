@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <!--
+            El medio de pago de la caja se edita en una lista EMBUTIDA en el
+            form de la caja, no en un form propio: el inherit va sobre el form
+            de pos_backend.box y el xpath entra a esa lista. Buscar un
+            "view_..._box_payment_method_form" es perder el tiempo, no existe.
+        -->
+        <record id="view_box_form_getnet_terminal" model="ir.ui.view">
+            <field name="name">pos_backend.box.form.getnet.terminal</field>
+            <field name="model">pos_backend.box</field>
+            <field name="inherit_id" ref="pos_backend.view_pos_backend_box_form"/>
+            <field name="arch" type="xml">
+                <xpath expr="//field[@name='payment_method_ids']//field[@name='terminal_provider']" position="after">
+                    <field name="getnet_terminal_id"
+                           invisible="terminal_provider != 'getnet'"
+                           required="terminal_provider == 'getnet'"/>
+                </xpath>
+            </field>
+        </record>
+    </data>
+</odoo>
