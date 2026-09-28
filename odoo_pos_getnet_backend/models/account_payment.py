@@ -10,6 +10,7 @@ reversión de un cobro aprobado se hace con una devolución (DEV +
 TicketOriginal), no desde el form.
 """
 
+import ast
 import logging
 import threading
 
@@ -279,13 +280,15 @@ class AccountPayment(models.Model):
         try:
             numero = move.numero_cfe()
         except Exception as error:  # noqa: BLE001 - se re-levanta con contexto
-            raise UserError(_(
-                'No se pudo obtener el número de CFE de la factura '
-                '%(factura)s (%(error)s); no se puede enviar el cobro a la '
-                'terminal Getnet. Si es una factura anterior a la migración, '
-                'cobrala sin cargarla en «Facturas origen (Getnet)» (sale con '
-                'FacturaNro=0).',
-                factura=move.display_name, error=error)) from error
+            numero = self._getnet_numero_cfe_formato_v17(move)
+            if not numero:
+                raise UserError(_(
+                    'No se pudo obtener el número de CFE de la factura '
+                    '%(factura)s (%(error)s); no se puede enviar el cobro a la '
+                    'terminal Getnet. Si es una factura anterior a la migración, '
+                    'cobrala sin cargarla en «Facturas origen (Getnet)» (sale con '
+                    'FacturaNro=0).',
+                    factura=move.display_name, error=error)) from error
         if not numero:
             raise UserError(_(
                 'La factura %s no tiene número de CFE asignado; no se '
@@ -303,6 +306,34 @@ class AccountPayment(models.Model):
         vals['FacturaConsumidorFinal'] = (
             move.cfe_type in GETNET_CFE_CONSUMIDOR_FINAL)
         return vals
+
+    @api.model
+    def _getnet_numero_cfe_formato_v17(self, move):
+        """
+        Número de CFE de una factura firmada ANTES de migrar a 19.0.
+
+        Esas facturas guardan `cfe` como el repr de un dict (formato de v17)
+        y el numero_cfe() de uruware en 19.0 sólo lee el XML de Uruware. Se
+        lee con ast.literal_eval —que no ejecuta nada— y el número se acepta
+        SÓLO si tipo-serie-número coinciden con el nombre de la factura
+        (101-A-175216): verificado sobre 300 facturas reales de Campera, 300
+        coinciden. Cualquier otra cosa devuelve 0 y deja el error claro.
+        """
+        texto = (move.cfe or '').strip()
+        if not texto.startswith('{'):
+            return 0
+        try:
+            datos = ast.literal_eval(texto)
+            cfe = datos['CFE']
+            clave = next(k for k in cfe if not k.startswith('@'))
+            iddoc = cfe[clave]['Encabezado']['IdDoc']
+            tipo, serie = str(iddoc['TipoCFE']), str(iddoc['Serie'])
+            nro = int(iddoc['Nro'])
+        except Exception:  # noqa: BLE001 - formato ajeno: no se adivina
+            return 0
+        if (move.name or '') != '%s-%s-%s' % (tipo, serie, nro):
+            return 0
+        return nro
 
     def _getnet_prepare_transaccion_vals(self, provider, terminal):
         """Payload completo de PostearTransaccion para este pago."""

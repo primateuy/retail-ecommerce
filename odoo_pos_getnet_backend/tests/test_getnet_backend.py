@@ -263,24 +263,55 @@ class TestGetnetBackend(TransactionCase):
         self.assertIn(invoice.name, str(capturado.exception))
 
     # Cómo guarda `cfe` una factura firmada ANTES de la migración de Campera a
-    # 19.0: no el XML de Uruware sino el repr de un dict. Recortado del real
-    # (101-A-175216, 14/07/2026): lo que importa es el formato, no el contenido.
+    # 19.0: no el XML de Uruware sino el repr de un dict (formato de v17).
+    # Recortado del real (101-A-175216, 14/07/2026) con la ruta completa hasta
+    # el número; el tipo/serie/número se rellenan con los de la factura.
     CFE_MIGRADO = (
         "{'CFE': {'@xmlns': 'http://cfe.dgi.gub.uy', '@version': '1.0', "
         "'eTck': {'TmstFirma': '2026-07-14T14:30:30-03:00', 'Encabezado': "
-        "{'IdDoc': {'TipoCFE': '101', 'Serie': 'A', 'Nro': '175216'}}}}}")
+        "{'IdDoc': {'TipoCFE': '%(tipo)s', 'Serie': '%(serie)s', "
+        "'Nro': '%(nro)s', 'FchEmis': '2026-07-14'}}}}}")
 
-    def test_factura_migrada_de_v17_da_error_claro_y_no_un_error_crudo(self):
+    def _con_nombre_de_cfe(self, invoice, tipo='101', serie='A', nro=175216):
+        """La factura con el nombre que le pone la localización: 101-A-175216."""
+        invoice.sudo().write({'name': '%s-%s-%s' % (tipo, serie, nro)})
+        return invoice
+
+    def test_factura_migrada_de_v17_se_lee_con_el_formato_viejo(self):
         """
         15.639 de las 15.700 facturas firmadas de Campera guardan `cfe` en el
-        formato de v17 (repr de un dict), y el numero_cfe() de uruware en
-        19.0 lo parsea como XML: ExpatError. El envoltorio atrapaba sólo
-        UserError/ValidationError, así que el contador que cobraba una factura
-        vieja recibía un error crudo del parser. Visto con datos reales de
-        Campera contra el concentrador simulado el 27/09/2026.
+        formato de v17, y el numero_cfe() de uruware en 19.0 no lo lee. El
+        módulo lee ese formato (sin tocar la localización) y toma el número
+        SÓLO si tipo-serie-número coinciden con el nombre de la factura:
+        verificado sobre 300 facturas reales, 300 coinciden.
         """
+        invoice = self._con_nombre_de_cfe(self._create_invoice_anexo())
+        invoice.sudo().write({'cfe': self.CFE_MIGRADO % {
+            'tipo': '101', 'serie': 'A', 'nro': '175216'}})
+        payment = self._create_payment(
+            getnet_source_invoice_ids=[(6, 0, invoice.ids)])
+        vals = payment._getnet_factura_vals_from_move(invoice)
+        self.assertEqual(vals['FacturaNro'], 175216)
+        self.assertEqual(vals['FacturaMonto'], 33200)
+
+    def test_factura_migrada_que_no_coincide_con_su_nombre_no_se_usa(self):
+        """
+        Si el número del formato viejo no coincide con el nombre de la
+        factura, no se adivina: error claro que nombra la factura.
+        """
+        invoice = self._con_nombre_de_cfe(self._create_invoice_anexo())
+        invoice.sudo().write({'cfe': self.CFE_MIGRADO % {
+            'tipo': '101', 'serie': 'A', 'nro': '999'}})
+        payment = self._create_payment(
+            getnet_source_invoice_ids=[(6, 0, invoice.ids)])
+        with self.assertRaises(UserError) as capturado:
+            payment._getnet_factura_vals_from_move(invoice)
+        self.assertIn(invoice.name, str(capturado.exception))
+
+    def test_cfe_ilegible_da_error_claro_y_no_un_error_crudo(self):
+        """Ni XML ni el formato de v17: error que nombra la factura (DL-2b)."""
         invoice = self._create_invoice_anexo()
-        invoice.sudo().write({'cfe': self.CFE_MIGRADO})
+        invoice.sudo().write({'cfe': 'basura que no es ningún formato'})
         payment = self._create_payment(
             getnet_source_invoice_ids=[(6, 0, invoice.ids)])
         with self.assertRaises(UserError) as capturado:
