@@ -1,6 +1,10 @@
+import logging
+from datetime import datetime, timedelta
+
 from odoo import models, fields, api, _
 from odoo.exceptions import ValidationError, UserError
-from datetime import date
+
+_logger = logging.getLogger(__name__)
 
 
 class PriceGroupLine(models.Model):
@@ -216,42 +220,42 @@ class PriceGroupLine(models.Model):
             
             record.is_current = True
 
-    @api.constrains('date_start', 'date_end')
+    @api.constrains('date_start', 'date_end', 'price_group_id', 'product_tmpl_id', 'product_id', 'activo')
     def _check_dates(self):
         """
-        Valida que las fechas sean coherentes y no haya superposición.
+        Valida que las fechas sean coherentes y que no haya dos agrupadores
+        vigentes a la vez para el mismo producto.
+
+        Antes sólo miraba las fechas: al crear una línea no corría nunca (las
+        fechas no vienen en los valores) y la importación dejaba duplicados.
         """
         for record in self:
-            # Validar que fecha de inicio no sea posterior a fecha de fin
             if record.date_start and record.date_end and record.date_start > record.date_end:
                 raise ValidationError(_(
                     'La fecha de inicio no puede ser posterior a la fecha de fin.'
                 ))
-            
-            # Validar que no haya superposición con otras líneas del mismo producto
-            self._check_date_overlap(record)
+            if record.activo:
+                self._check_date_overlap(record)
+
+    def _dominio_mismo_producto(self, product_tmpl_id, product_id):
+        """Líneas activas del mismo producto: las de la variante si la línea es
+        de variante, o las propias del template (sin variante) si no."""
+        domain = [('activo', '=', True)]
+        if product_id:
+            domain.append(('product_id', '=', product_id))
+        else:
+            domain += [('product_tmpl_id', '=', product_tmpl_id), ('product_id', '=', False)]
+        return domain
 
     def _check_date_overlap(self, record):
         """
-        Verifica que no haya superposición de fechas con otras líneas del mismo producto.
+        Verifica que no haya superposición de fechas con otras líneas del mismo
+        producto, sea cual sea el agrupador: un producto tiene un solo
+        agrupador vigente por vez.
         """
-        domain = [
-            ('id', '!=', record.id),
-            ('activo', '=', True),
-            ('price_group_id', '=', record.price_group_id.id)
-        ]
-        
-        # Determinar el producto a validar
-        if record.product_id:
-            domain.append(('product_id', '=', record.product_id.id))
-        else:
-            domain.append(('product_tmpl_id', '=', record.product_tmpl_id.id))
-            domain.append(('product_id', '=', False))
-        
-        # Buscar líneas que puedan superponerse
-        overlapping_lines = self.search(domain)
-        
-        for line in overlapping_lines:
+        domain = self._dominio_mismo_producto(record.product_tmpl_id.id, record.product_id.id)
+        domain.append(('id', '!=', record.id))
+        for line in self.search(domain):
             if self._dates_overlap(record, line):
                 raise ValidationError(_(
                     'Existe superposición de fechas con la línea "%s". '
@@ -261,24 +265,16 @@ class PriceGroupLine(models.Model):
 
     def _dates_overlap(self, line1, line2):
         """
-        Determina si dos líneas tienen fechas que se superponen.
+        Determina si dos líneas tienen fechas que se superponen. Sin fecha de
+        inicio o de fin, el intervalo queda abierto de ese lado.
+
+        Se usaba date.min/date.max contra campos Datetime: con una sola de las
+        dos fechas cargada la comparación reventaba con TypeError.
         """
-        # Si ambas líneas no tienen fechas, se superponen
-        if not line1.date_start and not line1.date_end and not line2.date_start and not line2.date_end:
-            return True
-        
-        # Si una línea no tiene fechas, se superpone con cualquier otra
-        if not line1.date_start and not line1.date_end:
-            return True
-        if not line2.date_start and not line2.date_end:
-            return True
-        
-        # Validar superposición con fechas específicas
-        start1 = line1.date_start or date.min
-        end1 = line1.date_end or date.max
-        start2 = line2.date_start or date.min
-        end2 = line2.date_end or date.max
-        
+        start1 = line1.date_start or datetime.min
+        end1 = line1.date_end or datetime.max
+        start2 = line2.date_start or datetime.min
+        end2 = line2.date_end or datetime.max
         return start1 <= end2 and start2 <= end1
 
     @api.constrains('product_tmpl_id', 'product_id')
@@ -371,16 +367,99 @@ class PriceGroupLine(models.Model):
         else:
             self.price_list_item_id.write(vals)
 
+    def _preparar_vals_producto(self, vals):
+        """
+        Completa el producto de la línea cuando viene desde la lista del
+        template (x_price_group_line_ids del producto, que es lo que usa la
+        importación).
+
+        Esa lista tiene como inversa product_tmpl_relacion_id, que es un campo
+        calculado: Odoo sólo completa ése y la línea quedaba sin
+        product_tmpl_id. La regla de la lista de precios se creaba sin producto
+        y Odoo la rechazaba ("Please specify the product for which this rule
+        should be applied"): no se podía importar ni un archivo recién exportado.
+        """
+        if (vals.get('product_tmpl_relacion_id') and not vals.get('product_tmpl_id')
+                and not vals.get('product_id') and vals.get('origin', 'template') == 'template'):
+            vals['product_tmpl_id'] = vals['product_tmpl_relacion_id']
+        return vals
+
+    def _reemplazar_agrupador_vigente(self, vals):
+        """
+        Aplica la regla de un solo agrupador vigente por producto antes de crear.
+
+        - Si el producto ya tiene ESE agrupador vigente, no se crea nada y se
+          devuelve la línea existente: reimportar un archivo no duplica.
+        - Si tiene otro, se cierra el anterior justo antes de que empiece el
+          nuevo (queda el historial y su regla de precio deja de aplicar). Una
+          línea nueva sin fecha de inicio empieza ahora, para no superponerse
+          con el historial del producto.
+
+        :return: la línea existente a reutilizar, o una vacía si hay que crear.
+        """
+        tmpl_id, product_id = vals.get('product_tmpl_id'), vals.get('product_id')
+        if not vals.get('activo', True) or not (tmpl_id or product_id) or not vals.get('price_group_id'):
+            return self.browse()
+        date_start = fields.Datetime.to_datetime(vals.get('date_start'))
+        date_end = fields.Datetime.to_datetime(vals.get('date_end'))
+        otras = self.search(self._dominio_mismo_producto(tmpl_id, product_id))
+        if not otras:
+            return self.browse()
+
+        mismo = otras.filtered(lambda l: l.price_group_id.id == vals['price_group_id'])
+        if not date_start and not date_end:
+            # Sin fechas = "este es el agrupador de ahora": si ya está vigente
+            # y sin fin, no hay nada que hacer.
+            # No se usa is_current: es almacenado y queda con el "hoy" del día
+            # en que se calculó.
+            ahora = fields.Datetime.now()
+            vigente = mismo.filtered(lambda l: not l.date_end and (not l.date_start or l.date_start <= ahora))
+            if vigente:
+                return vigente[:1]
+        else:
+            igual = mismo.filtered(lambda l: l.date_start == date_start and l.date_end == date_end)
+            if igual:
+                return igual[:1]
+
+        corte = date_start or fields.Datetime.now().replace(microsecond=0)
+        if not date_start:
+            vals['date_start'] = corte
+        fin_nueva = date_end or datetime.max
+        for linea in otras:
+            inicio = linea.date_start or datetime.min
+            fin = linea.date_end or datetime.max
+            if fin < corte or inicio > fin_nueva:
+                continue  # no se pisan
+            if inicio >= corte:
+                raise UserError(_(
+                    'El producto ya tiene programado el agrupador "%s" a partir del %s. '
+                    'Ajuste o elimine esa línea antes de asignar "%s".'
+                ) % (linea.price_group_id.name, linea.date_start,
+                     self.env['x_price_group'].browse(vals['price_group_id']).name))
+            linea.write({'date_end': corte - timedelta(seconds=1)})
+            _logger.info('Agrupador de precio: se cierra la línea %s (%s) al asignar otro agrupador.',
+                         linea.id, linea.price_group_id.name)
+        return self.browse()
+
     @api.model_create_multi
     def create(self, vals_list):
-        new_ids = super(PriceGroupLine, self).create(vals_list)
-
-        for new_id in new_ids:
+        # Una por una: dos filas del mismo producto en una misma importación
+        # tienen que verse entre sí para el reemplazo.
+        lineas = self.browse()
+        for vals in vals_list:
+            vals = self._preparar_vals_producto(dict(vals))
+            existente = self._reemplazar_agrupador_vigente(vals)
+            if existente:
+                # Concatenado (no unión): una posición por cada vals, como espera
+                # la importación.
+                lineas += existente
+                continue
+            new_id = super(PriceGroupLine, self).create([vals])
             if not new_id.price_group_id.lista_precio_id:
                 raise UserError(f'El agrupador {new_id.price_group_id.name} no tiene lista de precio configurada')
             new_id.actualizar_lista_precio_item()
-
-        return new_ids
+            lineas += new_id
+        return lineas
 
     def write(self, vals):
         res = super(PriceGroupLine, self).write(vals)

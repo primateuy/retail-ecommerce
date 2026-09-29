@@ -1,6 +1,6 @@
 {
     'name': 'Agrupador de Precio con Vigencia para Listas de Precios',
-    'version': '17.0.2.0',
+    'version': '17.0.2.1',
     'category': 'Sales',
     'summary': 'Permite aplicar reglas de lista de precios según agrupadores de precio con vigencia temporal',
     'description': """
