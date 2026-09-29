@@ -11,7 +11,7 @@ cheque quede registrado como en contabilidad manual.
 import logging
 
 from odoo import _, models
-from odoo.tools import float_compare
+from odoo.tools import float_compare, float_is_zero
 
 _logger = logging.getLogger(__name__)
 
@@ -55,6 +55,73 @@ class PosSession(models.Model):
                 "fields": [],
             },
         }
+
+    def _bi_pos_es_cheque_de_terceros(self, payment):
+        """El pago trae datos de cheque y su diario puede registrar cheques de terceros."""
+        payment_method = payment.payment_method_id
+        journal = payment_method.journal_id
+        if not (journal and payment_method.allow_check_info and payment.check_number):
+            return False
+        if not journal._get_available_payment_method_lines("inbound").filtered(
+                lambda line: line.code == "new_third_party_checks"):
+            return False
+        if not (payment.check_number or "").strip().isdigit():
+            # l10n_latam_check sólo acepta dígitos: crear el cheque haría fallar
+            # el cierre de TODA la caja. Se registra como efectivo y se avisa.
+            _logger.warning(
+                "POS Check Info: el número de cheque %r del pago %s no es numérico; se "
+                "registra como efectivo y no se crea el cheque de terceros.",
+                payment.check_number, payment.id)
+            return False
+        return True
+
+    def _accumulate_amounts(self, data):
+        """Los cheques de diarios de EFECTIVO van al camino «banco por pago».
+
+        🔴 Odoo reparte los pagos al cerrar la sesión por tipo de diario. Los
+        diarios de cheques de terceros de l10n_latam_check son de tipo EFECTIVO,
+        y por ese camino sólo se genera una línea de extracto por sesión: nunca
+        se llama a `_create_split_account_payment`, que es donde se crea el
+        cheque. Por eso, con el método configurado sobre un diario de cheques,
+        los datos se cargaban en el PDV pero el cheque no se creaba (support,
+        21 al 24-09-2026).
+
+        Acá, después del reparto estándar, cada pago con datos de cheque de un
+        diario de efectivo se saca del grupo de efectivo y se pasa al de «banco
+        por pago»: sigue el mismo camino que ya creaba el cheque en diarios
+        bancarios. El resto de los pagos no cambia.
+        """
+        data = super()._accumulate_amounts(data)
+        split_bank = data["split_receivables_bank"]
+        split_cash = data["split_receivables_cash"]
+        combine_cash = data["combine_receivables_cash"]
+        vacio = {"amount": 0.0, "amount_converted": 0.0}
+        for order in self._get_closed_orders():
+            for payment in order.payment_ids:
+                if float_is_zero(payment.amount, precision_rounding=self.currency_id.rounding) \
+                        or payment.payment_method_id.type != "cash" \
+                        or not self._bi_pos_es_cheque_de_terceros(payment):
+                    continue
+                if not self.env["res.partner"]._find_accounting_partner(payment.partner_id):
+                    # El camino «por pago» exige cliente y, si falta, Odoo corta el
+                    # cierre de TODA la caja. Sin cliente, el pago sigue como efectivo.
+                    _logger.warning(
+                        "POS Check Info: el cheque %s de la orden %s no tiene cliente; se "
+                        "registra como efectivo y no se crea el cheque de terceros.",
+                        payment.check_number, order.name)
+                    continue
+                if payment in split_cash:
+                    split_bank[payment] = split_cash.pop(payment)
+                    continue
+                grupo = combine_cash.get(payment.payment_method_id)
+                if grupo is None:
+                    continue
+                montos = self._update_amounts(dict(vacio), {"amount": payment.amount},
+                                              payment.payment_date)
+                grupo["amount"] -= montos["amount"]
+                grupo["amount_converted"] -= montos["amount_converted"]
+                split_bank[payment] = montos
+        return data
 
     def _create_split_account_payment(self, payment, amounts):
         """

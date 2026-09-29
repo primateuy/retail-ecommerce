@@ -3,7 +3,7 @@
 
 {
     'name': 'POS Cheque Information',
-    'version': '17.0.0.1',
+    'version': '17.0.0.2',
     'category': 'Point of Sale',
     'summary': 'Pos check information on pos cheque info on point of sale cheque details point of sales check information on receipt in pos cheque number on pos receipt check info pos order receipt cheque info pos payment cheque info point of sales cheque',
     'description': """The Point of Sale Check Info odoo app helps users to manage crucial information related to checks like the bank, customer name, account number, and check number within point of sale operations for businesses that accept check payments. It ensures efficient check management from point of sale.""",

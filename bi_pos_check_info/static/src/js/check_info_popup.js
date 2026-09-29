@@ -43,6 +43,10 @@ export class CheckInfoPopup extends AbstractAwaitablePopup {
         var bank_account = document.getElementById("bank_account").value;
         if (!owner_name || !check_number || !bank_account) {
             alert("Please Fill Check Details !!")
+        } else if (!/^\d+$/.test(check_number.trim())) {
+            // El cheque de terceros de Odoo (l10n_latam_check) sólo acepta dígitos:
+            // con otro formato no se podría crear al cerrar la caja.
+            alert("El número de cheque sólo puede tener dígitos.")
         }else{
             return super.confirm();
         }
