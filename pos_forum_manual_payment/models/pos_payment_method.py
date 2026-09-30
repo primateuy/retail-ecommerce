@@ -87,7 +87,12 @@ class PosPaymentMethod(models.Model):
             if not rec.manual_transaction_enabled or not rec.manual_provider_id:
                 rec.manual_payment_popup_config = "[]"
                 continue
-            lines = rec._build_manual_payment_popup_field_lines()
+            # sudo: lo calcula la carga del PDV como el cajero, y el catálogo
+            # apunta a ir.model (relation_model_id), que Odoo sólo deja leer a
+            # Administración/Permisos de acceso. Sin sudo el PDV no abría para
+            # un usuario sin administrador. Son etiquetas y códigos de
+            # configuración, nada sensible.
+            lines = rec.sudo()._build_manual_payment_popup_field_lines()
             rec.manual_payment_popup_config = json.dumps(lines)
 
     def _build_manual_payment_popup_field_lines(self):

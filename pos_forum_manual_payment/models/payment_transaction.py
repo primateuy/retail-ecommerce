@@ -450,6 +450,9 @@ class PaymentTransaction(models.Model):
         """
         if raw in (None, False, ""):
             return ""
+        # sudo: corre al sincronizar el pedido, como el cajero, y
+        # relation_model_id es un ir.model, que el cajero no puede leer.
+        request_field = request_field.sudo()
         modelo = (
             request_field.relation_model_id.model
             if request_field.relation_model_id else "payment.method"
