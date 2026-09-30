@@ -1,0 +1,177 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <!--
+            Form del pago con terminal Fiserv.
+
+            Bloqueo de los botones estándar en modo ADITIVO (separator=" or "
+            add=...). En 17.0 esta vista REEMPLAZABA el invisible entero con
+            priority 15, y l10n_uy_einvoice_base —que también lo reemplaza, con
+            priority 16— se aplicaba después y se lo comía: era el «flag de
+            borrador pisado por einvoice». Aditivo y con la priority por
+            defecto, esta vista se aplica después de la de einvoice (por orden
+            de instalación) y suma su término sin pisar el de nadie. Getnet hace
+            lo mismo con los suyos: en una base con los dos, cada uno aporta su
+            término y el puente neutraliza el ajeno.
+        -->
+        <record id="account_payment_form_fiserv_terminal" model="ir.ui.view">
+            <field name="name">account.payment.form.fiserv.terminal</field>
+            <field name="model">account.payment</field>
+            <field name="inherit_id" ref="account.view_account_payment_form"/>
+            <field name="arch" type="xml">
+                <xpath expr="//header" position="inside">
+                    <!-- Campos técnicos: garantizan que el cliente los cargue -->
+                    <field name="fiserv_is_integrated_journal" invisible="1"/>
+                    <field name="fiserv_is_fiserv_payment_line" invisible="1"/>
+                    <field name="fiserv_tx_is_done" invisible="1"/>
+                    <field name="fiserv_tx_is_pending" invisible="1"/>
+                    <field name="fiserv_tx_can_requery" invisible="1"/>
+                    <field name="fiserv_tx_state" invisible="1"/>
+                    <field name="fiserv_async_terminal_pending" invisible="1"/>
+                    <field name="fiserv_payment_tx_provider_code" invisible="1"/>
+                    <field name="fiserv_selectable_terminal_ids" invisible="1"/>
+                    <field name="fiserv_need_terminal_choice" invisible="1"/>
+                    <field name="pos_integrated_post_blocked" invisible="1"/>
+                    <field name="pos_integrated_cancel_blocked" invisible="1"/>
+                    <field name="pos_integrated_draft_blocked" invisible="1"/>
+                </xpath>
+                <xpath expr="//button[@name='action_post']" position="attributes">
+                    <attribute name="invisible" separator=" or " add="pos_integrated_post_blocked"/>
+                </xpath>
+                <xpath expr="//button[@name='action_cancel']" position="attributes">
+                    <attribute name="invisible" separator=" or " add="pos_integrated_cancel_blocked"/>
+                </xpath>
+                <xpath expr="//button[@name='action_draft']" position="attributes">
+                    <attribute name="invisible" separator=" or " add="pos_integrated_draft_blocked"/>
+                </xpath>
+                <xpath expr="//button[@name='action_reject']" position="attributes">
+                    <attribute name="invisible" separator=" or " add="pos_integrated_cancel_blocked"/>
+                </xpath>
+                <xpath expr="//button[@name='action_post']" position="before">
+                    <button name="action_fiserv_create_transaction"
+                            type="object"
+                            string="Crear transacción"
+                            class="oe_highlight"
+                            invisible="state != 'draft' or not fiserv_is_fiserv_payment_line or fiserv_async_terminal_pending or fiserv_tx_is_done or fiserv_tx_is_pending"/>
+                    <button name="action_fiserv_requery"
+                            type="object"
+                            string="Reconsultar en ITD"
+                            class="btn-secondary"
+                            invisible="state != 'draft' or not fiserv_tx_can_requery or fiserv_async_terminal_pending"/>
+                    <button name="action_fiserv_mark_verified"
+                            type="object"
+                            string="Verificada: sin cobro"
+                            class="btn-secondary"
+                            groups="account.group_account_user"
+                            invisible="state != 'draft' or not fiserv_tx_is_pending or fiserv_async_terminal_pending"
+                            confirm="¿Verificó en el pinpad o en el cierre de lote que esta operación NO se cobró? La transacción se cancela y el pago queda libre para volver a cobrar."/>
+                </xpath>
+                <xpath expr="//sheet" position="before">
+                    <div role="status" class="alert alert-warning text-center mb-0"
+                         invisible="not fiserv_async_terminal_pending">
+                        <i class="fa fa-spinner fa-spin me-2" title="Procesando"/>
+                        <strong>Procesando en la terminal Fiserv... Espere por favor.</strong>
+                    </div>
+                    <div role="alert" class="alert alert-danger text-center mb-0"
+                         invisible="fiserv_async_terminal_pending or not fiserv_tx_is_pending or state != 'draft'">
+                        <i class="fa fa-exclamation-triangle me-2" title="Sin resultado"/>
+                        <strong>Operación Fiserv sin resultado. NO vuelva a cobrar:</strong>
+                        reconsulte en ITD o verifique el pinpad.
+                    </div>
+                    <div role="status" class="alert alert-success text-center mb-0"
+                         invisible="not fiserv_tx_is_done or state != 'draft'">
+                        <i class="fa fa-check-circle me-2" title="Aprobada"/>
+                        <strong>Transacción Fiserv aprobada. Pulse «Confirmar» para registrar el pago.</strong>
+                    </div>
+                </xpath>
+                <!--
+                    Devoluciones: con la transacción original elegida, partner /
+                    moneda / monto se precargan y quedan fijos (ITD rechaza un
+                    refund por un importe distinto y el asiento quedaría mal
+                    imputado). force_save: el cliente web NO guarda un campo readonly,
+                    así que sin él lo que precargó el onchange se perdía al guardar y la
+                    devolución quedaba en $0.00 hasta pulsar «Crear transacción».
+                -->
+                <xpath expr="//field[@name='amount']" position="attributes">
+                    <attribute name="readonly" separator=" or " add="fiserv_original_transaction_id"/>
+                    <attribute name="force_save">1</attribute>
+                </xpath>
+                <xpath expr="//field[@name='partner_id']" position="attributes">
+                    <attribute name="readonly" separator=" or " add="fiserv_original_transaction_id"/>
+                    <attribute name="force_save">1</attribute>
+                </xpath>
+                <xpath expr="//field[@name='currency_id']" position="attributes">
+                    <attribute name="readonly" separator=" or " add="fiserv_original_transaction_id"/>
+                    <attribute name="force_save">1</attribute>
+                </xpath>
+                <xpath expr="//group[@name='main_group']" position="after">
+                    <group string="Cobro con terminal Fiserv"
+                           name="fiserv_terminal_account_group"
+                           invisible="payment_type not in ('inbound', 'outbound') or (not fiserv_is_fiserv_payment_line and fiserv_payment_tx_provider_code != 'fiserv')">
+                        <field name="fiserv_charge_on_pos" readonly="1" force_save="1"/>
+                        <field name="fiserv_terminal_id"
+                               options="{'no_create': True}"
+                               readonly="state != 'draft' or fiserv_tx_is_done or fiserv_tx_is_pending"
+                               required="state == 'draft' and fiserv_is_fiserv_payment_line and fiserv_need_terminal_choice"
+                               invisible="not fiserv_need_terminal_choice and not fiserv_terminal_id"/>
+                        <!-- Único lugar de la UI donde se cargan a mano las
+                             facturas origen (el botón Pagar de la factura las
+                             precarga): de acá salen TaxRefund / TaxAmount /
+                             InvoiceNumber y la conciliación al confirmar. -->
+                        <field name="fiserv_source_invoice_ids"
+                               widget="many2many_tags"
+                               invisible="payment_type != 'inbound'"
+                               readonly="state != 'draft' or fiserv_tx_is_done or fiserv_tx_is_pending"
+                               domain="[('move_type', 'in', ('out_invoice', 'out_refund')), ('state', '=', 'posted'), ('payment_state', 'in', ('not_paid', 'partial')), ('partner_id', '=', partner_id), ('company_id', '=', company_id)]"/>
+                        <field name="fiserv_original_transaction_id"
+                               string="Transacción original (devolución)"
+                               options="{'no_create': True}"
+                               invisible="payment_type != 'outbound'"
+                               readonly="state != 'draft' or fiserv_tx_is_done or fiserv_tx_is_pending"
+                               required="state == 'draft' and payment_type == 'outbound' and fiserv_is_fiserv_payment_line"/>
+                        <field name="payment_transaction_id"
+                               string="Transacción Fiserv"
+                               options="{'no_create': True}"
+                               readonly="1"
+                               invisible="not payment_transaction_id or fiserv_payment_tx_provider_code != 'fiserv'"/>
+                        <field name="fiserv_tx_state"
+                               invisible="not payment_transaction_id or fiserv_payment_tx_provider_code != 'fiserv'"/>
+                    </group>
+                </xpath>
+            </field>
+        </record>
+
+        <!--
+            Botones «Facturar» / «Obtener PDF» de l10n_uy_einvoice_uruware: se
+            ocultan en los pagos con método Fiserv (el CFE sale de la factura, no del
+            pago). Por la línea del pago, no por el check: el check es derivado.
+            Aditivo por la misma razón que arriba.
+        -->
+        <record id="account_payment_form_fiserv_uruware_buttons" model="ir.ui.view">
+            <field name="name">account.payment.form.fiserv.uruware.buttons</field>
+            <field name="model">account.payment</field>
+            <field name="inherit_id" ref="l10n_uy_einvoice_uruware.cfe_resguardo_uruware_account_move_inh_form_view"/>
+            <field name="arch" type="xml">
+                <xpath expr="//button[@name='facturar']" position="attributes">
+                    <attribute name="invisible" separator=" or " add="fiserv_is_fiserv_payment_line"/>
+                </xpath>
+                <xpath expr="//header/button[@name='obtener_pdf']" position="attributes">
+                    <attribute name="invisible" separator=" or " add="fiserv_is_fiserv_payment_line"/>
+                </xpath>
+            </field>
+        </record>
+
+        <!-- El payment_transaction_id nativo (modo desarrollador) no se duplica
+             con el nuestro en los pagos Fiserv. -->
+        <record id="view_account_payment_form_inherit_payment_rebuild" model="ir.ui.view">
+            <field name="name">account.payment.form.payment.account.transaction</field>
+            <field name="model">account.payment</field>
+            <field name="inherit_id" ref="account_payment.view_account_payment_form_inherit_payment"/>
+            <field name="arch" type="xml">
+                <xpath expr="//field[@name='payment_transaction_id']" position="attributes">
+                    <attribute name="invisible" separator=" or " add="fiserv_payment_tx_provider_code == 'fiserv'"/>
+                </xpath>
+            </field>
+        </record>
+    </data>
+</odoo>

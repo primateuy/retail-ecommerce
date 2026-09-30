@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <record id="view_account_payment_register_form_fiserv" model="ir.ui.view">
+            <field name="name">account.payment.register.form.fiserv</field>
+            <field name="model">account.payment.register</field>
+            <field name="inherit_id" ref="account.view_account_payment_register_form"/>
+            <field name="arch" type="xml">
+                <xpath expr="//group[@name='group1']" position="before">
+                    <field name="fiserv_is_fiserv_journal" invisible="1"/>
+                    <div role="alert" class="alert alert-warning" invisible="not fiserv_is_fiserv_journal">
+                        Este método cobra en la terminal Fiserv: use «Pagar» en la factura
+                        para pasar por el pinpad antes de confirmar.
+                    </div>
+                </xpath>
+            </field>
+        </record>
+    </data>
+</odoo>

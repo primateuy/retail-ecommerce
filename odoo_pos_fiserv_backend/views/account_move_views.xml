@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <!--
+            Form de factura: con un proveedor Fiserv habilitado en la compañía,
+            los dos botones «Pagar» estándar (con y sin pagos pendientes de
+            conciliar) se ocultan y aparece uno que abre el form del pago con la
+            factura precargada. Sin proveedor habilitado, la factura queda como
+            la dejó Odoo.
+        -->
+        <record id="account_move_form_fiserv_register_payment" model="ir.ui.view">
+            <field name="name">account.move.form.fiserv.register.payment</field>
+            <field name="model">account.move</field>
+            <field name="inherit_id" ref="account.view_move_form"/>
+            <field name="arch" type="xml">
+                <xpath expr="//button[@id='account_invoice_payment_btn']" position="attributes">
+                    <attribute name="invisible" separator=" or " add="fiserv_register_enabled"/>
+                </xpath>
+                <xpath expr="//button[@id='account_invoice_payment_secondary_btn']" position="attributes">
+                    <attribute name="invisible" separator=" or " add="fiserv_register_enabled"/>
+                </xpath>
+                <xpath expr="//button[@id='account_invoice_payment_btn']" position="before">
+                    <field name="fiserv_register_enabled" invisible="1"/>
+                    <field name="pos_register_hide_fiserv" invisible="1"/>
+                    <button name="action_fiserv_register_payment"
+                            string="Pagar"
+                            type="object"
+                            class="oe_highlight"
+                            groups="account.group_account_invoice"
+                            invisible="not fiserv_register_enabled or state != 'posted' or payment_state not in ('not_paid', 'partial', 'in_payment') or move_type not in ('out_invoice', 'out_refund', 'in_invoice', 'in_refund') or pos_register_hide_fiserv"/>
+                </xpath>
+            </field>
+        </record>
+    </data>
+
+    <!--
+        Acción de la lista de facturas: «Registrar pago (form)», agrupado.
+        noupdate=1: si otro backend quita el binding al convivir, un -u
+        posterior de Fiserv no debe reactivarlo.
+    -->
+    <data noupdate="1">
+        <record id="action_server_fiserv_register_payment" model="ir.actions.server">
+            <field name="name">Registrar pago (con terminal)</field>
+            <field name="model_id" ref="account.model_account_move"/>
+            <field name="binding_model_id" ref="account.model_account_move"/>
+            <field name="binding_view_types">list</field>
+            <field name="group_ids" eval="[(6, 0, [ref('account.group_account_invoice')])]"/>
+            <field name="state">code</field>
+            <field name="code">action = records.action_fiserv_register_payment() if records else {'type': 'ir.actions.act_window_close'}</field>
+        </record>
+    </data>
+</odoo>

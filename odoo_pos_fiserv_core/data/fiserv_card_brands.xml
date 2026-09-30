@@ -1,0 +1,170 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!--
+        Marcas (sellos) por código de issuer para el proveedor Fiserv.
+        Fuente: Especificaciones POSLink v135, "15. Anexo 4: Códigos de emisores (issuers)".
+        Cada marca es una payment.method hija de `payment_method_fiserv`, con `code` = código de
+        issuer (2 dígitos). El resolver `_get_fiserv_card_brand_display_name` la usa por código.
+        noupdate="1": defaults sembrados; las ediciones manuales se conservan en -u.
+    -->
+    <data noupdate="1">
+
+        <record id="brand_fiserv_02" model="payment.method">
+            <field name="name">American Express</field>
+            <field name="code">02</field>
+            <field name="primary_payment_method_id" ref="payment_method_fiserv"/>
+            <field name="active">True</field>
+        </record>
+        <record id="brand_fiserv_04" model="payment.method">
+            <field name="name">Créditos Directos</field>
+            <field name="code">04</field>
+            <field name="primary_payment_method_id" ref="payment_method_fiserv"/>
+            <field name="active">True</field>
+        </record>
+        <record id="brand_fiserv_05" model="payment.method">
+            <field name="name">Cabal</field>
+            <field name="code">05</field>
+            <field name="primary_payment_method_id" ref="payment_method_fiserv"/>
+            <field name="active">True</field>
+        </record>
+        <record id="brand_fiserv_07" model="payment.method">
+            <field name="name">Cabal Débito</field>
+            <field name="code">07</field>
+            <field name="primary_payment_method_id" ref="payment_method_fiserv"/>
+            <field name="active">True</field>
+        </record>
+        <record id="brand_fiserv_08" model="payment.method">
+            <field name="name">Diners</field>
+            <field name="code">08</field>
+            <field name="primary_payment_method_id" ref="payment_method_fiserv"/>
+            <field name="active">True</field>
+        </record>
+        <record id="brand_fiserv_10" model="payment.method">
+            <field name="name">Edenred</field>
+            <field name="code">10</field>
+            <field name="primary_payment_method_id" ref="payment_method_fiserv"/>
+            <field name="active">True</field>
+        </record>
+        <record id="brand_fiserv_11" model="payment.method">
+            <field name="name">Visa Débito BPS Prestaciones</field>
+            <field name="code">11</field>
+            <field name="primary_payment_method_id" ref="payment_method_fiserv"/>
+            <field name="active">True</field>
+        </record>
+        <record id="brand_fiserv_13" model="payment.method">
+            <field name="name">Líder</field>
+            <field name="code">13</field>
+            <field name="primary_payment_method_id" ref="payment_method_fiserv"/>
+            <field name="active">True</field>
+        </record>
+        <record id="brand_fiserv_14" model="payment.method">
+            <field name="name">Líder BPS</field>
+            <field name="code">14</field>
+            <field name="primary_payment_method_id" ref="payment_method_fiserv"/>
+            <field name="active">True</field>
+        </record>
+        <record id="brand_fiserv_15" model="payment.method">
+            <field name="name">Maestro</field>
+            <field name="code">15</field>
+            <field name="primary_payment_method_id" ref="payment_method_fiserv"/>
+            <field name="active">True</field>
+        </record>
+        <record id="brand_fiserv_16" model="payment.method">
+            <field name="name">Maestro BPS</field>
+            <field name="code">16</field>
+            <field name="primary_payment_method_id" ref="payment_method_fiserv"/>
+            <field name="active">True</field>
+        </record>
+        <record id="brand_fiserv_19" model="payment.method">
+            <field name="name">Mides</field>
+            <field name="code">19</field>
+            <field name="primary_payment_method_id" ref="payment_method_fiserv"/>
+            <field name="active">True</field>
+        </record>
+        <record id="brand_fiserv_21" model="payment.method">
+            <field name="name">OCA</field>
+            <field name="code">21</field>
+            <field name="primary_payment_method_id" ref="payment_method_fiserv"/>
+            <field name="active">True</field>
+        </record>
+        <record id="brand_fiserv_24" model="payment.method">
+            <field name="name">Visa</field>
+            <field name="code">24</field>
+            <field name="primary_payment_method_id" ref="payment_method_fiserv"/>
+            <field name="active">True</field>
+        </record>
+        <record id="brand_fiserv_34" model="payment.method">
+            <field name="name">Visa Débito</field>
+            <field name="code">34</field>
+            <field name="primary_payment_method_id" ref="payment_method_fiserv"/>
+            <field name="active">True</field>
+        </record>
+        <record id="brand_fiserv_35" model="payment.method">
+            <field name="name">OCA BPS</field>
+            <field name="code">35</field>
+            <field name="primary_payment_method_id" ref="payment_method_fiserv"/>
+            <field name="active">True</field>
+        </record>
+        <record id="brand_fiserv_44" model="payment.method">
+            <field name="name">Visa Alimentación</field>
+            <field name="code">44</field>
+            <field name="primary_payment_method_id" ref="payment_method_fiserv"/>
+            <field name="active">True</field>
+        </record>
+        <record id="brand_fiserv_52" model="payment.method">
+            <field name="name">Mastercard</field>
+            <field name="code">52</field>
+            <field name="primary_payment_method_id" ref="payment_method_fiserv"/>
+            <field name="active">True</field>
+        </record>
+        <record id="brand_fiserv_54" model="payment.method">
+            <field name="name">Mastercard Prepaga</field>
+            <field name="code">54</field>
+            <field name="primary_payment_method_id" ref="payment_method_fiserv"/>
+            <field name="active">True</field>
+        </record>
+        <record id="brand_fiserv_55" model="payment.method">
+            <field name="name">Creditel</field>
+            <field name="code">55</field>
+            <field name="primary_payment_method_id" ref="payment_method_fiserv"/>
+            <field name="active">True</field>
+        </record>
+        <record id="brand_fiserv_59" model="payment.method">
+            <field name="name">Club del Este</field>
+            <field name="code">59</field>
+            <field name="primary_payment_method_id" ref="payment_method_fiserv"/>
+            <field name="active">True</field>
+        </record>
+        <record id="brand_fiserv_74" model="payment.method">
+            <field name="name">Anda</field>
+            <field name="code">74</field>
+            <field name="primary_payment_method_id" ref="payment_method_fiserv"/>
+            <field name="active">True</field>
+        </record>
+        <record id="brand_fiserv_75" model="payment.method">
+            <field name="name">Passcard</field>
+            <field name="code">75</field>
+            <field name="primary_payment_method_id" ref="payment_method_fiserv"/>
+            <field name="active">True</field>
+        </record>
+        <record id="brand_fiserv_86" model="payment.method">
+            <field name="name">Líder Sodexo</field>
+            <field name="code">86</field>
+            <field name="primary_payment_method_id" ref="payment_method_fiserv"/>
+            <field name="active">True</field>
+        </record>
+        <record id="brand_fiserv_97" model="payment.method">
+            <field name="name">Pago Después</field>
+            <field name="code">97</field>
+            <field name="primary_payment_method_id" ref="payment_method_fiserv"/>
+            <field name="active">True</field>
+        </record>
+        <record id="brand_fiserv_99" model="payment.method">
+            <field name="name">TOKE</field>
+            <field name="code">99</field>
+            <field name="primary_payment_method_id" ref="payment_method_fiserv"/>
+            <field name="active">True</field>
+        </record>
+
+    </data>
+</odoo>

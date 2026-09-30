@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    EL PROVEEDOR SE CREA SOLO AL INSTALAR, Y NACE APAGADO.
+
+    En 17.0 lo creaba un post_init_hook: en estado `test`, con
+    `allow_tokenization`, sólo en la compañía activa y sin xmlid propio en los
+    datos (se lo registraba a mano después). Es el DL-8 de Getnet, del lado
+    Fiserv, y un poco peor: un proveedor en `test` con credenciales vacías es
+    un medio de cobro que parece disponible y no cobra.
+
+    Se sigue el patrón de los módulos `payment_*` del core: `noupdate="1"`
+    —para que una actualización NO pise lo que el cliente configuró— y
+    `module_id`, que es lo que hace que Odoo lo reconozca como el proveedor de
+    este módulo y lo copie al crear una compañía nueva.
+
+    NACE `disabled` Y SIN CREDENCIALES. Habilitarlo es un acto deliberado de
+    quien tiene los datos de ITD. Al habilitarlo, Odoo le asigna un diario
+    bancario y el módulo crea las dos líneas de método (cobro y devolución).
+
+    NO se le enlazan `payment_method_ids`: este proveedor cobra en un pinpad,
+    no en un checkout web. Enlazarlo lo ofrecería donde no corresponde.
+-->
+<odoo noupdate="1">
+
+    <record id="payment_provider_fiserv" model="payment.provider">
+        <field name="name">Fiserv ITD</field>
+        <field name="code">fiserv</field>
+        <field name="state">disabled</field>
+        <field name="module_id" ref="base.module_odoo_pos_fiserv_core"/>
+        <!-- Datos de conexión VACÍOS. Se cargan por configuración, nunca acá:
+             el SystemId identifica al comercio ante ITD y es distinto en
+             testing y en producción. -->
+        <field name="fiserv_url_webservice"></field>
+        <field name="fiserv_system_id"></field>
+        <field name="fiserv_branch"></field>
+        <field name="fiserv_is_multiple" eval="False"/>
+    </record>
+
+</odoo>

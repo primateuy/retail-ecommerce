@@ -1,0 +1,121 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <record id="view_payment_transaction_fiserv_form" model="ir.ui.view">
+            <field name="name">payment.transaction.fiserv.form</field>
+            <field name="model">payment.transaction</field>
+            <field name="inherit_id" ref="payment.payment_transaction_form"/>
+            <field name="arch" type="xml">
+                <xpath expr="//header" position="inside">
+                    <button name="fiserv_action_conciliada" type="object"
+                            string="Verificada: sin cobro"
+                            groups="account.group_account_user"
+                            invisible="not fiserv_requiere_conciliacion or state not in ('draft', 'pending')"
+                            confirm="¿Verificó en el pinpad o en el cierre de lote que esta operación NO se cobró? La transacción se cancela y el pago queda libre para volver a cobrar."/>
+                </xpath>
+                <xpath expr="//group[@name='transaction_details']" position="after">
+                    <group string="Información Fiserv ITD" name="fiserv_info" invisible="provider_code != 'fiserv'">
+                        <group string="POS / Ticket">
+                            <field name="pos_id"/>
+                            <field name="ticket_number"/>
+                            <field name="batch_number"/>
+                            <field name="authorization_code"/>
+                            <field name="merchant_number"/>
+                            <field name="invoice_number"/>
+                        </group>
+                        <group string="Tarjeta">
+                            <field name="card_bin"/>
+                            <field name="card_last_four"/>
+                            <field name="issuer_code"/>
+                            <field name="issuer_name"/>
+                            <field name="acquirer"/>
+                            <field name="installments"/>
+                        </group>
+                    </group>
+                    <group string="Relaciones" name="fiserv_relations" invisible="provider_code != 'fiserv'">
+                        <!--
+                            ``pos_order_id`` y ``pos_payment_id`` solo existen cuando
+                            odoo_pos_fiserv_pos está instalado. La vista del POS los
+                            inyecta vía xpath sobre el group ``fiserv_relations_left``;
+                            sin POS este group queda con los campos contables solamente.
+                        -->
+                        <group name="fiserv_relations_left">
+                            <field name="transaction_origin"/>
+                            <field name="account_payment_id" invisible="transaction_origin != 'account_payment'"/>
+                            <field name="is_promotion"/>
+                        </group>
+                        <group string="Auditoría ITD">
+                            <field name="fiserv_transaction_id"/>
+                            <field name="fiserv_response_code"/>
+                            <field name="fiserv_response_message"/>
+                            <field name="fiserv_requiere_conciliacion" readonly="1"/>
+                            <field name="fiserv_motivo_conciliacion" readonly="1"
+                                   invisible="not fiserv_requiere_conciliacion"/>
+                        </group>
+                    </group>
+                    <notebook string="Detalle Fiserv" name="fiserv_detailed" invisible="provider_code != 'fiserv'">
+                        <!-- mode 'js': el CodeEditor no tiene modo json; JSON se visualiza bien con js -->
+                        <page string="Solicitud JSON" name="fiserv_complete_request">
+                            <field name="fiserv_complete_request" readonly="1" widget="ace" options="{'mode': 'js'}"/>
+                        </page>
+                        <page string="Respuesta JSON" name="fiserv_complete_response">
+                            <field name="fiserv_complete_response" readonly="1" widget="ace" options="{'mode': 'js'}"/>
+                        </page>
+                    </notebook>
+                </xpath>
+            </field>
+        </record>
+
+        <record id="view_payment_transaction_fiserv_list" model="ir.ui.view">
+            <field name="name">payment.transaction.fiserv.list</field>
+            <field name="model">payment.transaction</field>
+            <field name="inherit_id" ref="payment.payment_transaction_list"/>
+            <field name="arch" type="xml">
+                <xpath expr="//field[@name='amount']" position="after">
+                    <field name="pos_id" optional="show"/>
+                    <field name="ticket_number" optional="show"/>
+                    <field name="card_last_four" optional="show"/>
+                    <field name="acquirer" optional="show"/>
+                    <field name="fiserv_transaction_id" optional="show"/>
+                </xpath>
+            </field>
+        </record>
+
+        <record id="view_payment_transaction_fiserv_search" model="ir.ui.view">
+            <field name="name">payment.transaction.fiserv.search</field>
+            <field name="model">payment.transaction</field>
+            <field name="inherit_id" ref="payment.payment_transaction_search"/>
+            <field name="arch" type="xml">
+                <xpath expr="//field[@name='reference']" position="after">
+                    <field name="pos_id"/>
+                    <field name="ticket_number"/>
+                    <field name="fiserv_transaction_id"/>
+                    <field name="acquirer"/>
+                </xpath>
+                <xpath expr="//filter[@name='live_transactions']" position="after">
+                    <filter string="Fiserv ITD" name="fiserv_provider" domain="[('provider_code', '=', 'fiserv')]"/>
+                    <filter string="Fiserv: requieren verificación" name="fiserv_conciliacion"
+                            domain="[('fiserv_requiere_conciliacion', '=', True)]"/>
+                </xpath>
+            </field>
+        </record>
+
+        <record id="action_payment_transaction_fiserv" model="ir.actions.act_window">
+            <field name="name">Transacciones Fiserv ITD</field>
+            <field name="res_model">payment.transaction</field>
+            <field name="view_mode">list,form</field>
+            <field name="domain">[('provider_code', '=', 'fiserv')]</field>
+            <field name="context">{'search_default_fiserv_provider': 1}</field>
+        </record>
+
+        <!-- En Clientes, junto a Pagos: quien revisa las operaciones es el
+             contador, y el menú Configuración (donde estaba en 17.0) es sólo
+             para el administrador contable: la lista existía y no llegaba. -->
+        <menuitem id="menu_payment_transaction_fiserv"
+                  name="Transacciones Fiserv"
+                  parent="account.menu_finance_receivables"
+                  action="action_payment_transaction_fiserv"
+                  sequence="16"
+                  groups="account.group_account_user"/>
+    </data>
+</odoo>
