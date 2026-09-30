@@ -3,6 +3,7 @@ import { PaymentMercadoPago } from "@pos_mercado_pago/app/payment_mercado_pago";
 import { MercadoPagoQRPanel } from "@pos_mercadopago/components/popup_qr/popup_qr";
 import { register_payment_method } from "@point_of_sale/app/store/pos_store";
 import { patch } from "@web/core/utils/patch";
+import { floatIsZero } from "@web/core/utils/numbers";
 import { PaymentScreen } from "@point_of_sale/app/screens/payment_screen/payment_screen";
 import { ProductScreen } from "@point_of_sale/app/screens/product_screen/product_screen";
 
@@ -55,6 +56,18 @@ export class PaymentMercadoPagoQR extends PaymentMercadoPago {
             return;
         }
 
+        // Si ya hay un QR pendiente para esta orden se vuelve a mostrar en vez de generar otro,
+        // porque un segundo QR en la misma caja pisa al primero en Mercado Pago.
+        if (orderFrontend.mp_pending_order) {
+            this.pos._syncMercadoPagoPanelWithOrder(orderFrontend);
+            return;
+        }
+
+        const amountError = this._checkMercadoPagoAmount(orderFrontend, cid);
+        if (amountError) {
+            return this._showMsg(amountError, "| Validacion de montos");
+        }
+
         try {
             const paymentLines = this.get_paymentlines(orderFrontend.paymentlines);
 
@@ -64,6 +77,7 @@ export class PaymentMercadoPagoQR extends PaymentMercadoPago {
                 currency_id: this.pos.currency?.name || "UYU",
                 unit_price: line.price,
                 quantity: line.quantity,
+                discount: line.discount || 0,
                 description: line.product?.description || line.full_product_name,
                 product_id: line.product.id,
                 tax_ids: line.tax_ids || line.product.taxes_id,
@@ -85,6 +99,8 @@ export class PaymentMercadoPagoQR extends PaymentMercadoPago {
                 company_id: this.pos.config.company_id[0],
                 qr_type: this.pos.qr_type,
                 paymentLines: paymentLines,
+                amount_total: orderFrontend.get_total_with_tax(),
+                amount_return: orderFrontend.get_change(),
             });
 
             const parsedOrder = JSON.parse(order);
@@ -113,6 +129,39 @@ export class PaymentMercadoPagoQR extends PaymentMercadoPago {
             console.error("Error al procesar la orden", error);
             return this._showMsg("Hubo un error al procesar la orden", "| Error al procesar la orden");
         }
+    }
+
+    /**
+     * Valida que el QR se genere con la orden completamente cubierta.
+     *
+     * Si se envía MP antes de cargar los demás medios, o si MP supera el saldo,
+     * lo cobrado no coincide con el pedido que se registra al confirmar el pago.
+     *
+     * @param {Order} order orden actual del POS.
+     * @param {string} cid cid de la línea de pago de Mercado Pago.
+     * @returns {string|false} mensaje de error, o false si los montos son válidos.
+     */
+    _checkMercadoPagoAmount(order, cid) {
+        const decimals = this.pos.currency.decimal_places;
+        const mpLine = order.paymentlines.find((line) => line.cid === cid);
+        if (!mpLine || mpLine.amount <= 0 || floatIsZero(mpLine.amount, decimals)) {
+            return "El monto a cobrar con Mercado Pago debe ser mayor a cero";
+        }
+        // No se usa order.get_due(): solo suma líneas en estado 'done', y la de MP
+        // recién pasa a 'waiting' al enviarse, así que la orden nunca parecía paga.
+        const total = order.get_total_with_tax();
+        const allPaid = order.paymentlines.reduce((sum, line) => sum + line.amount, 0);
+        const due = total - allPaid;
+        if (due > 0 && !floatIsZero(due, decimals)) {
+            return "Cargue primero los demas medios de pago: la orden debe quedar paga completa antes de generar el QR de Mercado Pago";
+        }
+        const otherPaid = allPaid - mpLine.amount;
+        const remaining = Math.max(total - otherPaid, 0);
+        const excess = mpLine.amount - remaining;
+        if (excess > 0 && !floatIsZero(excess, decimals)) {
+            return "El monto de Mercado Pago supera el saldo pendiente de la orden";
+        }
+        return false;
     }
 
     get_paymentlines(paymentlines = []) {

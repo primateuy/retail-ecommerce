@@ -6,19 +6,42 @@
             <button
                 class="btn btn-primary w-100"
                 t-on-click="onComprobar"
-                t-att-disabled="state.checking or state.cancelling"
+                t-att-disabled="isBusy"
             >
                 <t t-if="state.checking">Verificando...</t>
                 <t t-else="">Comprobar pago</t>
             </button>
             <button
+                class="btn btn-secondary w-100"
+                t-on-click="onCancelarQr"
+                t-att-disabled="isBusy"
+            >
+                <t t-if="state.cancelling">Cancelando...</t>
+                <t t-else="">Cancelar QR y volver</t>
+            </button>
+            <button
                 class="btn btn-danger w-100"
                 t-on-click="onEliminar"
-                t-att-disabled="state.checking or state.cancelling"
+                t-att-disabled="isBusy"
             >
                 <t t-if="state.cancelling">Cancelando...</t>
                 <t t-else="">Eliminar Orden</t>
             </button>
+            <t t-if="!state.confirmForce">
+                <button class="btn btn-link btn-sm text-muted" t-on-click="onForzarCierre" t-att-disabled="isBusy">
+                    Cerrar QR sin verificar
+                </button>
+            </t>
+            <t t-else="">
+                <div class="alert alert-warning w-100 mb-0 small">
+                    Antes de cerrar, confirme en la app de Mercado Pago que el cliente
+                    <b>no</b> pago este QR. Si pago y se vuelve a cobrar, se cobra dos veces.
+                </div>
+                <div class="d-flex gap-2 w-100">
+                    <button class="btn btn-warning flex-fill" t-on-click="onForzarCierre">Si, cerrar</button>
+                    <button class="btn btn-light flex-fill" t-on-click="onCancelarForzado">Volver</button>
+                </div>
+            </t>
         </div>
     </t>
 </templates>
