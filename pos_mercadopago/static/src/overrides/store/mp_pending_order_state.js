@@ -1,6 +1,6 @@
 /** @odoo-module **/
 
-import { Order } from "@point_of_sale/app/store/models";
+import { Order, Payment } from "@point_of_sale/app/store/models";
 import { PosStore } from "@point_of_sale/app/store/pos_store";
 import { patch } from "@web/core/utils/patch";
 
@@ -52,6 +52,50 @@ patch(Order.prototype, {
     clearMpPendingOrder() {
         this.mp_pending_order = null;
         this.save_to_db();
+    },
+
+    /**
+     * Permite agregar otros medios de pago mientras la línea de MP no se envió.
+     *
+     * El core bloquea nuevas líneas si hay una electrónica sin terminar, y la de
+     * MP queda en 'pending'/'retry' hasta que se confirma el QR. Una vez
+     * generado el QR se sigue bloqueando, porque cambiar montos ahí descuadra
+     * lo cobrado con el pedido.
+     */
+    electronic_payment_in_progress() {
+        if (this.mp_pending_order) {
+            return super.electronic_payment_in_progress(...arguments);
+        }
+        return this.get_paymentlines().some((line) => {
+            const status = line.payment_status;
+            if (!status || ["done", "reversed"].includes(status)) {
+                return false;
+            }
+            const isMercadoPago = line.payment_method.use_payment_terminal === "mercado_pago";
+            return !(isMercadoPago && ["pending", "retry"].includes(status));
+        });
+    },
+});
+
+patch(Payment.prototype, {
+    /**
+     * Ajusta el estado de la línea de MP después de "Enviar".
+     *
+     * El envío solo genera el QR; el pago se confirma después con "Comprobar
+     * pago". El core marca 'retry' ("Transacción cancelada") ante cualquier
+     * respuesta no exitosa, así que para MP se usa:
+     * - 'waitingCapture' ("Solicitud enviada") si el QR quedó generado;
+     * - 'pending' ("Enviar") si no se generó (validación o error).
+     */
+    handle_payment_response(isPaymentSuccessful) {
+        if (
+            isPaymentSuccessful ||
+            this.payment_method.use_payment_terminal !== "mercado_pago"
+        ) {
+            return super.handle_payment_response(...arguments);
+        }
+        this.set_payment_status(this.order?.mp_pending_order ? "waitingCapture" : "pending");
+        return false;
     },
 });
 
