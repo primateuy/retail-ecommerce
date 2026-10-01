@@ -32,8 +32,10 @@ class PosOrder(models.Model):
             lambda m: m.payment_type == 'contado'
         )[:1]
 
+        # El vuelto en efectivo llega como pos.payment negativo (is_change=True) sobre el
+        # mismo método; se incluye para que el monto declarado sea el neto y no lo entregado.
         for payment in self.payment_ids:
-            if payment.amount <= 0:
+            if not payment.amount:
                 continue
 
             pos_method = payment.payment_method_id
@@ -81,4 +83,4 @@ class PosOrder(models.Model):
                     'amount': payment.amount,
                 })
 
-        return distribution
+        return [line for line in distribution if line['amount'] > 0]
