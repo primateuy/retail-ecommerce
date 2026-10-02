@@ -58,7 +58,7 @@ class PosOrder(models.Model):
         return self.env['payment.transaction'].sudo().search(
             [
                 ('oca_transaction_id', '=', tid),
-                ('provider_id', '=', oca_provider.id),
+                ('provider_id.code', '=', 'oca'),  # cualquier proveedor OCA: hay uno por RUT
                 ('state', 'in', ['pending', 'done']),
             ],
             order='id desc',

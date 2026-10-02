@@ -160,7 +160,7 @@ class PosPayment(models.Model):
                 if oca_provider:
                     tx_by_ref = self.env['payment.transaction'].sudo().search([
                         ('oca_transaction_id', '=', payment_tid),
-                        ('provider_id', '=', oca_provider.id),
+                        ('provider_id.code', '=', 'oca'),  # cualquier proveedor OCA: hay uno por RUT
                         ('state', 'in', ['pending', 'done']),
                     ], order='id desc', limit=1)
                     if tx_by_ref:

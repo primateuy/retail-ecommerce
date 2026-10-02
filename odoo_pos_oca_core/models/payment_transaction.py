@@ -488,10 +488,12 @@ class PaymentTransaction(models.Model):
         # Obtener el número de factura del pedido POS
         invoice_number = self._get_invoice_number_from_relations(pos_order, pos_payment)
         
-        # Crear valores para la transacción
+        # Crear valores para la transacción. El proveedor sale del PosID: con
+        # un proveedor OCA por RUT, la terminal dice a cuál pertenece el cobro.
+        pos_id = pos_data.get('PosID') or oca_response.get('PosID')
         transaction_vals = {
-            'provider_id': self._get_oca_provider_id(),
-            'payment_method_id': self._get_oca_payment_method_id(),
+            'provider_id': self._get_oca_provider_id(pos_id=pos_id),
+            'payment_method_id': self._get_oca_payment_method_id(pos_id=pos_id),
             'reference': self._generate_oca_reference(pos_data, oca_response),
             'amount': corrected_amount,
             'currency_id': self._get_currency_id(pos_data),
@@ -626,17 +628,53 @@ class PaymentTransaction(models.Model):
             return 'error'
         return self._get_transaction_state_from_response(response_code)
     
-    def _get_oca_provider_id(self, account_payment=None):
+    def _get_oca_provider_by_pos_id(self, pos_id):
+        """
+        Proveedor OCA dueño de la terminal con ese PosID.
+
+        Las terminales (``multiple.pos.config``) las define
+        ``odoo_pos_oca_multiple``, del que el core no depende: si el modelo no
+        está cargado no se resuelve por acá.
+
+        Args:
+            pos_id (str|int|None): PosID enviado o devuelto por POSLink.
+
+        Returns:
+            payment.provider: un proveedor, o vacío si el PosID no está en una
+            sola terminal OCA.
+        """
+        provider_model = self.env['payment.provider'].sudo()
+        pos_id = str(pos_id or '').strip()
+        if not pos_id or 'multiple.pos.config' not in self.env:
+            return provider_model
+        terminals = self.env['multiple.pos.config'].sudo().search([
+            ('codigo_terminal', '=', pos_id),
+            ('payment_provider_id.code', '=', 'oca'),
+        ])
+        providers = terminals.mapped('payment_provider_id')
+        if len(providers) > 1:
+            _logger.warning(
+                'OCA: el PosID %s está en terminales de varios proveedores (%s); '
+                'no se usa para elegir el proveedor.', pos_id, providers.ids,
+            )
+            return provider_model
+        return providers
+
+    def _get_oca_provider_id(self, account_payment=None, pos_id=None):
         """
         Resuelve el ``payment.provider`` para la ``payment.transaction`` OCA.
 
-        Regla: si la tx viene de un ``account.payment``, usar el provider de su
-        línea de método (``payment_method_line_id.payment_provider_id``). Esto
-        desambigua cuando hay varios providers con ``code='oca'`` (p.ej. una
-        configuración multi-moneda): cada pago queda asignado al provider real
-        del diario usado, no al primero por orden.
+        Con varios proveedores OCA (uno por RUT) importa cuál se elige: la
+        empresa de la transacción es ``related`` del proveedor. Orden:
 
-        Fallback: primer provider con ``code='oca'`` (flujo POS).
+        1. Si la tx viene de un ``account.payment``, el provider de su línea de
+           método (``payment_method_line_id.payment_provider_id``).
+        2. Si viene el PosID, el proveedor de la terminal con ese PosID (flujo
+           POS).
+        3. Respaldo: el proveedor OCA de menor id. Antes se usaba el primero
+           según el ``_order`` de ``payment.provider`` (estado, secuencia,
+           nombre), y en Forum eso mandaba todas las transacciones del PDV al
+           proveedor de Aweryl, primero por nombre.
         """
         if account_payment:
             try:
@@ -650,17 +688,25 @@ class PaymentTransaction(models.Model):
                     'OCA: no pude leer provider desde account.payment %s: %s',
                     account_payment, exc,
                 )
+        provider = self._get_oca_provider_by_pos_id(pos_id)
+        if provider:
+            return provider.id
         provider = self.env['payment.provider'].sudo().search(
-            [('code', '=', 'oca')], limit=1,
+            [('code', '=', 'oca')], order='id', limit=1,
         )
         if not provider:
             _logger.error(
                 'No se encontró el proveedor de pago OCA. Asegúrese de que esté configurado.'
             )
             return 1
+        if pos_id:
+            _logger.warning(
+                'OCA: el PosID %s no está en ninguna terminal; la transacción queda '
+                'con el proveedor de respaldo %s.', pos_id, provider.display_name,
+            )
         return provider.id
-    
-    def _get_oca_payment_method_id(self, account_payment=None):
+
+    def _get_oca_payment_method_id(self, account_payment=None, pos_id=None):
         """
         Resuelve el ``payment.method`` para la ``payment.transaction`` OCA.
 
@@ -668,8 +714,8 @@ class PaymentTransaction(models.Model):
         método de pago elegido en el pago — concretamente el primer
         ``payment.method`` del ``payment.provider`` asociado a la línea de
         método del pago (``payment_method_line_id.payment_provider_id``).
-        Si no hay pago o no hay method en esa cadena, fallback al provider
-        OCA global. En última instancia, False.
+        Si no, el del proveedor que resuelve ``_get_oca_provider_id`` (por
+        PosID, o el de respaldo). En última instancia, False.
         """
         # 1. Si hay account.payment, usar el provider de su línea de método.
         if account_payment:
@@ -687,10 +733,10 @@ class PaymentTransaction(models.Model):
                     'OCA: no pude leer method desde account.payment %s: %s',
                     account_payment, exc,
                 )
-        # 2. Fallback: provider OCA global (preferir code='oca').
-        provider = self.env['payment.provider'].sudo().search(
-            [('code', '=', 'oca')], limit=1,
-        )
+        # 2. El proveedor de la transacción (por PosID o el de respaldo); preferir code='oca'.
+        provider = self.env['payment.provider'].sudo().browse(
+            self._get_oca_provider_id(pos_id=pos_id)
+        ).exists()
         if provider and provider.payment_method_ids:
             preferred = provider.payment_method_ids.filtered(
                 lambda m: m.code == 'oca'
@@ -913,9 +959,12 @@ class PaymentTransaction(models.Model):
         # Crear valores para la transacción con información completa.
         # Pasamos account_pay al getter para que, en flujo backend, use el
         # method del pago (via payment_method_line_id.payment_provider_id).
+        # El PosID decide el proveedor en el flujo POS; una respuesta de error
+        # puede venir sin PosID, por eso el respaldo al request original.
+        pos_id = oca_response.get('PosID') or (pos_data or {}).get('PosID')
         transaction_vals = {
-            'provider_id': self._get_oca_provider_id(account_pay),
-            'payment_method_id': self._get_oca_payment_method_id(account_pay),
+            'provider_id': self._get_oca_provider_id(account_pay, pos_id=pos_id),
+            'payment_method_id': self._get_oca_payment_method_id(account_pay, pos_id=pos_id),
             'reference': self._generate_oca_reference_from_complete_data(oca_response),
             'amount': corrected_amount,
             'currency_id': self._get_currency_id_from_response(oca_response),

@@ -541,7 +541,7 @@ class PosOrder(models.Model):
                     tid_key = str(payment_tid).strip()
                     tx_by_ref = self.env['payment.transaction'].sudo().search([
                         ('oca_transaction_id', '=', tid_key),
-                        ('provider_id', '=', oca_provider.id),
+                        ('provider_id.code', '=', 'oca'),  # cualquier proveedor OCA: hay uno por RUT
                         ('state', 'in', ['pending', 'done']),
                     ], order='id desc', limit=1)
                     if tx_by_ref:
@@ -589,7 +589,7 @@ class PosOrder(models.Model):
                         ('state', 'in', ['pending', 'done']),
                     ]
                     if oca_provider:
-                        orphan_domain.append(('provider_id', '=', oca_provider.id))
+                        orphan_domain.append(('provider_id.code', '=', 'oca'))  # cualquier proveedor OCA
                     orphaned_transactions = self.env['payment.transaction'].sudo().search(orphan_domain)
                     best_score = 0
                     for transaction in orphaned_transactions:
