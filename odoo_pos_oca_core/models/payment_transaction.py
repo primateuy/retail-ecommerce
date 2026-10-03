@@ -432,9 +432,14 @@ class PaymentTransaction(models.Model):
         has_pos_order = (
             'pos_order_id' in self._fields and bool(self.pos_order_id)
         )
+        # La venta también cuenta: la asociación con pos.order y con pos.payment
+        # son pasos separados, y una tx con venta pero sin pos.payment enlazado
+        # recibía un account.payment extra al post-procesarse (visto en test,
+        # 2026-10-03, al destrabar el post-proceso de pos_online_payment).
         is_pos_oca = (
             self.transaction_origin in ('pos_payment', 'pos_order')
             or has_pos_payment
+            or has_pos_order
         )
         if is_pos_oca:
             _logger.info(
