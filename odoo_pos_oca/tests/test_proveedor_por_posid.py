@@ -42,8 +42,6 @@ class TestProveedorPorPosid(TransactionCase):
         cls.Tx = cls.env['payment.transaction'].sudo()
 
     def _crear_tx(self, pos_id, tid):
-        # Issuer va siempre: sin él _get_issuer_name hace int(None) y la
-        # transacción no se crea (bug aparte, también visto en producción).
         respuesta = {'ResponseCode': '0', 'PosID': pos_id, 'TransactionId': tid,
                      'TotalAmount': '10000', 'Currency': '858', 'Issuer': '21'}
         pedido = {'PosID': pos_id, 'Amount': '10000', 'Currency': '858'}

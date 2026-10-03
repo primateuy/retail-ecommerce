@@ -937,16 +937,25 @@ class PaymentTransaction(models.Model):
             except (ValueError, TypeError):
                 total_amount = 0.0
         
+        # Un reverso (timeout o promoción incompatible) no trae TotalAmount:
+        # sin este respaldo la transacción queda en 0 y no se sabe cuánto se
+        # revirtió. El request original lleva el monto, también en centésimos.
+        if not total_amount or total_amount <= 0:
+            try:
+                total_amount = float((pos_data or {}).get('Amount') or 0)
+            except (ValueError, TypeError):
+                total_amount = 0.0
+
         # Convertir desde centavos a la unidad correcta
         corrected_amount = total_amount / 100.0 if total_amount > 0 else 0.0
-        
+
         # Log para debuggear el problema del monto
-        _logger.info('OCA Complete Transaction Amount Debug - TotalAmount: %s, Corrected: %s', 
+        _logger.info('OCA Complete Transaction Amount Debug - TotalAmount: %s, Corrected: %s',
                     total_amount, corrected_amount)
-        
+
         # Obtener el número de factura del pedido POS relacionado
         invoice_number = self._get_invoice_number_from_relations(pos_order, pos_payment)
-        
+
         # Log para debuggear la referencia y número de factura
         _logger.info('OCA Invoice Number Debug - Invoice Number: %s, POS Order: %s, POS Payment: %s',
                     invoice_number, pos_order.name if pos_order else 'None', pos_payment.name if pos_payment else 'None')
@@ -967,7 +976,12 @@ class PaymentTransaction(models.Model):
             'payment_method_id': self._get_oca_payment_method_id(account_pay, pos_id=pos_id),
             'reference': self._generate_oca_reference_from_complete_data(oca_response),
             'amount': corrected_amount,
-            'currency_id': self._get_currency_id_from_response(oca_response),
+            # Si el monto salió del request (reverso), la moneda también: la
+            # respuesta del reverso no trae Currency y caería siempre en pesos.
+            'currency_id': self._get_currency_id_from_response(
+                oca_response if oca_response.get('Currency')
+                else dict(oca_response, Currency=(pos_data or {}).get('Currency') or '858')
+            ),
             'state': state,
             'state_message': state_message,
             'partner_id': self._get_partner_id(pos_order, pos_payment),
@@ -1183,8 +1197,18 @@ class PaymentTransaction(models.Model):
             52: 'Mastercard',
         }
         
+        # Un reverso por timeout llega sin Issuer: int(None) hacía caer la
+        # creación de la transacción y el reverso no quedaba registrado.
+        # Mismo criterio que odoo_pos_fiserv_core._get_issuer_name.
+        if issuer_code in (None, False, ''):
+            return ''
+        try:
+            code_int = int(issuer_code)
+        except (TypeError, ValueError):
+            return str(issuer_code).strip()
+
         # Intentar obtener el nombre del método de pago correspondiente
-        mapped_name = issuer_mapping.get(int(issuer_code))
+        mapped_name = issuer_mapping.get(code_int)
         if mapped_name:
             # Buscar el método de pago correspondiente en Odoo
             payment_method = self.env['payment.method'].search([
