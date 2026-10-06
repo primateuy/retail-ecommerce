@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 {
     "name": "POS Forum — Impresión QZ Tray",
-    "version": "17.0.2.0.1",
+    "version": "17.0.2.0.2",
     "category": "Point of Sale",
     "summary": "Ticket de cambio y recibo POS vía QZ Tray (impresora local sin diálogo del navegador).",
     "description": """
@@ -31,7 +31,7 @@ pos_qz_printer Kanak / QZ Tray) y de html2canvas 1.4.1 (MIT).
     """,
     "author": "PRIMATE",
     "license": "LGPL-3",
-    "depends": ["point_of_sale", "odoo_pos_oca", "pos_loyalty"],
+    "depends": ["point_of_sale", "odoo_pos_oca", "odoo_pos_no_invoice", "pos_loyalty"],
     "data": [
         "data/loyalty_coupon_pos_report.xml",
         "views/loyalty_program_views.xml",
@@ -45,7 +45,9 @@ pos_qz_printer Kanak / QZ Tray) y de html2canvas 1.4.1 (MIT).
             "pos_forum_qz_print/static/src/lib/html2canvas.js",
             "pos_forum_qz_print/static/src/js/escpos_raster.js",
             "pos_forum_qz_print/static/src/js/qz_print_service.js",
+            "pos_forum_qz_print/static/src/js/receipt_data_qz.js",
             "pos_forum_qz_print/static/src/js/receipt_screen_qz.js",
+            "pos_forum_qz_print/static/src/js/reprint_qz.js",
             "pos_forum_qz_print/static/src/js/loyalty_code_scan.js",
         ],
     },

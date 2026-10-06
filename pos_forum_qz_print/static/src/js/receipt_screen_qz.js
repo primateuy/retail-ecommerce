@@ -12,6 +12,7 @@
 import { patch } from "@web/core/utils/patch";
 import { ReceiptScreen } from "@point_of_sale/app/screens/receipt_screen/receipt_screen";
 import { OrderReceipt } from "@point_of_sale/app/screens/receipt_screen/receipt/order_receipt";
+import { buildReceiptPrintData } from "@pos_forum_qz_print/js/receipt_data_qz";
 
 const _superPrintChangeTicketRoutine = ReceiptScreen.prototype.printChangeTicketRoutine;
 const _superPrintChangeTicketDocumentOnly = ReceiptScreen.prototype.printChangeTicketDocumentOnly;
@@ -20,7 +21,6 @@ const _superPrintLoyaltyCouponCode = ReceiptScreen.prototype.printLoyaltyCouponC
 const _superPrintReceipt = ReceiptScreen.prototype.printReceipt;
 
 const LOG = "[pos_forum_qz_print]";
-const OCA_VOUCHER_LOG = "[odoo_pos_no_invoice][oca_voucher]";
 
 /**
  * IDs de loyalty.card desde el pedido POS (claves de couponPointChanges; pos_loyalty).
@@ -57,92 +57,9 @@ patch(ReceiptScreen.prototype, {
      BOLETA DE LA RUTINA DE IMPERSION
      */
     async _qzBuildReceiptHtml() {
-        const ord = this.pos.get_order();
-        const orderRef = ord.pos_reference || ord.name || "";
-        const orderServerId = ord.server_id || null;
-        let accountMoveId = null;
-        if (ord?.account_move) {
-            if (Array.isArray(ord.account_move)) {
-                accountMoveId = ord.account_move[0];
-            } else if (typeof ord.account_move === "object" && ord.account_move.id) {
-                accountMoveId = ord.account_move.id;
-            } else if (typeof ord.account_move === "number") {
-                accountMoveId = ord.account_move;
-            }
-        }
-
-        let ocaVouchersForReceipt = [];
-        try {
-            const rawVouchers = await this.orm.call("pos.order", "get_oca_voucher_dict_for_pos_receipt", [
-                orderServerId || false,
-                orderRef || false,
-            ]);
-            ocaVouchersForReceipt = Array.isArray(rawVouchers)
-                ? rawVouchers
-                : (rawVouchers && typeof rawVouchers === "object" && Object.keys(rawVouchers).length
-                    ? [rawVouchers]
-                    : []);
-        } catch (e) {
-            console.warn(`${OCA_VOUCHER_LOG} _qzBuildReceiptHtml voucher dict`, e);
-        }
-
-        // Bloque: mismo motivo que en printReceipt(QZ) — pre-cargar cfe_data acá y
-        // marcar _skipAsyncReload evita que receipt_cfe_data.js repita RPC en
-        // onMounted mientras el RenderContainer aislado captura el render, lo que
-        // deja el Fiber de Owl sin completar (toHtml() resuelve null).
-        let receiptServerData = null;
-        try {
-            receiptServerData = await this.orm.call(
-                "pos.order",
-                "get_receipt_data_from_invoice_or_order",
-                [[], accountMoveId, orderRef, orderServerId]
-            );
-        } catch (e) {
-            console.error(`${LOG} _qzBuildReceiptHtml receiptServerData RPC error`, e);
-        }
-        let cfeData = {};
-        const accountMoveIdForCfe = accountMoveId || receiptServerData?.account_move_id || null;
-        if (accountMoveIdForCfe) {
-            try {
-                const rawCfeData = await this.orm.call(
-                    "pos.order",
-                    "get_cfe_data_from_invoice",
-                    [[], accountMoveIdForCfe]
-                ) || {};
-                if (rawCfeData && (rawCfeData.tipo || rawCfeData.serie || rawCfeData.numero)) {
-                    cfeData = { ...rawCfeData };
-                    cfeData.vta_cont = ord?.pos_reference || ord?.name || "";
-                    cfeData.caja = ord?.session_id ? (ord.session_id.name || "") : "";
-                    cfeData.cajero = ord?.user_id ? (ord.user_id.name || "") : "";
-                    cfeData.vend = "0";
-                    cfeData.store = ord?.config_id ? `STORE-${ord.config_id.id}` : "";
-                    if (ord?.payment_ids?.length > 0) {
-                        const pm = ord.payment_ids[0].payment_method_id;
-                        cfeData.pago = pm ? (pm.name || "Contado") : "Contado";
-                    } else {
-                        cfeData.pago = "Contado";
-                    }
-                }
-            } catch (e) {
-                console.error(`${LOG} _qzBuildReceiptHtml cfe_data RPC error`, e);
-            }
-        }
-        const base = ord.export_for_printing();
-        const receiptData = {
-            ...base,
-            ...(receiptServerData || {}),
+        const receiptData = await buildReceiptPrintData(this.env, this.pos.get_order(), {
             isBill: this.isBill,
-            oca_voucher: ocaVouchersForReceipt[0] || {},
-            oca_vouchers: ocaVouchersForReceipt,
-            cfe_data: cfeData,
-            _skipAsyncReload: true,
-        };
-        if (!receiptServerData?.orderlines?.length) {
-            receiptData.orderlines = base.orderlines;
-        }
-        if (!receiptServerData?.paymentlines?.length) {
-            receiptData.paymentlines = base.paymentlines;
-        }
+        });
         const receiptEl = await this.renderer.toHtml(OrderReceipt, {
             data: receiptData,
             formatCurrency: this.env.utils.formatCurrency,
@@ -495,93 +412,9 @@ patch(ReceiptScreen.prototype, {
             btn.className = "fa fa-fw fa-spin fa-circle-o-notch";
         }
         try {
-            const order = this.pos.get_order();
-            const base = order.export_for_printing();
-            const orderRef = order.pos_reference || order.name || "";
-            const orderServerId = order.server_id || null;
-            let accountMoveId = null;
-            if (order?.account_move) {
-                if (Array.isArray(order.account_move)) {
-                    accountMoveId = order.account_move[0];
-                } else if (typeof order.account_move === "object" && order.account_move.id) {
-                    accountMoveId = order.account_move.id;
-                } else if (typeof order.account_move === "number") {
-                    accountMoveId = order.account_move;
-                }
-            }
-            let ocaVouchers = [];
-            try {
-                const rawVouchers = await this.env.services.orm.call(
-                    "pos.order",
-                    "get_oca_voucher_dict_for_pos_receipt",
-                    [orderServerId || false, orderRef || false]
-                );
-                ocaVouchers = Array.isArray(rawVouchers)
-                    ? rawVouchers
-                    : (rawVouchers && typeof rawVouchers === "object" && Object.keys(rawVouchers).length
-                        ? [rawVouchers]
-                        : []);
-            } catch (e) {
-                console.warn(`${OCA_VOUCHER_LOG} printReceipt(QZ) voucher RPC error`, e);
-            }
-            // Bloque: pre-cargar receiptServerData/cfe_data acá, igual que la versión
-            // web de odoo_pos_no_invoice. Sin esto, receipt_cfe_data.js (onMounted)
-            // repite estas mismas RPC mientras el RenderContainer aislado de
-            // renderer.toHtml() intenta capturar el render, dejando el Fiber de Owl
-            // sin completar nunca (toHtml() termina resolviendo null y qzPrint.printHtml
-            // explota con "Cannot read properties of null (reading 'outerHTML')").
-            let receiptServerData = null;
-            try {
-                receiptServerData = await this.env.services.orm.call(
-                    "pos.order",
-                    "get_receipt_data_from_invoice_or_order",
-                    [[], accountMoveId, orderRef, orderServerId]
-                );
-            } catch (e) {
-                console.error(`${LOG} printReceipt(QZ) receiptServerData RPC error`, e);
-            }
-            let cfeData = {};
-            const accountMoveIdForCfe = accountMoveId || receiptServerData?.account_move_id || null;
-            if (accountMoveIdForCfe) {
-                try {
-                    const rawCfeData = await this.env.services.orm.call(
-                        "pos.order",
-                        "get_cfe_data_from_invoice",
-                        [[], accountMoveIdForCfe]
-                    ) || {};
-                    if (rawCfeData && (rawCfeData.tipo || rawCfeData.serie || rawCfeData.numero)) {
-                        cfeData = { ...rawCfeData };
-                        cfeData.vta_cont = order?.pos_reference || order?.name || "";
-                        cfeData.caja = order?.session_id ? (order.session_id.name || "") : "";
-                        cfeData.cajero = order?.user_id ? (order.user_id.name || "") : "";
-                        cfeData.vend = "0";
-                        cfeData.store = order?.config_id ? `STORE-${order.config_id.id}` : "";
-                        if (order?.payment_ids?.length > 0) {
-                            const pm = order.payment_ids[0].payment_method_id;
-                            cfeData.pago = pm ? (pm.name || "Contado") : "Contado";
-                        } else {
-                            cfeData.pago = "Contado";
-                        }
-                    }
-                } catch (e) {
-                    console.error(`${LOG} printReceipt(QZ) cfe_data RPC error`, e);
-                }
-            }
-            const receiptData = {
-                ...base,
-                ...(receiptServerData || {}),
+            const receiptData = await buildReceiptPrintData(this.env, this.pos.get_order(), {
                 isBill: this.isBill,
-                oca_voucher: ocaVouchers[0] || {},
-                oca_vouchers: ocaVouchers,
-                cfe_data: cfeData,
-                _skipAsyncReload: true,
-            };
-            if (!receiptServerData?.orderlines?.length) {
-                receiptData.orderlines = base.orderlines;
-            }
-            if (!receiptServerData?.paymentlines?.length) {
-                receiptData.paymentlines = base.paymentlines;
-            }
+            });
             const el = await this.renderer.toHtml(OrderReceipt, {
                 data: receiptData,
                 formatCurrency: this.env.utils.formatCurrency,
