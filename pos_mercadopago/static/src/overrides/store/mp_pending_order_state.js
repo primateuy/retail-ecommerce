@@ -75,6 +75,38 @@ patch(Order.prototype, {
             return !(isMercadoPago && ["pending", "retry"].includes(status));
         });
     },
+
+    /**
+     * Propone como monto de la nueva línea el saldo real de la orden.
+     *
+     * El core usa get_due(), que solo descuenta líneas en 'done'; como se permite
+     * agregar medios con MP en 'pending'/'retry', la nueva línea tomaba el total
+     * sin descontar lo asignado a MP. get_due() no se cambia porque el core lo usa
+     * para decidir si la orden está paga al validar.
+     *
+     * @param {Object} payment_method método de pago de la nueva línea.
+     * @returns {Payment|false} la línea creada, o false si el core no la agregó.
+     */
+    add_paymentline(payment_method) {
+        const newLine = super.add_paymentline(...arguments);
+        if (!newLine) {
+            return newLine;
+        }
+        // Se compara por cid: get_paymentlines() devuelve proxies reactivos, distintos
+        // por referencia de newLine aunque sean la misma línea.
+        const pendingMpAmount = this.get_paymentlines()
+            .filter(
+                (line) =>
+                    line.cid !== newLine.cid &&
+                    line.payment_method.use_payment_terminal === "mercado_pago" &&
+                    ["pending", "retry"].includes(line.payment_status)
+            )
+            .reduce((sum, line) => sum + line.get_amount(), 0);
+        if (pendingMpAmount) {
+            newLine.set_amount(Math.max(newLine.get_amount() - pendingMpAmount, 0));
+        }
+        return newLine;
+    },
 });
 
 patch(Payment.prototype, {
