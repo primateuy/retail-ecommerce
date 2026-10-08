@@ -167,6 +167,15 @@ class MpPendingOrder(models.Model):
                 'expired' o 'error') y el pedido creado (o vacío).
         """
         self.ensure_one()
+        # TEMPORAL - SOLO PRUEBAS: simula el pago del QR sin consultar a MP. Borrar este bloque.
+        simulate_payment = self.env['ir.config_parameter'].sudo().get_param(
+            'pos_mercadopago.simular_pago_qr'
+        )
+        if simulate_payment == 'True':
+            _logger.warning("Orden MP %s: pago SIMULADO (pos_mercadopago.simular_pago_qr)", self.name)
+            order = self._create_pos_order_from_mp()
+            return ('paid' if order else 'processing'), order
+        # FIN TEMPORAL
         try:
             payment = self._find_approved_payment()
             if not payment:
@@ -241,6 +250,8 @@ class MpPendingOrder(models.Model):
         self._confirm_pos_order(order)
         self._create_payment_transaction(order, payment)
         self.sudo().unlink()
+        # Último paso: la firma del CFE hace commits y deja persistido todo lo anterior.
+        self._invoice_pos_order(order)
         return order
 
     def _get_payment_date(self, payment):
@@ -364,7 +375,7 @@ class MpPendingOrder(models.Model):
             )
 
     def _confirm_pos_order(self, order):
-        """Marca el pedido como pagado y genera picking y factura.
+        """Marca el pedido como pagado y genera el picking.
 
         Cada paso va en su propio savepoint: si falla, el pedido igual queda
         registrado (en borrador si no cuadra el pago) en vez de perderse todo
@@ -395,12 +406,24 @@ class MpPendingOrder(models.Model):
         except Exception:
             _logger.exception("Error al crear/validar picking para orden %s", order.name)
 
-        if order.to_invoice and order.partner_id:
-            try:
-                with self.env.cr.savepoint():
-                    order._generate_pos_order_invoice()
-            except Exception:
-                _logger.exception("Error al crear factura para orden %s", order.name)
+    def _invoice_pos_order(self, order):
+        """Genera, postea y concilia la factura del pedido si corresponde.
+
+        No usa savepoint: la firma del CFE (l10n_uy_einvoice_uruware) hace
+        cr.commit() antes de postear, lo que elimina el savepoint; el RELEASE
+        posterior fallaba, abortaba la transacción y la factura quedaba en
+        borrador, sin pagar y con el CFE ya emitido en DGI. Por eso se llama
+        al final, cuando no queda nada pendiente que pueda perderse.
+
+        Args:
+            order (pos.order): pedido ya creado y marcado como pagado.
+        """
+        if order.state != 'paid' or not (order.to_invoice and order.partner_id):
+            return
+        try:
+            order._generate_pos_order_invoice()
+        except Exception:
+            _logger.exception("Error al crear factura para orden %s", order.name)
 
     def _create_payment_transaction(self, order, payment):
         """Registra el payment.transaction del cobro de MP asociado al pedido."""
