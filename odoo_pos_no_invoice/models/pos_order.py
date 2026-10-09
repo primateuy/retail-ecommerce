@@ -376,6 +376,9 @@ class PosOrder(models.Model):
                 'sucursal_direccion': sucursal_direccion,
                 'sucursal_ciudad': sucursal_ciudad,
                 'punto_emision': punto_emision_nombre,
+                # Va también en cfe_data porque es lo único que llega a todas
+                # las vías de impresión, incluida la reimpresión.
+                'receptor': self._receipt_receptor_vals(invoice),
             }
 
             _logger.info(
@@ -439,6 +442,57 @@ class PosOrder(models.Model):
                 'amount': rate if rate is not None else 0.0,
                 'amount_type': 'percent',
             },
+        }
+
+    def _receipt_receptor_vals(self, invoice, pos_order=None):
+        """Arma los datos del receptor del CFE para la representación impresa.
+
+        Una eFactura (y un eTicket con receptor identificado) tiene que mostrar
+        el documento y el nombre del cliente en lugar de «CONSUMO FINAL».
+        Se toma el partner de la factura, que es el que se informa a DGI; si
+        todavía no hay factura, el de la orden.
+
+        Args:
+            invoice (account.move): factura de la orden; puede ser vacía.
+            pos_order (pos.order): orden del POS, usada como respaldo.
+
+        Returns:
+            dict: name, doc_type, vat, street, city e is_receptor. Vacío si no
+                hay partner.
+        """
+        partner = (invoice and invoice.partner_id) or (pos_order and pos_order.partner_id)
+        if not partner:
+            return {}
+
+        identification_type = (
+            partner.l10n_latam_identification_type_id
+            if 'l10n_latam_identification_type_id' in partner._fields
+            else False
+        )
+        is_rut = bool(identification_type) and str(identification_type.code) == '2'
+        doc_type = 'RUT' if is_rut else (identification_type.name if identification_type else '')
+
+        # Mismo criterio que l10n_uy_einvoice_base para informar el receptor:
+        # la eFactura y sus notas siempre lo llevan; el eTicket solo si el
+        # cliente está marcado como receptor.
+        cfe_type = str(invoice.cfe_type) if invoice and 'cfe_type' in invoice._fields else ''
+        is_efactura = cfe_type in ('111', '112', '113', '121', '122', '123')
+        is_receptor = is_efactura or bool(
+            'es_receptor' in partner._fields and partner.es_receptor
+        )
+
+        city = ''
+        if 'city_id' in partner._fields and partner.city_id:
+            city = partner.city_id.name or ''
+        city = city or partner.city or ''
+
+        return {
+            'name': partner.name or '',
+            'doc_type': doc_type,
+            'vat': partner.vat or '',
+            'street': partner.street or '',
+            'city': city,
+            'is_receptor': is_receptor and bool(partner.vat),
         }
 
     @api.model
@@ -649,6 +703,7 @@ class PosOrder(models.Model):
             'document_type': document_type,
             'customer_name': customer_name,
             'branch_name': branch_name,
+            'receptor': self._receipt_receptor_vals(invoice, pos_order),
         })
 
         # Construir datos de adenda desde la orden del POS.

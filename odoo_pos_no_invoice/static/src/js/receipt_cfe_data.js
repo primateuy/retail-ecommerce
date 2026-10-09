@@ -314,15 +314,24 @@ patch(OrderReceipt.prototype, {
                 || cfeData?.cfe_serie_num
                 || this.props.data?.name
                 || '',
-            date: receiptData.legal_data?.date
-                || this.props.data?.date
+            // Primero la del POS: viene de formatDateTime(date_order), en hora local
+            // y con hora. La del servidor es solo dd/mm/yyyy y, sin factura, sale
+            // de date_order en UTC (después de las 21 h marcaría el día siguiente).
+            date: this.props.data?.date
+                || receiptData.legal_data?.date
                 || '',
             document_type: receiptData.legal_data?.document_type
                 || cfeData?.tipo
                 || '',
+            // El receptor de la factura va antes que el partner de la orden activa:
+            // al reimprimir, get_order() es la orden NUEVA (sin cliente).
             customer_name: receiptData.legal_data?.customer_name
+                || cfeData?.receptor?.name
                 || partner?.name
                 || 'Consumidor final',
+            receptor: (cfeData?.receptor && Object.keys(cfeData.receptor).length)
+                ? cfeData.receptor
+                : (receiptData.legal_data?.receptor || {}),
             branch_name: receiptData.legal_data?.branch_name
                 || this.pos?.config?.name
                 || '',
