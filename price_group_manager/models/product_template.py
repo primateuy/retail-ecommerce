@@ -206,20 +206,21 @@ class ProductTemplate(models.Model):
         
         return True
 
-    @api.model
-    def create(self, vals):
+    @api.model_create_multi
+    def create(self, vals_list):
         """
         Sobrescribe el método create para manejar la creación de productos
         con agrupadores de precio.
+
+        En lote (model_create_multi), igual que el core: con @api.model cada importación de
+        plantillas se partía en un create por registro.
         """
-        # Crear el producto template
-        product = super().create(vals)
-        
+        products = super().create(vals_list)
         # Si se especificaron agrupadores de precio, crearlos
-        if 'x_price_group_ids' in vals and vals['x_price_group_ids']:
-            self._create_price_group_lines_from_vals(product, vals)
-        
-        return product
+        for product, vals in zip(products, vals_list):
+            if vals.get('x_price_group_ids'):
+                self._create_price_group_lines_from_vals(product, vals)
+        return products
 
     def write(self, vals):
         """

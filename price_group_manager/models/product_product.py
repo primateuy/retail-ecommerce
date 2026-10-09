@@ -277,20 +277,22 @@ class ProductProduct(models.Model):
         """
         return not self.has_own_price_groups() and bool(self.x_inherited_price_group_id)
 
-    @api.model
-    def create(self, vals):
+    @api.model_create_multi
+    def create(self, vals_list):
         """
         Sobrescribe el método create para manejar la creación de variantes
         con agrupadores de precio.
+
+        En lote (model_create_multi): con @api.model Odoo partía cada creación masiva de
+        variantes —una plantilla con cientos de combinaciones— en un create por variante,
+        y todo lo que viene después (reglas, WIS, recálculos) se repetía por cada una.
         """
-        # Crear la variante
-        variant = super().create(vals)
-        
+        variants = super().create(vals_list)
         # Si se especificaron agrupadores de precio, crearlos
-        if 'x_price_group_ids' in vals and vals['x_price_group_ids']:
-            self._create_price_group_lines_from_vals(variant, vals)
-        
-        return variant
+        for variant, vals in zip(variants, vals_list):
+            if vals.get('x_price_group_ids'):
+                self._create_price_group_lines_from_vals(variant, vals)
+        return variants
 
     def write(self, vals):
         """
