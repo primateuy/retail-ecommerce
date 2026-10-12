@@ -153,12 +153,11 @@ patch(Order.prototype, {
         // Preserve the cashier's current selection so the sync doesn't hijack it.
         const savedSelectedLine = this.selected_orderline;
         try {
-            const forumRewardId = cfg.forum_birthday_reward_id?.[0];
+            // Por producto también (isForumBirthdayLine): en una orden restaurada del
+            // navegador la marca en memoria se pierde, y sin esto cada recarga dejaba el
+            // descuento anterior y agregaba otro encima.
             for (const line of [...this.get_orderlines()]) {
-                const isForumLine =
-                    line.forum_birthday_line ||
-                    (forumRewardId && line.reward_id === forumRewardId);
-                if (isForumLine) {
+                if (isForumBirthdayLine(line)) {
                     this._unlinkOrderline(line);
                 }
             }
@@ -191,7 +190,7 @@ patch(Order.prototype, {
             }
             let base = 0;
             for (const line of this.get_orderlines()) {
-                if (line.is_reward_line || line.refunded_orderline_id || line.forum_birthday_line) {
+                if (line.is_reward_line || line.refunded_orderline_id || isForumBirthdayLine(line)) {
                     continue;
                 }
                 base += forumBirthdayLinePromoBaseAmount(line);
