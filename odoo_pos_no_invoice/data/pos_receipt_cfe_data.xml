@@ -103,11 +103,6 @@
                         </t>
                     </div>
                     <div style="text-align:center; font-size:12px; width:100%">
-                        <t t-if="props.data.cfe_data.ruc_emisor">
-                            RUT: <t t-esc="props.data.cfe_data.ruc_emisor"/>
-                        </t>
-                    </div>
-                    <div style="text-align:center; font-size:12px; width:100%">
                         <t t-if="props.data.cfe_data.pago">
                             Pago: <t t-esc="props.data.cfe_data.pago"/>
                         </t>
@@ -115,17 +110,47 @@
                 </div>
             </t>
 
-            <!-- Mensaje de consumo final -->
-            <div style="text-align:center; font-weight:bold; border:2px solid black; padding:8px; margin:10px 0; font-size:13px; width:100%">
-                CONSUMO FINAL
-            </div>
+            <!-- Receptor: eFactura (o eTicket con receptor) lleva documento y nombre
+                 del cliente; si no, consumo final. -->
+            <t t-set="receptor" t-value="(props.data.legal_data and props.data.legal_data.receptor) || {}"/>
+            <t t-if="receptor.is_receptor">
+                <div style="font-size:12px; border:2px solid black; padding:6px; margin:10px 0; width:100%">
+                    <div style="text-align:center; font-weight:bold; font-size:13px; width:100%">
+                        <t t-esc="receptor.doc_type || 'Documento'"/> COMPRADOR: <t t-esc="receptor.vat"/>
+                    </div>
+                    <div style="text-align:center; width:100%"><t t-esc="receptor.name"/></div>
+                    <t t-if="receptor.street">
+                        <div style="text-align:center; width:100%">
+                            <t t-esc="receptor.street"/>
+                            <t t-if="receptor.city">, <t t-esc="receptor.city"/></t>
+                        </div>
+                    </t>
+                </div>
+            </t>
+            <t t-else="">
+                <div style="text-align:center; font-weight:bold; border:2px solid black; padding:8px; margin:10px 0; font-size:13px; width:100%">
+                    CONSUMO FINAL
+                </div>
+            </t>
 
-            <!-- ===================== MONEDA ===================== -->
-            <div style="font-size:14px; width:100%">
-               <t t-if="props.data.currency_name">
-                  Moneda: <t t-esc="props.data.currency_name"/>
-               </t>
-             </div>
+            <!-- ===================== MONEDA Y FECHA ===================== -->
+            <!-- Una sola fila: moneda a la izquierda, fecha y hora a la derecha.
+                 Tabla sin table-layout:fixed para que la fecha tome el ancho que
+                 necesita (nowrap) y la moneda se quede con el resto. A 12px entran
+                 ~42 caracteres en 80mm: «Moneda: UYU» + «Fecha: dd/mm/aaaa hh:mm:ss»
+                 suman 37. -->
+            <div style="font-size:12px; width:100%; display:table; color:#000">
+                <span style="display:table-cell; text-align:left; white-space:nowrap">
+                    <t t-if="props.data.currency_name">
+                        Moneda: <t t-esc="props.data.currency_name"/>
+                    </t>
+                </span>
+                <span style="display:table-cell; text-align:right; white-space:nowrap">
+                    <t t-if="props.data.legal_data and props.data.legal_data.date">
+                        <t t-esc="props.data.legal_data.date"/>
+                    </t>
+                </span>
+            </div>
 
             <!-- ===================== CUERPO ===================== -->
             <!-- ============ 2.5 PRODUCTOS, IVA, TOTAL Y PAGOS (diseño A) ============
