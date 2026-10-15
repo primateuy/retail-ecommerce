@@ -84,8 +84,10 @@ class SaleOrder(models.Model):
             partner_id = self.env['res.partner'].create([vals])
             #partner_id.child_ids.sudo().unlink()
 
-        entrega = json_data.get('entrega', {})
-        dir_envio = entrega.get('direccionEnvio', {})
+        # Fenicio envía las claves con valor null (ej. RETIRO sin direccionEnvio),
+        # por lo que el default de .get() no alcanza.
+        entrega = json_data.get('entrega') or {}
+        dir_envio = entrega.get('direccionEnvio') or {}
         if partner_id.city == False and 'entrega' in json_data:
             if dir_envio:
                 if partner_id.country_id == False:
