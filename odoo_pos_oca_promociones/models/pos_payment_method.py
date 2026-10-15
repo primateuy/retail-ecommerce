@@ -183,14 +183,9 @@ class PosPaymentMethod(models.Model):
             
             # Buscar promociones activas solo por proveedor (aplica a todos los métodos con ese proveedor)
             if provider_code:
-                domain = [
-                    ('active', '=', True),
-                    ('payment_provider_id.code', '=', provider_code),
-                    '|',
-                    ('company_id', '=', False),
-                    ('company_id', '=', self.env.company.id),
-                ]
-                promotions = self.env['payment.method.promotion'].search(domain, limit=1)
+                Promotion = self.env['payment.method.promotion']
+                domain = Promotion._promotion_domain(self) + [('payment_provider_id.code', '=', provider_code)]
+                promotions = Promotion.search(domain, limit=1)
                 if promotions:
                     has_active_promotions = True
                     _logger.info('Promociones activas encontradas para proveedor %s', provider_code)

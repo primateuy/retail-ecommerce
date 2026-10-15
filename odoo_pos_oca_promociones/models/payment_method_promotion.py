@@ -392,6 +392,47 @@ class PaymentMethodPromotion(models.Model):
         return True, msg
 
     @api.model
+    @api.model
+    def _oca_provider_for(self, payment_method):
+        """Proveedor OCA con el que cobra el método de pago de la caja.
+
+        El del método; si no tiene, el de su terminal (por el registro asociado o por el PosID,
+        como resuelve la transacción).
+        """
+        provider = self.env['payment.provider']
+        if not payment_method:
+            return provider
+        payment_method = payment_method.sudo()
+        if 'payment_provider' in payment_method._fields:
+            provider = payment_method.payment_provider
+        if not provider and 'pos_id' in payment_method._fields:
+            provider = payment_method.pos_id.payment_provider_id
+        if not provider and payment_method.codigo_terminal:
+            provider = self.env['payment.transaction']._get_oca_provider_by_pos_id(
+                payment_method.codigo_terminal)
+        return provider
+
+    @api.model
+    def _promotion_domain(self, payment_method):
+        """Promociones activas que pueden aplicar a un cobro con ese método de pago.
+
+        Se eligen por el proveedor OCA de la caja y su compañía, no por ``env.company``: el
+        cobro se procesa en un hilo de superusuario sin compañía de la caja, y ahí
+        ``env.company`` es siempre la principal (todas las cajas tomaban la de Surf).
+        """
+        provider = self._oca_provider_for(payment_method)
+        if provider:
+            return [
+                ('active', '=', True),
+                ('payment_provider_id', '=', provider.id),
+                '|', ('company_id', '=', False), ('company_id', '=', provider.company_id.id),
+            ]
+        company = payment_method.company_id if payment_method else self.env.company
+        return [
+            ('active', '=', True),
+            '|', ('company_id', '=', False), ('company_id', '=', company.id),
+        ]
+
     def find_applicable_promotion(self, card_data, provider_code=None, payment_method_id=None, order=None):
         """
         Busca una promoción aplicable según los criterios dados
@@ -405,7 +446,8 @@ class PaymentMethodPromotion(models.Model):
                 - Issuer: Emisor
                 - CardNumber: Número de tarjeta o BIN
             provider_code (str): Código del proveedor de pago
-            payment_method_id (int): ID del método de pago POS
+            payment_method_id (int): ID del método de pago POS; decide el proveedor y la compañía
+                de las promociones candidatas (``_promotion_domain``)
             order: Obsoleto, se ignora. La incompatibilidad se evalúa con los programas aplicados
                 en carrito (pos.session + pos.order borrador) vía
                 ``get_incompatibility_payment_block_for_applied_programs()``.
@@ -413,15 +455,8 @@ class PaymentMethodPromotion(models.Model):
         Returns:
             payment.method.promotion o None: Promoción aplicable o None si no hay ninguna
         """
-        # Buscar promociones activas
-        domain = [
-            ('active', '=', True),
-            '|',
-            ('company_id', '=', False),
-            ('company_id', '=', self.env.company.id),
-        ]
-        
-        promotions = self.search(domain, order='sequence, id')
+        payment_method = self.env['pos.payment.method'].browse(payment_method_id).exists()
+        promotions = self.search(self._promotion_domain(payment_method), order='sequence, id')
         
         card_number = card_data.get('CardNumber', '') or ''
         
