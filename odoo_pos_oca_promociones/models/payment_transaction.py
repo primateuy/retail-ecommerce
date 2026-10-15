@@ -10,7 +10,7 @@ Este módulo extiende payment.transaction para:
 import json
 import logging
 
-from odoo import models, api
+from odoo import models, fields, api
 from odoo.exceptions import ValidationError
 
 _logger = logging.getLogger(__name__)
@@ -21,6 +21,27 @@ class PaymentTransaction(models.Model):
     Extensión del modelo payment.transaction para promociones OCA
     """
     _inherit = 'payment.transaction'
+
+    # La promoción queda en la transacción y el contador de la promoción se cuenta desde acá:
+    # el cobro nunca escribe en la promoción, que comparten todas las cajas a la vez.
+    oca_promotion_id = fields.Many2one(
+        'payment.method.promotion',
+        string='Promoción OCA',
+        ondelete='set null',
+        index=True,
+        copy=False,
+        readonly=True,
+    )
+
+    def _oca_promotion_vals(self, promotion_info):
+        """Valores de promoción a guardar en la transacción a partir de ``promotion_info``."""
+        promotion = self.env['payment.method.promotion']
+        if promotion_info.get('promotion_id'):
+            promotion = promotion.browse(promotion_info['promotion_id']).exists()
+        return {
+            'is_promotion': promotion_info.get('is_promotion', False),
+            'oca_promotion_id': promotion.id,
+        }
 
     @api.model
     def get_oca_display_message(self, oca_response):
@@ -45,9 +66,7 @@ class PaymentTransaction(models.Model):
         # Procesar información de promoción si está presente
         if oca_response.get('promotion_info'):
             promotion_info = oca_response['promotion_info']
-            update_vals = {
-                'is_promotion': promotion_info.get('is_promotion', False),
-            }
+            update_vals = self._oca_promotion_vals(promotion_info)
             
             # Actualizar oca_complete_response para incluir información de promoción
             try:
@@ -89,9 +108,7 @@ class PaymentTransaction(models.Model):
         # Procesar información de promoción si está presente
         if oca_response.get('promotion_info'):
             promotion_info = oca_response['promotion_info']
-            update_vals = {
-                'is_promotion': promotion_info.get('is_promotion', False),
-            }
+            update_vals = transaction._oca_promotion_vals(promotion_info)
             
             # Actualizar oca_complete_response para incluir información de promoción
             try:

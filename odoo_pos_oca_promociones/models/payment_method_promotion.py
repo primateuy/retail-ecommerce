@@ -139,11 +139,12 @@ class PaymentMethodPromotion(models.Model):
     )
     
     # Estadísticas (opcional, para reportes)
+    # Se cuenta desde las transacciones y no se guarda: sumarle 1 durante el cobro chocaba
+    # entre cajas que aplicaban la misma promoción a la vez, y el choque deshacía el pago.
     times_applied = fields.Integer(
         string='Veces Aplicada',
-        default=0,
-        readonly=True,
-        help='Contador de veces que se ha aplicado esta promoción'
+        compute='_compute_times_applied',
+        help='Cantidad de cobros aprobados con esta promoción'
     )
 
     @api.constrains('discount_percent')
@@ -445,9 +446,27 @@ class PaymentMethodPromotion(models.Model):
         
         return None
     
-    def action_increment_times_applied(self):
-        """
-        Incrementa el contador de veces aplicada
-        """
+    def _times_applied_domain(self):
+        return [('oca_promotion_id', 'in', self.ids), ('state', '=', 'done')]
+
+    def _compute_times_applied(self):
+        if not self.ids:
+            self.times_applied = 0
+            return
+        grupos = self.env['payment.transaction'].sudo()._read_group(
+            self._times_applied_domain(), ['oca_promotion_id'], ['__count'])
+        cantidades = {promotion.id: cantidad for promotion, cantidad in grupos}
+        for promotion in self:
+            promotion.times_applied = cantidades.get(promotion.id, 0)
+
+    def action_view_transactions(self):
+        """Abre los cobros aprobados con esta promoción."""
         self.ensure_one()
-        self.times_applied += 1
+        return {
+            'type': 'ir.actions.act_window',
+            'name': _('Cobros con %s', self.name),
+            'res_model': 'payment.transaction',
+            'view_mode': 'tree,form',
+            'domain': self._times_applied_domain(),
+            'context': {'create': False},
+        }

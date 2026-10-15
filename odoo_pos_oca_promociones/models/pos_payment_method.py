@@ -823,10 +823,6 @@ class PosPaymentMethod(models.Model):
                                             'description': f'{promotion.name} - {discount_percent}%',
                                             'is_promotion': True
                                         }
-                                        try:
-                                            promotion.action_increment_times_applied()
-                                        except Exception as counter_error:
-                                            _logger.warning('Error al incrementar contador de promoción: %s', str(counter_error))
                                         result['promotion_info'] = saved_promotion_info
                                         _logger.info('Información de promoción almacenada en resultado para transacción OCA: %s', transaction_id)
                                         if confirm_response.get('ResponseCode') in ['0', '10']:

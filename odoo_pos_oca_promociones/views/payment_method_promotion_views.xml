@@ -27,12 +27,11 @@
         <field name="arch" type="xml">
             <form string="Promoción por Método de Pago">
                 <header>
-                    <button name="action_increment_times_applied" string="Incrementar Contador" type="object" class="oe_stat_button" icon="fa-bar-chart"/>
                     <field name="active" widget="boolean_toggle"/>
                 </header>
                 <sheet>
                     <div class="oe_button_box" name="button_box">
-                        <button class="oe_stat_button" type="object" name="action_increment_times_applied" icon="fa-bar-chart">
+                        <button class="oe_stat_button" type="object" name="action_view_transactions" icon="fa-bar-chart">
                             <field name="times_applied" widget="statinfo" string="Veces Aplicada"/>
                         </button>
                     </div>
