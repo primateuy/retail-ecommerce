@@ -491,6 +491,34 @@ class PosPaymentMethod(models.Model):
         
         return response_json
 
+    @api.model
+    def _oca_promo_confirm_quotas(self, result, data):
+        """
+        Cuotas para processConfirmFinancialPurchase.
+
+        Si la consulta al pinpad o el cobro inicial traen un valor >= 1, se usa ese. Si no, va 0:
+        OCA toma las cuotas que el cliente elige en el pinpad. Antes completaba con 1 y OCA aprobaba
+        en 1 cuota toda venta con promoción, aunque el cliente eligiera 6 (Forum, 16-10-2026). Es el
+        mismo 0 que ya manda la confirmación sin promoción.
+        """
+        candidates = []
+        for key in ('Quota', 'Quotas'):
+            val = (result or {}).get(key)
+            if val is not None and val != '':
+                candidates.append(val)
+        for key in ('Installments', 'Quotas'):
+            val = (data or {}).get(key)
+            if val is not None and val != '':
+                candidates.append(val)
+        for raw in candidates:
+            try:
+                n = int(raw)
+            except (TypeError, ValueError):
+                continue
+            if n >= 1:
+                return n
+        return 0
+
     def _procesar_en_segundo_plano(
         self,
         data,
@@ -551,29 +579,7 @@ class PosPaymentMethod(models.Model):
             last_taxable_sent = data.get('TaxableAmount')
 
             def _get_quota_value():
-                """
-                Cuotas para processConfirmFinancialPurchase: nunca 0 (OCA puede devolver EXCEDE CUOTAS).
-
-                Se prioriza Quota/Quotas del resultado de consulta; luego Installments del cobro inicial;
-                se ignoran valores < 1.
-                """
-                candidates = []
-                for key in ('Quota', 'Quotas'):
-                    val = result.get(key)
-                    if val is not None and val != '':
-                        candidates.append(val)
-                for key in ('Installments', 'Quotas'):
-                    val = data.get(key)
-                    if val is not None and val != '':
-                        candidates.append(val)
-                for raw in candidates:
-                    try:
-                        n = int(raw)
-                    except (TypeError, ValueError):
-                        continue
-                    if n >= 1:
-                        return n
-                return 1
+                return env['pos.payment.method']._oca_promo_confirm_quotas(result, data)
 
             query_data = {
                 "PosID": data['PosID'],
