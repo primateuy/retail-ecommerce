@@ -10,7 +10,7 @@ Este módulo agrega funcionalidad para:
 import json
 import logging
 
-from odoo import models, api
+from odoo import models, api, _
 from odoo.exceptions import ValidationError
 
 _logger = logging.getLogger(__name__)
@@ -357,7 +357,7 @@ class PosOrder(models.Model):
                 - line_id: int - ID de la línea creada si fue exitoso
         """
         self.ensure_one()
-        
+
         try:
             # Bloqueo explícito: promoción OCA incompatible con lealtad ya aplicada en este pedido
             if promotion_id:
@@ -434,15 +434,12 @@ class PosOrder(models.Model):
                 self.name,
             )
 
-            # Bloque: impuestos de la línea de descuento (mismos criterios que antes).
-            tax_ids = []
-            for line in self.lines:
-                if line.product_id.id != product_id and line.tax_ids:
-                    for tax in line.tax_ids:
-                        if tax.id not in tax_ids:
-                            tax_ids.append(tax.id)
-            if not tax_ids and product.taxes_id:
-                tax_ids = product.taxes_id.ids
+            # Bloque: impuestos de la línea de descuento. Lleva el impuesto del producto de
+            # descuento, no los de las demás líneas: juntarlos le sumaba «Entrega Gratuita» de las
+            # bolsas y el CFE no se podía emitir (dos indicadores de facturación en una línea).
+            # Si el producto tiene más de uno, la línea los lleva igual y la factura queda en
+            # borrador sin emitir (ver _generate_pos_order_invoice): el cobro no se corta.
+            tax_ids = product.sudo().taxes_id.ids
             if not tax_ids:
                 basic_tax = self.env['account.tax'].search([
                     ('amount', '=', 22.0),
@@ -700,5 +697,47 @@ class PosOrder(models.Model):
 
             order._oca_promo_recompute_pos_order_header_amounts()
 
-        return super(PosOrder, self)._generate_pos_order_invoice()
+        # Producto de descuento con más de un impuesto: la venta y el cobro siguen, pero la
+        # factura queda en borrador sin emitir hasta que se corrija el producto.
+        sin_emitir = self.filtered(lambda o: o._oca_promo_discount_tax_error())
+        for order in sin_emitir:
+            order._oca_promo_create_draft_invoice(order._oca_promo_discount_tax_error())
+        resto = self - sin_emitir
+        if not resto:
+            return {}
+        return super(PosOrder, resto)._generate_pos_order_invoice()
+
+    def _oca_promo_discount_tax_error(self):
+        """
+        Mensaje de error si la línea de descuento de la promoción OCA lleva un producto con más
+        de un impuesto (el CFE admite un indicador de facturación por línea); vacío si está bien.
+        """
+        self.ensure_one()
+        discount_products = self.env['payment.method.promotion'].sudo().with_context(
+            active_test=False,
+        ).search([]).mapped('discount_product_id')
+        for line in self.lines.filtered(lambda l: l.price_unit < 0 and l.product_id in discount_products):
+            taxes = line.product_id.sudo().taxes_id
+            if len(taxes) > 1:
+                return _(
+                    'Factura sin emitir: el producto de descuento «%(producto)s» de la promoción OCA '
+                    'tiene %(cantidad)s impuestos (%(impuestos)s) y la línea de descuento admite uno '
+                    'solo. Dejale un único impuesto de venta al producto, corregí el impuesto de la '
+                    'línea de descuento en esta factura y confirmala.',
+                    producto=line.product_id.display_name,
+                    cantidad=len(taxes),
+                    impuestos=', '.join(taxes.mapped('name')),
+                )
+        return ''
+
+    def _oca_promo_create_draft_invoice(self, motivo):
+        """Crea la factura de la orden en borrador, sin publicarla ni emitir el CFE."""
+        self.ensure_one()
+        if self.account_move:
+            return self.account_move
+        move = self._create_invoice(self._prepare_invoice_vals())
+        self.write({'account_move': move.id, 'state': 'invoiced'})
+        _logger.warning('OCA promo: factura de la orden %s queda en borrador. %s', self.name, motivo)
+        move.message_post(body=motivo)
+        return move
     
