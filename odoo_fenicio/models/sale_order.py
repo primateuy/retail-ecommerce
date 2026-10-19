@@ -112,8 +112,12 @@ class SaleOrder(models.Model):
                 raise ValidationError("No se proporcionaron datos de pago")
             
             json_data_pago = json_data['pago']
-            id_externo = json_data_pago.get('idExterno')
-            
+            # 'reference' es obligatoria y única en payment.transaction, pero Fenicio
+            # manda idExterno en null para pagos sin pasarela (ej. ABITAB, CALLCENTER).
+            id_externo = json_data_pago.get('idExterno') or (
+                f"FENICIO-{json_data.get('idOrden')}-{json_data_pago.get('id')}"
+            )
+
             existing_transaction = self.env['payment.transaction'].search([
                 ('reference', '=', id_externo),
                 ('company_id', '=', fenicio_compania.id)
@@ -279,9 +283,8 @@ class SaleOrder(models.Model):
 
             
             entrega = json_data.get('entrega') or {}
-            horario = entrega.get('horario') or {}
-            direccion_envio = horario.get('direccionEnvio') or {}
-            observaciones = direccion_envio.get('observaciones', '')
+            direccion_envio = entrega.get('direccionEnvio') or {}
+            observaciones = direccion_envio.get('observaciones') or ''
 
             # Si la entrega es de tipo RETIRO, agregar el producto del local a la orden
             _logger.info("RETIRO DEBUG — tipo: %s | local: %s", entrega.get('tipo'), entrega.get('local'))
