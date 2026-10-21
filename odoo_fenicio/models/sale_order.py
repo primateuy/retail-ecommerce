@@ -286,31 +286,25 @@ class SaleOrder(models.Model):
             direccion_envio = entrega.get('direccionEnvio') or {}
             observaciones = direccion_envio.get('observaciones') or ''
 
-            # Si la entrega es de tipo RETIRO, agregar el producto del local a la orden
-            _logger.info("RETIRO DEBUG — tipo: %s | local: %s", entrega.get('tipo'), entrega.get('local'))
+            # FIX [#4890]: el producto del local ya no se agrega como línea de la orden.
+            # Con precio 0 terminaba en la factura y el CFE no se podía emitir. Sólo se
+            # usa para encontrar el método de envío del local.
+            carrier_product_ids = [cmd[2]['product_id'] for cmd in lines if cmd[2].get('product_id')]
             if entrega.get('tipo') == 'RETIRO':
                 local_sku = entrega.get('local')
-                if local_sku:
-                    local_product = self.env['product.product'].search(
-                        [('default_code', '=', local_sku)], limit=1
-                    )
-                    if local_product:
-                        lines.append((0, 0, {
-                            'product_id': local_product.id,
-                            'product_uom_qty': 1,
-                        }))
-                        precios_por_linea.append(local_product.lst_price)
-                        _logger.info("RETIRO: agregado producto '%s' (SKU: %s)", local_product.name, local_sku)
-                    else:
-                        _logger.warning("RETIRO: no se encontró producto con SKU '%s'", local_sku)
+                local_product = local_sku and self.env['product.product'].search(
+                    [('default_code', '=', local_sku)], limit=1
+                )
+                if local_product:
+                    carrier_product_ids.append(local_product.id)
+                else:
+                    _logger.warning("RETIRO: no se encontró producto con SKU '%s'", local_sku)
 
-            
-
-            # Si algún producto de las líneas corresponde al producto de un carrier con tipo de orden, usarlo
-            line_product_ids = [cmd[2]['product_id'] for cmd in lines if cmd[2].get('product_id')]
-            if line_product_ids:
-                carrier = self.env['delivery.carrier'].search([
-                    ('product_id', 'in', line_product_ids),
+            # El método de envío cuyo producto coincide define el tipo de orden (almacén y ruta)
+            carrier = self.env['delivery.carrier']
+            if carrier_product_ids:
+                carrier = carrier.search([
+                    ('product_id', 'in', carrier_product_ids),
                     ('sale_order_type_id', '!=', False),
                     ('company_id', 'in', [fenicio_compania.id, False]),
                 ], limit=1)
@@ -347,6 +341,7 @@ class SaleOrder(models.Model):
                 'company_id': fenicio_compania.id,
                 'type_id': sale_order_type_id.id if sale_order_type_id else False,
                 'website_id': fenicio_website.id,
+                'carrier_id': carrier.id,
             }
             if sale_order_type_id and sale_order_type_id.warehouse_id:
                 vals['warehouse_id'] = sale_order_type_id.warehouse_id.id
