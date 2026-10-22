@@ -10,6 +10,11 @@ from odoo.exceptions import UserError
 
 _logger = logging.getLogger(__name__)
 
+# Máximo que admite Fenicio en el parámetro tot de /API_V1/catalogo.
+CATALOG_PAGE_SIZE = 250
+# Tope de seguridad: 250 x 400 = 100.000 productos.
+CATALOG_MAX_PAGES = 400
+
 
 class FenicioCatalogLine(models.Model):
     _name = 'fenicio.catalog.line'
@@ -73,22 +78,22 @@ class FenicioCatalogLine(models.Model):
         return base_url.rstrip('/') + '/API_V1/catalogo'
 
     @api.model
-    def _fetch_catalog(self, url):
-        """Descarga el catálogo desde Fenicio.
+    def _fetch_catalog(self, url, params=None):
+        """Descarga una página del catálogo desde Fenicio.
 
         Args:
             url (str): endpoint del catálogo Fenicio.
+            params (dict | None): parámetros de la consulta (por ejemplo pag y tot).
 
         Returns:
-            tuple[str, dict | list]: el cuerpo crudo de la respuesta tal cual
-                lo devuelve el endpoint, y el mismo cuerpo ya parseado a JSON.
+            dict | list: el cuerpo de la respuesta parseado a JSON.
 
         Raises:
             UserError: si falla la conexión, hay timeout, el endpoint
                 devuelve un error HTTP o el cuerpo no es JSON válido.
         """
         try:
-            resp = requests.get(url, timeout=60)
+            resp = requests.get(url, params=params, timeout=60)
             resp.raise_for_status()
         except requests.exceptions.ConnectionError:
             raise UserError(f'No se pudo conectar a Fenicio: {url}')
@@ -100,6 +105,69 @@ class FenicioCatalogLine(models.Model):
             return resp.json()
         except ValueError:
             raise UserError('La respuesta de Fenicio no es JSON válido.')
+
+    @api.model
+    def _fetch_catalog_all(self, url):
+        """Descarga el catálogo completo recorriendo todas sus páginas.
+
+        Fenicio pagina el catálogo con pag (desde 1) y tot (entre 10 y 250, 50 por
+        defecto) y no informa el total, así que se piden páginas de CATALOG_PAGE_SIZE
+        hasta que una venga incompleta o vacía.
+
+        Args:
+            url (str): endpoint del catálogo Fenicio.
+
+        Returns:
+            dict: {'error': False, 'productos': [...]} con los productos de todas
+                las páginas, en el formato que entiende _extract_products.
+
+        Raises:
+            UserError: si falla alguna página o Fenicio devuelve un error.
+        """
+        productos = []
+        codigos_vistos = set()
+        for pagina in range(1, CATALOG_MAX_PAGES + 1):
+            data = self._fetch_catalog(url, {'pag': pagina, 'tot': CATALOG_PAGE_SIZE})
+            pagina_productos = self._extract_page(data)
+            if not pagina_productos:
+                break
+            codigos = {prod.get('cod') for prod in pagina_productos if isinstance(prod, dict)}
+            # Si Fenicio ignora pag repite la misma página; cortar evita un loop infinito.
+            if codigos and codigos <= codigos_vistos:
+                _logger.warning('[Fenicio] La página %d del catálogo repite productos, se corta', pagina)
+                break
+            codigos_vistos |= codigos
+            productos.extend(pagina_productos)
+            if len(pagina_productos) < CATALOG_PAGE_SIZE:
+                break
+        else:
+            _logger.warning('[Fenicio] Se alcanzó el máximo de %d páginas del catálogo', CATALOG_MAX_PAGES)
+        _logger.info('[Fenicio] Catálogo descargado: %d productos en %d páginas', len(productos), pagina)
+        return {'error': False, 'productos': productos}
+
+    @api.model
+    def _extract_page(self, data):
+        """Devuelve los productos de una página, o una lista vacía si ya no hay más.
+
+        Args:
+            data (dict | list): respuesta de una página del catálogo.
+
+        Returns:
+            list: productos de la página.
+
+        Raises:
+            UserError: si Fenicio devuelve un error.
+        """
+        if isinstance(data, dict):
+            if data.get('error'):
+                raise UserError(f"Fenicio devolvió un error: {data.get('msj') or 'sin detalle'}")
+            # La documentación nombra la lista "catalogo" y el ejemplo "productos".
+            for key in ('productos', 'catalogo'):
+                if isinstance(data.get(key), list):
+                    return data[key]
+            if not any(isinstance(value, (list, dict)) for value in data.values()):
+                return []
+        return self._extract_products(data)
 
     @api.model
     def _extract_products(self, data):
@@ -185,7 +253,7 @@ class FenicioCatalogLine(models.Model):
     def action_sync_all(self):
         url = self._get_catalog_url()
         _logger.info('[Fenicio] Sincronizando catálogo desde %s', url)
-        data = self._fetch_catalog(url)
+        data = self._fetch_catalog_all(url)
         products = self._extract_products(data)
 
         created = updated = skipped = 0
