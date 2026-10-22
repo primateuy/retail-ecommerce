@@ -68,7 +68,7 @@ class FenicioCatalogSync(models.TransientModel):
         if not website or not website.fenicio_catalog_url:
             raise UserError('No hay una URL de catálogo configurada en el sitio web.')
         url = website.fenicio_catalog_url.rstrip('/') + '/API_V1/catalogo'
-        data = CatalogLine._fetch_catalog(url)
+        data = CatalogLine._fetch_catalog_all(url)
         products = CatalogLine._extract_products(data)
         _logger.info("Catálogo Fenicio obtenido desde %s: %d productos", url, len(products))
 

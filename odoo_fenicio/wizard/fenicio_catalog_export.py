@@ -5,7 +5,6 @@ import json
 import logging
 from io import BytesIO
 
-import requests
 import xlsxwriter
 
 from odoo import models, fields
@@ -49,21 +48,6 @@ class FenicioCatalogExport(models.TransientModel):
                 'Ingresá la URL base en el sitio web → pestaña Fenicio.'
             )
         return base_url.rstrip('/') + '/API_V1/catalogo'
-
-    def _fetch_catalog(self, url):
-        try:
-            resp = requests.get(url, timeout=60)
-            resp.raise_for_status()
-        except requests.exceptions.ConnectionError:
-            raise UserError(f'No se pudo conectar a Fenicio: {url}')
-        except requests.exceptions.Timeout:
-            raise UserError('La solicitud a Fenicio tardó demasiado (timeout 60s).')
-        except requests.exceptions.HTTPError as e:
-            raise UserError(f'Fenicio devolvió un error HTTP: {e}')
-        try:
-            return resp.json()
-        except ValueError:
-            raise UserError('La respuesta de Fenicio no es JSON válido.')
 
     def _extract_products(self, data):
         if isinstance(data, list):
@@ -254,7 +238,7 @@ class FenicioCatalogExport(models.TransientModel):
         url = self._get_catalog_url()
         _logger.info('[Fenicio] GET %s', url)
 
-        data = self._fetch_catalog(url)
+        data = self.env['fenicio.catalog.line']._fetch_catalog_all(url)
         products = self._extract_products(data)
         excel_bytes = self._build_excel(products)
 
