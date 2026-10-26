@@ -125,7 +125,14 @@ class PosBackendTerminalGetnet(models.AbstractModel):
             return {'available': False, 'reason': _(
                 'El proveedor Getnet de la terminal %s está deshabilitado.',
                 terminal.display_name)}
-        if terminal.lock_origin and terminal.lock_origin != GETNET_ORIGEN:
+        # Ocupada por OTRO flujo, pero solo si su lock SIGUE VIGENTE. Un lock
+        # ajeno vencido (TTL) es de un worker que murió sin liberar -p. ej. el
+        # cron de recuperación cortado a mitad deja 'recovery' colgado-: el
+        # próximo terminal_authorize lo roba con getnet_claim, así que mostrar
+        # "ocupada (RECOVERY)" dejaría el medio deshabilitado para siempre por
+        # un lock que ya no vale. Mismo criterio de vencimiento que el claim.
+        if (terminal.lock_origin and terminal.lock_origin != GETNET_ORIGEN
+                and not terminal.getnet_lock_is_stale()):
             return {'available': False, 'reason': _(
                 'La terminal %(term)s está ocupada por otra operación '
                 '(%(origen)s). El mismo pinpad no puede atender dos cobros a '

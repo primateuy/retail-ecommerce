@@ -13,6 +13,7 @@ antes de PostearTransaccion y liberarlo con getnet_release() al terminar
 """
 
 import logging
+from datetime import timedelta
 
 from odoo import _, fields, models
 from odoo.exceptions import UserError
@@ -137,6 +138,22 @@ class GetnetPosTerminal(models.Model):
                 date=self.lock_date or '?',
             ))
         return True
+
+    def getnet_lock_is_stale(self):
+        """El lock venció (TTL) y cualquier flujo podría robarlo con getnet_claim.
+
+        MISMO criterio que la condición SQL de getnet_claim: un lock cuya marca
+        es más vieja que el TTL es de un worker que murió sin liberar. Sirve
+        para que quien consulta disponibilidad no muestre "ocupada" una terminal
+        que en realidad ya se puede tomar; la toma real la sigue decidiendo
+        getnet_claim atómicamente. Sin fecha de lock, se trata como vencido para
+        no dejar la terminal bloqueada para siempre.
+        """
+        self.ensure_one()
+        if not self.lock_date:
+            return True
+        return self.lock_date < (
+            fields.Datetime.now() - timedelta(seconds=GETNET_LOCK_TTL_SECONDS))
 
     def getnet_touch(self):
         """

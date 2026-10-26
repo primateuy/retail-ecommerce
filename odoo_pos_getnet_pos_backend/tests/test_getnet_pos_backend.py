@@ -14,11 +14,16 @@ que NADIE commitee a mano se prueba aparte.
 """
 
 import uuid
+from datetime import timedelta
 from unittest.mock import patch
 
+from odoo import fields
 from odoo.tests import TransactionCase, tagged
 
 from odoo.addons.odoo_pos_getnet_core.models import getnet_utils
+from odoo.addons.odoo_pos_getnet_core.models.getnet_pos_terminal import (
+    GETNET_LOCK_TTL_SECONDS,
+)
 from odoo.addons.odoo_pos_getnet_core.models import (
     payment_transaction as pt_mod,
 )
@@ -163,6 +168,27 @@ class TestGetnetPosBackend(TransactionCase):
         respuesta = self._impl().terminal_is_available(self.metodo)
         self.assertFalse(respuesta['available'])
         self.assertIn('ocupada', respuesta['reason'])
+
+    def test_un_lock_ajeno_vencido_no_apaga_el_medio_para_siempre(self):
+        """Un lock ajeno VENCIDO (TTL) no bloquea: el próximo cobro lo roba.
+
+        Prueba 9: el cron de recuperación dejó la terminal tomada por
+        'recovery' y el worker murió sin liberar. Con el lock vigente el medio
+        se apaga (correcto), pero una vez vencido debe volver a estar
+        disponible —getnet_claim ya podría tomarla—, no quedar deshabilitado
+        para siempre con el aviso "(RECOVERY)".
+        """
+        self.terminal.getnet_claim('recovery', ref='TOK-X')
+        # Lock vigente: apaga el medio.
+        self.assertFalse(self._impl().terminal_is_available(self.metodo)['available'])
+        # Lock vencido (worker muerto): el medio vuelve a estar disponible.
+        self.terminal.lock_date = fields.Datetime.now() - timedelta(
+            seconds=GETNET_LOCK_TTL_SECONDS + 60)
+        respuesta = self._impl().terminal_is_available(self.metodo)
+        self.assertTrue(
+            respuesta['available'],
+            'un lock de recovery vencido no puede bloquear el medio para siempre')
+        self.assertFalse(respuesta['reason'])
 
     def test_medio_sin_terminal_da_un_motivo_accionable(self):
         otro = self.env['pos_backend.box.payment.method'].create({
