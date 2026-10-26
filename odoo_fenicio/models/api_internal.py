@@ -8,6 +8,9 @@ from odoo.tools import plaintext2html
 
 _logger = logging.getLogger(__name__)
 
+# Fenicio sólo manda M o F en el género del comprador.
+GENEROS_FENICIO = {'M': 'male', 'F': 'female'}
+
 
 class ApiInternal(models.Model):
     _name = 'api.internal'
@@ -359,73 +362,57 @@ class ApiInternal(models.Model):
 
     @api.model
     def crear_usuario(self, json_data):
-        try:
+        """Registra o vincula en Odoo el usuario que se dio de alta en Fenicio.
 
-            user = self.env['res.partner'].search([('id_fenicio', '=', json_data['id'])], limit=1);
-            pais = self.env['res.country'].search([('code', '=', json_data['documento']['pais'])], limit=1);
+        Fenicio llama una sola vez por usuario y guarda el código que se le devuelve.
+        El contacto se busca por el id de Fenicio o por el número de documento (el
+        mismo criterio que usan las órdenes). Si existe, se vincula y se
+        completan sólo los datos que le falten; si no, se crea.
 
-            
-            # VAT código 0
-            # RUC código 2
-            # CI código 3
-            # OTROS código 4
+        Args:
+            json_data (dict): objeto Comprador de Fenicio.
 
-            tipo_doc = '';
-            if json_data['documento']['tipo'] == '0':
-                tipo_doc = 'VAT'
-            elif json_data['documento']['tipo'] == '2':
-                tipo_doc = 'RUC'
-            elif json_data['documento']['tipo'] == '3':
-                tipo_doc = 'CI'
-            elif json_data['documento']['tipo'] == '4':
-                tipo_doc = 'OTROS'
+        Returns:
+            tuple[dict, str]: data con el código del contacto en Odoo, y el mensaje.
 
-            tipoDocumento = self.env['l10n_latam.identification.type'].search([('name', '=', tipo_doc), ('active', '=', True)], limit=1);
+        Raises:
+            UserError: si el usuario no trae id de Fenicio o email.
+        """
+        if not json_data.get('id') or not json_data.get('email'):
+            raise UserError('El usuario no tiene id de Fenicio o email.')
 
-            genero = '';
+        Partner = self.env['res.partner']
+        documento = json_data.get('documento') or {}
+        nombre = ' '.join(filter(None, [json_data.get('nombre'), json_data.get('apellido')]))
+        vals = {
+            'id_fenicio': str(json_data['id']),
+            'name': nombre or json_data['email'],
+            'email': json_data['email'],
+            'phone': json_data.get('telefono'),
+            'gender': GENEROS_FENICIO.get(json_data.get('genero')),
+            'programa_millas': (json_data.get('extras') or {}).get('programaMillas'),
+        }
+        if documento.get('numero'):
+            vals['vat'] = documento['numero']
+            vals['numero_doc'] = documento['numero']
+            identification_type = Partner._get_fenicio_identification_type(documento.get('tipo'))
+            if identification_type:
+                vals['l10n_latam_identification_type_id'] = identification_type.id
+        if documento.get('pais'):
+            country = self.env['res.country'].search([('code', '=', documento['pais'].upper())], limit=1)
+            if country:
+                vals['country_id'] = country.id
 
-            if json_data['genero'] and (json_data['genero'] == 'MASCULINO' or json_data['genero'] == 'Masculino' or json_data['genero'] == 'M'):
-                genero = 'male';
-            elif json_data['genero'] and (json_data['genero'] == 'FEMENINO' or json_data['genero'] == 'Femenino' or json_data['genero'] == 'F'):
-                genero = 'female';
-            elif json_data['genero'] and (json_data['genero'] == 'OTRO' or json_data['genero'] == 'Otro' or json_data['genero'] == 'O'):
-                genero = 'other';
-            
-            city = 'No definida';
-            if json_data['documento']['ciudad']:
-                city = self.env['res.country.city'].search([('name', '=', json_data['documento']['ciudad'])], limit=1);
-
-            # Por esto:
-            city = 'No definida'
-            if json_data.get('documento', {}).get('ciudad'):
-                city = json_data['documento']['ciudad']
-                city = self.env['res.country.city'].search([('name', '=', city)], limit=1)
-
-            
-            if user:
-                message = "El usuario ya existia, no se han insertado los datos."
-                return user.id_fenicio, message;
-            user = self.env['res.partner'].create({
-                'id_fenicio': json_data['codigo'],
-                'name': json_data['nombre'] + ' ' + json_data['apellido'],
-                'email': json_data['email'],
-                'phone': json_data['telefono'],
-                'gender': genero,
-                'l10n_latam_identification_type_id': tipoDocumento.id if tipoDocumento else False,
-                'vat': json_data['documento']['numero'],
-                'country_id': pais.id if pais else '',
-                'city_id': city.id if city else '',
-                'company_id': self.env.company.id,
-                'programa_millas': json_data['extras']['programaMillas']
-            })
-
-
-            return user.id_fenicio, "El usuario se ha creado correctamente.";
-            
-
-
-        except Exception as e:
-            return False
+        partner = Partner._find_fenicio_partner(json_data)
+        if partner:
+            # Lo cargado en Odoo tiene prioridad: sólo se completan los campos vacíos.
+            partner.write({key: value for key, value in vals.items() if value and not partner[key]})
+            mensaje = 'Usuario existente vinculado.'
+        else:
+            partner = Partner.with_context(skip_vat_check=True).create(vals)
+            mensaje = 'Usuario registrado.'
+        _logger.info("Usuario Fenicio %s: %s (contacto %s)", json_data['id'], mensaje, partner.id)
+        return {'codigo': str(partner.id)}, mensaje
 
     @api.model
     def stockporsku(self, json_data, token):
@@ -479,6 +466,15 @@ class ApiInternal(models.Model):
 
             estado = json_data['estado']
             id_orden_fenicio = json_data['idOrden']
+
+            # FIX: una orden con pago pendiente no se crea ni se confirma, porque
+            # terminaba facturada y entregada sin cobrar. Se procesa cuando llega APROBADA.
+            if estado == 'PAGO_PENDIENTE':
+                _logger.info("Orden Fenicio %s con pago pendiente: no se procesa", id_orden_fenicio)
+                return {
+                    'mensaje': 'Orden con pago pendiente: se procesa cuando el pago se apruebe',
+                    'estado': estado,
+                }
 
             SALE_ORDER_ENV = self.env['sale.order']
             sale_order_id = SALE_ORDER_ENV.search([('id_order_fenicio', '=', id_orden_fenicio), ('company_id', '=', fenicio_compania.id)], limit=1)

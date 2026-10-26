@@ -13,11 +13,57 @@ class SaleOrder(models.Model):
     programa_millas = fields.Char("Programa Millas");
 
     @api.model
+    def _find_fenicio_partner(self, comprador):
+        """Busca el contacto de un comprador de Fenicio.
+
+        Busca primero por el id del comprador en Fenicio y después por el número de
+        documento. No se usa comprador.codigo: en las órdenes llega con valores que
+        no asignó Odoo y podría coincidir con el id de otro contacto.
+
+        Args:
+            comprador (dict): objeto Comprador de Fenicio.
+
+        Returns:
+            res.partner: el contacto encontrado, o un recordset vacío.
+        """
+        Partner = self.env['res.partner']
+        if comprador.get('id'):
+            partner = Partner.search([('id_fenicio', '=', str(comprador['id']))], limit=1)
+            if partner:
+                return partner
+        numero = (comprador.get('documento') or {}).get('numero')
+        if numero:
+            return Partner.search([('vat', '=', numero)], limit=1)
+        return Partner
+
+    @api.model
+    def _get_fenicio_identification_type(self, tipo_documento):
+        """Devuelve el tipo de identificación de Odoo para un TipoDeDocumento de Fenicio.
+
+        Se configura con el campo Código Fenicio del tipo de identificación (por ejemplo
+        CI_UY o PASAPORTE). Si no hay ninguno configurado se usa OTROS (código 4).
+
+        Args:
+            tipo_documento (str): valor de documento.tipo enviado por Fenicio.
+
+        Returns:
+            l10n_latam.identification.type: el tipo encontrado, o un recordset vacío.
+        """
+        IdentificationType = self.env['l10n_latam.identification.type']
+        identification_type = IdentificationType
+        if tipo_documento:
+            identification_type = IdentificationType.search([
+                ('codigo_fenicio', '=', tipo_documento), ('active', '=', True)
+            ], limit=1)
+        if not identification_type:
+            _logger.info("Tipo de documento Fenicio '%s' no configurado, se usa OTROS", tipo_documento)
+            identification_type = IdentificationType.search([('code', '=', '4'), ('active', '=', True)], limit=1)
+        return identification_type
+
+    @api.model
     def get_partner_orden_venta(self, json_data):
         comprador = json_data['comprador']
-        partner_id = self.env['res.partner'].search([
-            ('vat', '=', comprador['documento']['numero'])
-        ], limit=1)
+        partner_id = self._find_fenicio_partner(comprador)
 
         if not partner_id:
             vat = ''
@@ -40,44 +86,10 @@ class SaleOrder(models.Model):
                     
                 
 
-                tipo_doc_fenicio = comprador['documento']['tipo']
+                tipo_documento = self._get_fenicio_identification_type(comprador['documento']['tipo'])
+                if tipo_documento:
+                    vals['l10n_latam_identification_type_id'] = tipo_documento.id
 
-                # _logger.info("Tipo de documento Fenicio: %s", tipo_doc_fenicio);
-
-                # # Mapeo de tipos de documento
-                # mapping_tipo_doc = {
-                #     '0': 'VAT',
-                #     '1': 'RUC',  # Código 1 también puede ser RUC
-                #     '2': 'RUC',
-                #     '3': 'CI',
-                #     '4': 'OTROS',
-                #     'VAT': 'VAT',
-                #     'RUC': 'RUC',
-                #     'DOCUMENTO_IDENTIDAD': 'CI',
-                #     'CI': 'CI',
-                #     'PASAPORTE': 'OTROS',
-                # }
-
-                # tipo_doc = mapping_tipo_doc.get(tipo_doc_fenicio, 'OTROS')
-                # _logger.info("Tipo de documento mapeado: %s", tipo_doc);
-
-                try:
-                    tipoDocumento = self.env['l10n_latam.identification.type'].search([('codigo_fenicio', '=', tipo_doc_fenicio), ('active', '=', True)], limit=1)
-                    if not tipoDocumento:
-                        tipoDocumento = self.env['l10n_latam.identification.type'].search([('code', '=', '4'), ('active', '=', True)], limit=1)
-                        _logger.info("Tipo de documento Fenicio '%s' no encontrado, usando OTROS (código 4)", tipo_doc_fenicio)
-                    if tipoDocumento:
-                        vals['l10n_latam_identification_type_id'] = tipoDocumento.id
-
-                except Exception as e:
-                    _logger.warning("No se pudo asignar tipo de documento latam: %s", str(e))
-
-                # Tipos de documento
-
-                # VAT código 0
-                # RUC código 2
-                # CI código 3
-                # OTROS código 4
                 vals['vat'] = comprador['documento']['numero']
                 vals['numero_doc'] = comprador['documento']['numero']
 
