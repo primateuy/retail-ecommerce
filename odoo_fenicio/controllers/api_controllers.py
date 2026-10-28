@@ -203,9 +203,10 @@ class ApiController(http.Controller):
             self._authenticate_and_setup_env()
             json_data = self.get_json_data()
             id_solicitud = json_data['_idSolicitud']
-            response_data = request.env['api.internal'].crear_usuario(json_data)
-            return self.build_response(id_solicitud, response_data, endpoint='/usuario', request_data=json_data)
+            response_data, mensaje = request.env['api.internal'].crear_usuario(json_data)
+            return self.build_response(id_solicitud, response_data, mensaje=mensaje, endpoint='/usuario', request_data=json_data)
         except Exception as e:
+            request.env.cr.rollback()
             return self.build_response(id_solicitud, None, status='ERROR', mensaje=str(e), endpoint='/usuario', request_data=json_data)
 
     @http.route('/permitecancelar', type='http', auth='public', cors="*", csrf=False, methods=['GET'])
