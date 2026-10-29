@@ -14,6 +14,19 @@ import {PaymentOCA} from "@odoo_pos_oca/app/payment_oca";
  */
 patch(PaymentOCA.prototype, {
     /**
+     * Referencia de la orden y cliente para que el backend arme la ley (TaxRefund) y el
+     * número de factura de 7 caracteres. Van en el cobro y en la confirmación; el backend
+     * los saca antes de mandar a OCA.
+     */
+    _ocaDatosLeyYFactura(order) {
+        const partner = order && order.get_partner();
+        return {
+            OcaOrderReference: (order && order.name) || "",
+            OcaPartnerId: partner ? partner.id : false,
+        };
+    },
+
+    /**
      * Obtiene el nro de cuotas desde la línea de pago del POS.
      * Si la línea tiene installments definido y > 0 se usa; si no, 1.
      * Así se respeta siempre el valor elegido por el usuario (ej. pagar en 3 cuotas).
@@ -312,10 +325,12 @@ patch(PaymentOCA.prototype, {
         data.Quotas = "0";
         data.Plan = "0";
         data.Currency = currency_code;
-        data.TaxRefund = "99";
+        // Ley y número de factura los completa el backend (_oca_aplicar_ley_y_factura).
+        data.TaxRefund = "1";
         data.TaxableAmount = `${total_order_amount_without_tax}`;
         data.InvoiceAmount = `${total_order_amount}`;
         data.InvoiceNumber = "1";
+        Object.assign(data, this._ocaDatosLeyYFactura(order));
         data.Installments = `0`;
         data.TicketNumber = "";
 
@@ -714,7 +729,7 @@ patch(PaymentOCA.prototype, {
         data.Currency = currency_code;
         data.TaxableAmount = `${newTaxableCents}`;
         data.InvoiceAmount = `${chargedCents}`;
-        data.InvoiceNumber = order.name || "1";
+        Object.assign(data, this._ocaDatosLeyYFactura(order));
 
         return data;
     },
@@ -770,7 +785,7 @@ patch(PaymentOCA.prototype, {
         data.Currency = currency_code;
         data.TaxableAmount = `${taxablePaymentCents}`;
         data.InvoiceAmount = `${origPayCents}`;
-        data.InvoiceNumber = order.name || "1";
+        Object.assign(data, this._ocaDatosLeyYFactura(order));
         
         const confirmResponse = await this.confirmFinancialPurchase(data);
         

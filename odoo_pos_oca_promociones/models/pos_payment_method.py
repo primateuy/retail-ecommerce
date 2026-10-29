@@ -171,7 +171,10 @@ class PosPaymentMethod(models.Model):
             dict: Respuesta del POS
         """
         self.ensure_one()
-        
+        if self.use_payment_terminal == 'oca':
+            # Con promociones la venta no pasa por el método base: la ley y la factura van acá.
+            self._oca_aplicar_ley_y_factura(data)
+
         # Verificar si hay promociones activas para este método de pago
         # Buscar promociones que puedan aplicarse a este método de pago
         has_active_promotions = False
@@ -379,6 +382,10 @@ class PosPaymentMethod(models.Model):
             dict: Respuesta del POS
         """
         self.ensure_one()
+        # El manual exige TaxRefund en la confirmación y la caja no lo mandaba; la factura
+        # iba con el nombre de la orden (más de 7 caracteres) y OCA la ignoraba.
+        self._oca_aplicar_ley_y_factura(data)
+        data['TaxRefund'] = int(data['TaxRefund'])
         _logger.info('Metodo processConfirmFinancialPurchase %s', pprint.pformat(data))
         
         # Log detallado de los campos enviados

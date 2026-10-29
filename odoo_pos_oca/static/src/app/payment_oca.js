@@ -129,12 +129,15 @@ export class PaymentOCA extends PaymentInterface {
         data.Quotas = "0";
         data.Plan = "0";
         data.Currency = currency_code;
-        //data.TaxRefund = "0";
-        data.TaxRefund = "99";
+        // Ley y número de factura los completa el backend (_oca_aplicar_ley_y_factura) a
+        // partir de la referencia de la orden y el cliente; sin ellos OCA no aplica la
+        // devolución de IVA. Los dos datos Oca* no se mandan a OCA.
+        data.TaxRefund = "1";
         data.TaxableAmount = `${total_order_amount_without_tax}`;
         data.InvoiceAmount = `${total_order_amount}`;
-        // Enviar un InvoiceNumber simple - el backend se encargará de encontrar la orden correcta
         data.InvoiceNumber = "1";
+        data.OcaOrderReference = order.name;
+        data.OcaPartnerId = order.get_partner() ? order.get_partner().id : false;
         data.Installments = "0";
         data.TicketNumber = "";
 

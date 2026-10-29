@@ -9,6 +9,7 @@ Viven en el core para evitar dependencias cruzadas entre los módulos backend y 
 
 import logging
 import pprint
+import re
 
 import requests
 
@@ -47,6 +48,50 @@ OCA_POS_RESPONSE_CODE_MSG = {
 # esto ocurre cuando se hizo cierre de lote entre la venta y el intento de anular;
 # la recomendación del manual es ejecutar ``processFinancialPurchaseRefund`` en su lugar.
 OCA_POS_RC_VOID_SHOULD_REFUND = ('109', '110')
+
+# Anexo 3 POSLink v135: código de ``TaxRefund`` por ley de devolución de impuestos.
+OCA_LEYES_DEVOLUCION = [
+    ('0', 'No aplica devolución'),
+    ('1', 'Devolución IVA - Ley 19.210'),
+    ('2', 'Devolución IMESI - Ley 18.083'),
+    ('3', 'Devolución AFAM - Ley 18.910'),
+    ('4', 'Devolución IVA - Ley 17.934'),
+    ('5', 'Reintegro IRPF - Ley 18.999'),
+]
+OCA_CODIGOS_LEY = tuple(codigo for codigo, _nombre in OCA_LEYES_DEVOLUCION)
+
+
+def oca_invoice_number_from_reference(reference):
+    """Número de factura POSLink (7 caracteres) a partir de la referencia de la orden.
+
+    ``Orden 02038-001-0003`` → ``0010003``: caja (login) y secuencia, que no se
+    repiten dentro de la sesión. Sin dígitos devuelve ``None``.
+
+    OCA aplica la devolución de impuestos sólo con número de factura; con el «1»
+    fijo que se mandaba, todas las ventas salían «Sin Nro Factura No Aplica Ley»
+    (Forum, 29-10-2026).
+    """
+    grupos = re.findall(r'\d+', str(reference or ''))
+    if not grupos:
+        return None
+    digitos = ''.join(grupos[-2:])
+    return digitos[-7:].zfill(7)
+
+
+def oca_partner_factura_con_rut(partner):
+    """True si al cliente se le factura con RUT (e-Factura): la ley va en 0 (manual POSLink).
+
+    El tipo de documento RUT se reconoce por ``is_vat`` o, en la localización
+    uruguaya, por ``check_type == 'vat'`` (el «RUC» de Forum no tiene ``is_vat``).
+    """
+    if not partner or 'l10n_latam_identification_type_id' not in partner._fields:
+        return False
+    tipo = partner.l10n_latam_identification_type_id
+    if not tipo:
+        return False
+    if tipo.is_vat:
+        return True
+    return 'check_type' in tipo._fields and tipo.check_type == 'vat'
 
 
 def _oca_extract_message_from_body(response_json):

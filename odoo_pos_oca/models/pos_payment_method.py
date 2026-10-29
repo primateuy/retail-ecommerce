@@ -8,6 +8,11 @@ from odoo import fields, models, api, SUPERUSER_ID
 from datetime import datetime
 
 from odoo.addons.l10n_be_coda.models.account_journal import transaction_code
+from odoo.addons.odoo_pos_oca_core.models.oca_utils import (
+    OCA_CODIGOS_LEY,
+    oca_invoice_number_from_reference,
+    oca_partner_factura_con_rut,
+)
 
 _logger = logging.getLogger("POS PAYMENT METHOD")
 
@@ -76,6 +81,43 @@ class PosPaymentMethod(models.Model):
 
         return self.processFinancialPurchaseVoidByTicket(data, pos_session_id)
 
+    def _oca_ley_devolucion(self, partner):
+        """Código TaxRefund de la venta: 0 si se factura con RUT; si no, la ley del proveedor."""
+        self.ensure_one()
+        if oca_partner_factura_con_rut(partner):
+            return '0'
+        proveedor = self.sudo().payment_provider or self.sudo().pos_id.payment_provider_id
+        return (proveedor.oca_tax_refund_law if proveedor else False) or '1'
+
+    def _oca_aplicar_ley_y_factura(self, data):
+        """Completa TaxRefund e InvoiceNumber de una venta antes de mandarla a OCA.
+
+        La caja manda la referencia de la orden y el cliente en ``OcaOrderReference`` y
+        ``OcaPartnerId``, que se sacan acá: no van a OCA. Sin ley válida ni número de
+        factura OCA no aplica la devolución de impuestos; hasta el 29-10-2026 se mandaba
+        TaxRefund 99 (no existe en el Anexo 3) y factura «1», y las 18.222 ventas de Forum
+        de octubre salieron «Sin Nro Factura No Aplica Ley».
+
+        Se puede llamar más de una vez sobre los mismos datos: la segunda no cambia nada.
+        """
+        self.ensure_one()
+        referencia = data.pop('OcaOrderReference', None)
+        tiene_cliente = 'OcaPartnerId' in data
+        partner_id = data.pop('OcaPartnerId', None)
+
+        numero = oca_invoice_number_from_reference(referencia) if referencia else None
+        actual = str(data.get('InvoiceNumber') or '')
+        if numero:
+            data['InvoiceNumber'] = numero
+        elif len(actual) > 7:
+            data['InvoiceNumber'] = oca_invoice_number_from_reference(actual) or actual[-7:]
+
+        if tiene_cliente or str(data.get('TaxRefund', '')) not in OCA_CODIGOS_LEY:
+            partner = self.env['res.partner'].sudo().browse(int(partner_id)).exists() \
+                if partner_id else self.env['res.partner']
+            data['TaxRefund'] = self._oca_ley_devolucion(partner)
+        return data
+
     def processFinancialPurchase(self, data, pos_session_id, account_payment_id=None):
         """
         Procesa una compra financiera enviando datos al POS y almacenando la transacción.
@@ -95,6 +137,7 @@ class PosPaymentMethod(models.Model):
             return super(PosPaymentMethod, self).processFinancialPurchase(
                 data, pos_session_id, account_payment_id=account_payment_id
             )
+        self._oca_aplicar_ley_y_factura(data)
         _logger.info('Metodo processFinancialPurchase %s', pprint.pformat(data))
         
         # Log detallado de los campos enviados
@@ -221,7 +264,14 @@ class PosPaymentMethod(models.Model):
                 pos_orders = self.env['pos.order'].search([
                     ('session_id', '=', pos_session_id)
                 ])
-                
+
+                # Formato actual: caja y secuencia de la referencia (ver _oca_aplicar_ley_y_factura).
+                for order in pos_orders:
+                    if oca_invoice_number_from_reference(order.pos_reference) == str(invoice_number):
+                        _logger.info('Pedido POS encontrado por referencia: %s (InvoiceNumber: %s)',
+                                     order.name, invoice_number)
+                        return order
+
                 for order in pos_orders:
                     if order.tracking_number:
                         # Formatear el tracking_number para comparar (máximo 7 caracteres)

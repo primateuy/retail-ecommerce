@@ -20,6 +20,8 @@ from datetime import datetime
 from odoo import _, fields, models
 from odoo.exceptions import UserError
 
+from .oca_utils import OCA_LEYES_DEVOLUCION
+
 _logger = logging.getLogger(__name__)
 
 
@@ -68,6 +70,13 @@ class PaymentProvider(models.Model):
         help='Código de comercio ante DGI para la devolución de IVA '
         '(Ley 19210). Se imprime en el voucher de tarjeta cuando hay '
         'devolución de impuestos.',
+    )
+    oca_tax_refund_law = fields.Selection(
+        selection=OCA_LEYES_DEVOLUCION,
+        string='Ley de devolución de impuestos',
+        default='1',
+        help='Código TaxRefund (Anexo 3 POSLink) que el PDV manda en cada venta con '
+        'tarjeta. A un cliente con RUT (e-Factura) siempre se le manda 0.',
     )
     oca_polling_timeout = fields.Integer(
         string='Timeout de espera OCA (segundos)',
