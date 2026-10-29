@@ -12,6 +12,7 @@ from odoo.exceptions import ValidationError
 from odoo.tools import formatLang
 import logging
 import json
+import re
 import uuid
 
 _logger = logging.getLogger(__name__)
@@ -284,6 +285,49 @@ class PaymentTransaction(models.Model):
         """Leyenda de la ley para el voucher (ej. 'IVA-Ley 19210'), '' si no mapea."""
         self.ensure_one()
         return self._OCA_TAX_REFUND_LAWS.get((self.tax_refund_code or '').strip(), '')
+
+    def _oca_json(self, raw):
+        try:
+            data = json.loads(raw or '{}')
+        except (TypeError, ValueError):
+            return {}
+        return data if isinstance(data, dict) else {}
+
+    def get_oca_tax_refund_applied(self):
+        """La devolución se aplicó sólo si OCA devolvió monto (TaxAmount > 0).
+
+        El código TaxRefund solo no alcanza: OCA informa la ley que corresponde a la tarjeta
+        aunque no la aplique (ventas canceladas con TaxRefund 1 y TaxAmount 0).
+        """
+        self.ensure_one()
+        return (self.tax_refund_amount or 0.0) > 0
+
+    def get_oca_invoice_number_sent(self):
+        """Número de factura con que OCA registró la venta (el que imprime su voucher)."""
+        self.ensure_one()
+        for raw in (self.oca_complete_response, self.oca_complete_request):
+            numero = self._oca_json(raw).get('InvoiceNumber')
+            if numero not in (None, '', False):
+                return str(numero)
+        return self.invoice_number or ''
+
+    def get_oca_tax_refund_reason(self):
+        """Motivo que imprime OCA cuando no aplica la ley (ej. «Sin Nro Factura No Aplica Ley»).
+
+        Sale del voucher que devuelve OCA (VoucherPrintInfoXML): las líneas que hablan de la
+        ley. Vacío si se aplicó o si OCA no dio motivo. Antes el ticket imprimía siempre, fijo,
+        «Aplica dev. IVA-Ley 19210 Sin nro. factura no aplica ley» (Forum, 29-10-2026).
+        """
+        self.ensure_one()
+        if self.get_oca_tax_refund_applied():
+            return ''
+        voucher = self._oca_json(self.oca_complete_response).get('VoucherPrintInfoXML') or ''
+        lineas = []
+        for linea in re.findall(r'<itemLinea>(.*?)</itemLinea>', voucher, flags=re.S):
+            texto = ' '.join(linea.split())
+            if re.search(r'\bley\b', texto, flags=re.I) and texto not in lineas:
+                lineas.append(texto)
+        return ' / '.join(lineas)
 
     @staticmethod
     def _oca_extract_emv_vals(response):

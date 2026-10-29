@@ -15,6 +15,8 @@ from time import monotonic, sleep
 
 from odoo import fields, models, api, SUPERUSER_ID
 
+from odoo.addons.odoo_pos_oca_core.models.oca_utils import oca_completar_desde_intermedias
+
 _logger = logging.getLogger(__name__)
 
 
@@ -974,10 +976,7 @@ class PosPaymentMethod(models.Model):
             # intermedias si la última respuesta no los trae, e inyectar el
             # TaxableAmount enviado por la caja (no vuelve del pinpad). Los usa
             # el voucher de tarjeta.
-            for voucher_key, voucher_val in accumulated_voucher_fields.items():
-                current = result.get(voucher_key)
-                if current in (None, '', False) or str(current).strip() in ('', '0', '0.00'):
-                    result[voucher_key] = voucher_val
+            oca_completar_desde_intermedias(result, accumulated_voucher_fields)
             if last_taxable_sent and not result.get('TaxableAmount'):
                 result['TaxableAmount'] = last_taxable_sent
             

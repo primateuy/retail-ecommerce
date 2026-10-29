@@ -295,12 +295,17 @@ class PosOrder(models.Model):
                 'ticket_number': transaction.ticket_number or '',
                 'batch_number': transaction.batch_number or '',
                 'authorization_code': transaction.authorization_code or '',
-                'invoice_number': transaction.invoice_number or '',
+                # El número que registró OCA, no el nombre de la orden.
+                'invoice_number': transaction.get_oca_invoice_number_sent(),
                 'installments': transaction.installments or 0,
                 'issuer_code': transaction.issuer_code or '',
                 'card_masked': card_masked,
                 'amount': transaction.amount,
                 'tax_refund_amount': transaction.tax_refund_amount or 0.0,
+                # Ley aplicada o no según lo que respondió OCA (ver payment.transaction).
+                'tax_refund_applied': transaction.get_oca_tax_refund_applied(),
+                'tax_law_label': transaction.get_oca_tax_refund_law_label() or 'IVA-Ley 19210',
+                'tax_refund_reason': transaction.get_oca_tax_refund_reason(),
                 # Importe gravado: el ticket OCA lo expone como Amount / 1.22 (IVA 22% UY).
                 'taxable_amount': round((transaction.amount or 0.0) / 1.22, 2),
                 # Código DGI del comercio (Ley 19210); vacío si no está configurado.

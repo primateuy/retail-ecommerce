@@ -157,13 +157,17 @@
                                     <td style="text-align:right; padding:0;"><span t-if="dgi_code" t-esc="dgi_code"/></td>
                                 </tr>
                             </table>
-                            <div style="text-align:center; font-size:11px;">
+                            <div style="text-align:center; font-size:11px; margin-bottom:8px;">
                                 Aplica dev. <t t-esc="tax_law_label"/>
                             </div>
-                            <div style="text-align:center; font-size:11px; margin-bottom:8px;">
-                                Sin nro. factura no apli
-                            </div>
                         </t>
+                        <!-- Sin devolución: el motivo que imprimió OCA (ej. «Sin Nro Factura No
+                             Aplica Ley»). Antes iba fijo «Sin nro. factura no apli» aun con la
+                             devolución aplicada. -->
+                        <t t-set="tax_refund_reason" t-value="tx.get_oca_tax_refund_reason()"/>
+                        <div t-if="tax_refund_reason" style="text-align:center; font-size:11px; margin-bottom:8px;">
+                            <t t-esc="tax_refund_reason"/>
+                        </div>
 
                         <!-- Bloque: importes fiscales (factura / gravado) -->
                         <table style="width:100%; border-collapse:collapse; margin-top:8px;">

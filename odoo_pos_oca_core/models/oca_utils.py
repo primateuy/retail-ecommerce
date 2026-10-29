@@ -61,6 +61,32 @@ OCA_LEYES_DEVOLUCION = [
 OCA_CODIGOS_LEY = tuple(codigo for codigo, _nombre in OCA_LEYES_DEVOLUCION)
 
 
+# En la respuesta, TaxRefund es la ley que OCA asocia a la tarjeta y TaxAmount lo que devolvió:
+# la ley se aplicó sólo si TaxAmount > 0. En la respuesta final un «0» significa «no se
+# aplicó», no un dato faltante; un TaxRefund 1 de un paso intermedio no lo puede pisar
+# (en producción, 169 ventas canceladas traían TaxRefund 1 con TaxAmount 0).
+OCA_CLAVES_DEVOLUCION = ('TaxRefund', 'TaxAmount')
+
+
+def oca_completar_desde_intermedias(result, acumulado):
+    """Completa la respuesta final del Query con valores de iteraciones intermedias.
+
+    Sólo campos que faltan. Los de devolución de impuestos se completan únicamente si la
+    respuesta final no los trae; los demás también si vienen en cero (cuotas, ticket).
+    """
+    for clave, valor in acumulado.items():
+        actual = result.get(clave)
+        vacio = actual in (None, '', False)
+        if clave not in OCA_CLAVES_DEVOLUCION:
+            vacio = vacio or (
+                (isinstance(actual, (int, float)) and actual == 0)
+                or (isinstance(actual, str) and actual.strip() in ('', '0', '0.00'))
+            )
+        if vacio:
+            result[clave] = valor
+    return result
+
+
 def oca_invoice_number_from_reference(reference):
     """Número de factura POSLink (7 caracteres) a partir de la referencia de la orden.
 

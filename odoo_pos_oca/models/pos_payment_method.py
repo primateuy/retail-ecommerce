@@ -10,6 +10,7 @@ from datetime import datetime
 from odoo.addons.l10n_be_coda.models.account_journal import transaction_code
 from odoo.addons.odoo_pos_oca_core.models.oca_utils import (
     OCA_CODIGOS_LEY,
+    oca_completar_desde_intermedias,
     oca_invoice_number_from_reference,
     oca_partner_factura_con_rut,
 )
@@ -577,15 +578,7 @@ class PosPaymentMethod(models.Model):
             # falten o vengan vacíos en la última respuesta. Garantiza que
             # ``Quota`` y otros datos capturados en iteraciones intermedias
             # lleguen al persist (causa raíz del bug "cuota queda en 1").
-            for key, val in accumulated.items():
-                current = result.get(key)
-                is_empty = (
-                    current in (None, '', False)
-                    or (isinstance(current, (int, float)) and current == 0)
-                    or (isinstance(current, str) and current.strip() in ('', '0'))
-                )
-                if is_empty:
-                    result[key] = val
+            oca_completar_desde_intermedias(result, accumulated)
 
             # Monto gravado enviado por la caja: el voucher lo imprime como
             # Imp.Gravado y el pinpad no lo retorna en la respuesta.
