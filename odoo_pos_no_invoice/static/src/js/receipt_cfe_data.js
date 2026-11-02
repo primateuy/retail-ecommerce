@@ -16,7 +16,6 @@ import { OrderReceipt } from "@point_of_sale/app/screens/receipt_screen/receipt/
 import { patch } from "@web/core/utils/patch";
 import { useState, onMounted } from "@odoo/owl";
 import { useService } from "@web/core/utils/hooks";
-import { _t } from "@web/core/l10n/translation";
 
 /** Prefijo fijo para filtrar en consola (F12) al depurar el bloque voucher OCA en el recibo. */
 const OCA_VOUCHER_LOG = "[odoo_pos_no_invoice][oca_voucher]";
@@ -30,7 +29,6 @@ patch(OrderReceipt.prototype, {
         super.setup();
         // Obtener servicio ORM para llamadas al backend desde el POS.
         this.orm = useService("orm");
-        this.notification = useService("notification");
         // Inicializar el estado local con los datos necesarios para el recibo.
         // Snapshot del empleado/vendedor de la orden actual antes de que cambie.
         const currentOrder = this.pos.get_order();
@@ -213,21 +211,8 @@ patch(OrderReceipt.prototype, {
         if (accountMoveId) {
             console.log('Obteniendo datos CFE desde factura ID:', accountMoveId);
             try {
-                // Sólo esta vía reintenta la emisión si el CFE quedó pendiente: las
-                // de impresión y reimpresión corren en paralelo y no deben emitir.
-                const cfeData = await this.orm.call(
-                    'pos.order', 'get_cfe_data_from_invoice', [[], accountMoveId],
-                    { reintentar: true }) || {};
+                const cfeData = await this.orm.call('pos.order', 'get_cfe_data_from_invoice', [[], accountMoveId]) || {};
                 console.log('Datos CFE obtenidos:', cfeData);
-                if (cfeData.cfe_pendiente) {
-                    // La venta y la factura quedaron registradas; lo que falta es el
-                    // CFE. El cajero se tiene que enterar: el ticket sale sin CAE ni QR.
-                    this.notification.add(
-                        _t("La venta quedó registrada pero el CFE no se pudo emitir: %s. " +
-                           "Avisá a administración para emitirlo desde la factura (botón «Emitir CFE»).",
-                           cfeData.cfe_error || _t("sin respuesta de UCFE")),
-                        { type: "danger", sticky: true, title: _t("CFE pendiente de emisión") });
-                }
 
                 // Agregar información adicional de la orden para la adenda.
                 if (cfeData && (cfeData.tipo || cfeData.serie || cfeData.numero)) {
