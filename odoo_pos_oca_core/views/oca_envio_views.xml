@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_oca_envio_tree" model="ir.ui.view">
+        <field name="name">oca.envio.tree</field>
+        <field name="model">oca.envio</field>
+        <field name="arch" type="xml">
+            <tree string="Llamadas a OCA" create="0" edit="0" delete="0"
+                  decoration-danger="resultado in ('rechazado', 'error')">
+                <field name="fecha"/>
+                <field name="operacion"/>
+                <field name="pos_id" optional="show"/>
+                <field name="oca_transaction_id" optional="show"/>
+                <field name="status_http"/>
+                <field name="response_code"/>
+                <field name="mensaje"/>
+                <field name="repeticiones" optional="show"/>
+                <field name="fecha_ultima" optional="hide"/>
+                <field name="duracion_ms" optional="hide"/>
+                <field name="usuario_id" optional="hide"/>
+                <field name="resultado" widget="badge" decoration-danger="resultado in ('rechazado', 'error')"
+                       decoration-success="resultado == 'exito'"/>
+            </tree>
+        </field>
+    </record>
+
+    <record id="view_oca_envio_form" model="ir.ui.view">
+        <field name="name">oca.envio.form</field>
+        <field name="model">oca.envio</field>
+        <field name="arch" type="xml">
+            <form string="Llamada a OCA" create="0" edit="0" delete="0">
+                <sheet>
+                    <group>
+                        <group>
+                            <field name="fecha"/>
+                            <field name="operacion"/>
+                            <field name="url"/>
+                            <field name="pos_id"/>
+                            <field name="oca_transaction_id"/>
+                            <field name="usuario_id"/>
+                        </group>
+                        <group>
+                            <field name="resultado" widget="badge" decoration-danger="resultado in ('rechazado', 'error')"
+                                   decoration-success="resultado == 'exito'"/>
+                            <field name="status_http"/>
+                            <field name="response_code"/>
+                            <field name="mensaje"/>
+                            <field name="duracion_ms"/>
+                            <field name="repeticiones"/>
+                            <field name="fecha_ultima" invisible="repeticiones &lt;= 1"/>
+                        </group>
+                    </group>
+                    <field name="error" invisible="not error" class="text-danger"/>
+                    <notebook>
+                        <!-- mode 'js': el CodeEditor de Odoo 17 no tiene json -->
+                        <page string="Enviado" name="enviado">
+                            <field name="request" widget="code" options="{'mode': 'js'}"/>
+                        </page>
+                        <page string="Respuesta" name="respuesta">
+                            <field name="respuesta" widget="code" options="{'mode': 'js'}"/>
+                        </page>
+                    </notebook>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_oca_envio_search" model="ir.ui.view">
+        <field name="name">oca.envio.search</field>
+        <field name="model">oca.envio</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="oca_transaction_id"/>
+                <field name="pos_id"/>
+                <field name="operacion"/>
+                <field name="request" string="Contenido enviado"/>
+                <filter name="con_error" string="Con error" domain="[('resultado', 'in', ('rechazado', 'error'))]"/>
+                <group expand="0" string="Agrupar por">
+                    <filter name="por_operacion" string="Operación" context="{'group_by': 'operacion'}"/>
+                    <filter name="por_pos" string="PosID" context="{'group_by': 'pos_id'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_oca_envio" model="ir.actions.act_window">
+        <field name="name">Llamadas a OCA</field>
+        <field name="res_model">oca.envio</field>
+        <field name="view_mode">tree,form</field>
+        <field name="search_view_id" ref="view_oca_envio_search"/>
+        <field name="help" type="html">
+            <p>Cada llamada a OCA (POSLink): compra, consultas, confirmación, reverso y anulación, con lo que se mandó y lo que respondió.</p>
+        </field>
+    </record>
+
+    <menuitem id="menu_oca_envio"
+              name="Llamadas a OCA"
+              parent="account.root_payment_menu"
+              action="action_oca_envio"
+              sequence="11"/>
+
+    <record id="view_payment_transaction_form_oca_envios" model="ir.ui.view">
+        <field name="name">payment.transaction.form.oca.envios</field>
+        <field name="model">payment.transaction</field>
+        <field name="inherit_id" ref="odoo_pos_oca_core.view_payment_transaction_oca_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//page[@name='oca_complete_response_page']" position="after">
+                <page string="Llamadas a OCA" name="oca_envios_page">
+                    <field name="oca_envio_ids" readonly="1"/>
+                </page>
+            </xpath>
+        </field>
+    </record>
+</odoo>

@@ -20,6 +20,7 @@ from datetime import datetime
 from odoo import _, fields, models
 from odoo.exceptions import UserError
 
+from .oca_envio import oca_post
 from .oca_utils import OCA_LEYES_DEVOLUCION
 
 _logger = logging.getLogger(__name__)
@@ -125,7 +126,7 @@ class PaymentProvider(models.Model):
 
         endpoint = (base_url_endpoint or '').rstrip('/') + '/processFinancialPurchaseQuery'
         headers = {'Content-Type': 'application/json'}
-        req = requests.post(endpoint, json=data, headers=headers, timeout=30)
+        req = oca_post(self.env, requests.post, endpoint, json=data, headers=headers, timeout=30)
         response_json = req.json()
         _oca_normalize_http_response(response_json)
         return response_json
@@ -154,7 +155,7 @@ class PaymentProvider(models.Model):
         )
         endpoint = (base_url_endpoint or '').rstrip('/') + '/processFinancialReverse'
         headers = {'Content-Type': 'application/json'}
-        req = requests.post(endpoint, json=data, headers=headers, timeout=30)
+        req = oca_post(self.env, requests.post, endpoint, json=data, headers=headers, timeout=30)
         response_json = req.json()
         _oca_normalize_http_response(response_json)
         _logger.info('processFinancialReverse Response:\n%s', pprint.pformat(response_json))
@@ -503,6 +504,7 @@ class PaymentProvider(models.Model):
             data,
             'processFinancialPurchase',
             extra_999_pos_warning=True,
+            env=self.env,
         )
 
         if response_json['ResponseCode'] != '0':
@@ -558,6 +560,7 @@ class PaymentProvider(models.Model):
             data,
             'processFinancialPurchaseVoidByTicket',
             extra_999_pos_warning=False,
+            env=self.env,
         )
 
         rc = str(response_json.get('ResponseCode', '999')).strip()
@@ -638,5 +641,6 @@ class PaymentProvider(models.Model):
             refund_data,
             'processFinancialPurchaseRefund',
             extra_999_pos_warning=False,
+            env=self.env,
         )
         return refund_data, response_json

@@ -1412,7 +1412,7 @@ class PaymentTransaction(models.Model):
                     )
                     try:
                         conf = _oca_http_post_confirm_financial_purchase(
-                            base_url_endpoint, confirm_payload,
+                            base_url_endpoint, confirm_payload, env=self.env,
                         )
                         confirm_after_card_read_done = True
                         crc = str(conf.get('ResponseCode', '999')).strip()

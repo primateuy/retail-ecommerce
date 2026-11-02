@@ -173,12 +173,22 @@ def _oca_normalize_http_response(response_json):
     return response_json
 
 
+def _post(env, endpoint, data):
+    """POST JSON a OCA; con `env`, queda registrado en «Llamadas a OCA» (oca.envio)."""
+    headers = {'Content-Type': 'application/json'}
+    if env is None:
+        return requests.post(endpoint, json=data, headers=headers, timeout=30)
+    from .oca_envio import oca_post
+    return oca_post(env, requests.post, endpoint, json=data, headers=headers, timeout=30)
+
+
 def oca_pos_http_post(
     base_url_endpoint,
     path_suffix,
     data,
     log_label,
     extra_999_pos_warning=False,
+    env=None,
 ):
     """
     POST JSON genérico a OCA (processFinancialPurchase, voidByTicket, etc.).
@@ -198,12 +208,7 @@ def oca_pos_http_post(
     """
     base_url_endpoint = (base_url_endpoint or '').rstrip('/')
     endpoint = base_url_endpoint + path_suffix
-    req = requests.post(
-        endpoint,
-        json=data,
-        headers={'Content-Type': 'application/json'},
-        timeout=30,
-    )
+    req = _post(env, endpoint, data)
     is_void = 'VoidByTicket' in path_suffix
     if not (200 <= req.status_code < 300):
         body_preview = (req.text or '')[:2000]
@@ -366,17 +371,12 @@ def _oca_build_confirm_financial_purchase_payload(
     }
 
 
-def _oca_http_post_confirm_financial_purchase(base_url_endpoint, confirm_data):
+def _oca_http_post_confirm_financial_purchase(base_url_endpoint, confirm_data, env=None):
     """
     POST a processConfirmFinancialPurchase; normaliza ResponseCode/msg como el resto de OCA.
     """
     endpoint = (base_url_endpoint or '').rstrip('/') + '/processConfirmFinancialPurchase'
-    req = requests.post(
-        endpoint,
-        json=confirm_data,
-        headers={'Content-Type': 'application/json'},
-        timeout=30,
-    )
+    req = _post(env, endpoint, confirm_data)
     response_json = req.json()
     _oca_normalize_http_response(response_json)
     _logger.info('processConfirmFinancialPurchase Response:\n%s', pprint.pformat(response_json))

@@ -16,6 +16,7 @@ from time import monotonic, sleep
 from odoo import fields, models, api, SUPERUSER_ID
 
 from odoo.addons.odoo_pos_oca_core.models.oca_utils import oca_completar_desde_intermedias
+from odoo.addons.odoo_pos_oca_core.models.oca_envio import oca_post
 
 _logger = logging.getLogger(__name__)
 
@@ -237,7 +238,7 @@ class PosPaymentMethod(models.Model):
             }
             
             # Enviar solicitud al POS
-            req = requests.post(endpoint, json=data, headers=headers, timeout=30)
+            req = oca_post(self.env, requests.post, endpoint, json=data, headers=headers, timeout=30)
             response_json = req.json()
             response_json['ResponseCode'] = str(response_json['ResponseCode'])
             
@@ -333,7 +334,7 @@ class PosPaymentMethod(models.Model):
         }
         
         # Enviar solicitud al POS
-        req = requests.post(endpoint, json=data, headers=headers, timeout=30)
+        req = oca_post(self.env, requests.post, endpoint, json=data, headers=headers, timeout=30)
         response_json = req.json()
         response_json['ResponseCode'] = str(response_json['ResponseCode'])
         
@@ -409,7 +410,7 @@ class PosPaymentMethod(models.Model):
         try:
             _logger.info('Enviando datos a processConfirmFinancialPurchase: %s', pprint.pformat(data))
             _logger.info('Endpoint: %s', endpoint)
-            req = requests.post(endpoint, json=data, headers=headers, timeout=30)
+            req = oca_post(self.env, requests.post, endpoint, json=data, headers=headers, timeout=30)
             
             # Log de respuesta HTTP
             _logger.info('Respuesta HTTP - Status Code: %s, Headers: %s', req.status_code, dict(req.headers))

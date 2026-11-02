@@ -5,6 +5,7 @@ import requests
 
 from time import monotonic, sleep
 from odoo import fields, models, api, SUPERUSER_ID
+from odoo.addons.odoo_pos_oca_core.models.oca_envio import oca_post
 from datetime import datetime
 
 from odoo.addons.l10n_be_coda.models.account_journal import transaction_code
@@ -160,7 +161,7 @@ class PosPaymentMethod(models.Model):
         }
         
         # Enviar solicitud al POS
-        req = requests.post(endpoint, json=data, headers=headers, timeout=30)
+        req = oca_post(self.env, requests.post, endpoint, json=data, headers=headers, timeout=30)
         response_json = req.json()
         response_json['ResponseCode'] = str(response_json['ResponseCode'])
 
@@ -851,7 +852,7 @@ class PosPaymentMethod(models.Model):
         headers = {
             'Content-Type': 'application/json',
         }
-        req = requests.post(endpoint, json=data, headers=headers, timeout=30)
+        req = oca_post(self.env, requests.post, endpoint, json=data, headers=headers, timeout=30)
 
         response_json = req.json()
 
@@ -902,7 +903,7 @@ class PosPaymentMethod(models.Model):
         headers = {
             'Content-Type': 'application/json',
         }
-        req = requests.post(endpoint, json=data, headers=headers, timeout=TIMEOUT)
+        req = oca_post(self.env, requests.post, endpoint, json=data, headers=headers, timeout=TIMEOUT)
 
         response_json = req.json()
 
@@ -984,7 +985,7 @@ class PosPaymentMethod(models.Model):
         headers = {
             'Content-Type': 'application/json',
         }
-        req = requests.post(endpoint, json=data, headers=headers, timeout=30)
+        req = oca_post(self.env, requests.post, endpoint, json=data, headers=headers, timeout=30)
         response_json = req.json()
         response_json['ResponseCode'] = str(response_json['ResponseCode'])
 
@@ -1055,7 +1056,7 @@ class PosPaymentMethod(models.Model):
         headers = {
             'Content-Type': 'application/json',
         }
-        req = requests.post(endpoint, json=data, headers=headers, timeout=30)
+        req = oca_post(self.env, requests.post, endpoint, json=data, headers=headers, timeout=30)
         response_json = req.json()
         response_json['ResponseCode'] = str(response_json['ResponseCode'])
 
