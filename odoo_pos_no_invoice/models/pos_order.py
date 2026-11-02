@@ -5,6 +5,8 @@ from odoo import _, models, api, fields
 from odoo.tools import is_html_empty
 import logging
 
+import psycopg2
+
 _logger = logging.getLogger(__name__)
 
 
@@ -193,7 +195,7 @@ class PosOrder(models.Model):
         return result
 
     @api.model
-    def get_cfe_data_from_invoice(self, ids, account_move_id):
+    def get_cfe_data_from_invoice(self, ids, account_move_id, reintentar=False):
         """
         Obtiene los datos del CFE directamente desde account_move (factura)
 
@@ -203,6 +205,10 @@ class PosOrder(models.Model):
         Args:
             ids (list): Lista de IDs de pos.order (no se usa, pero es requerido por @api.model)
             account_move_id (int): ID del account.move (factura)
+            reintentar (bool): si el CFE quedó pendiente, reintentar la emisión
+                antes de armar los datos. Lo pide sólo el recibo en pantalla: las
+                otras vías (impresión, QZ, reimpresión) corren en paralelo con él
+                y no deben emitir a la vez.
 
         Returns:
             dict: Diccionario con los datos del CFE formateados para el recibo.
@@ -230,6 +236,11 @@ class PosOrder(models.Model):
                 ['cfe_serie_num', 'name', 'cfe_hash', 'cfe_url_qr', 'cfe_type', 'qr_img', 'cfe_cae_from', 'cfe_cae_to',
                  'cfe_cae_exp_date', 'cfe_cae_auth'])
             invoice = invoice.sudo().browse(account_move_id)
+            cfe_error = ''
+            if reintentar:
+                cfe_error = self._cfe_reintentar_emision(invoice)
+                invoice = self.env['account.move'].sudo().browse(account_move_id)
+            cfe_pendiente = bool('uy_cfe_pendiente' in invoice._fields and invoice.uy_cfe_pendiente)
 
             _logger.info('Factura encontrada: ID=%s, name=%s', invoice.id, invoice.name)
 
@@ -272,7 +283,9 @@ class PosOrder(models.Model):
             if not serie or not numero:
                 _logger.info('Factura %s no tiene serie y número completos (serie="%s", numero="%s")', account_move_id,
                              serie, numero)
-                return {}
+                # Sin datos para el recibo, pero el aviso de CFE pendiente tiene que
+                # llegar igual al PDV.
+                return {'cfe_pendiente': True, 'cfe_error': cfe_error} if cfe_pendiente else {}
 
             # Obtener el nombre del tipo de CFE
             tipo_nombre = ''
@@ -379,6 +392,9 @@ class PosOrder(models.Model):
                 # Va también en cfe_data porque es lo único que llega a todas
                 # las vías de impresión, incluida la reimpresión.
                 'receptor': self._receipt_receptor_vals(invoice),
+                # La factura quedó registrada pero el CFE no salió: el PDV avisa.
+                'cfe_pendiente': cfe_pendiente,
+                'cfe_error': cfe_error if cfe_pendiente else '',
             }
 
             _logger.info(
@@ -395,6 +411,43 @@ class PosOrder(models.Model):
             return {}
 
         return cfe_data
+
+    def _cfe_reintentar_emision(self, invoice):
+        """Reintenta la emisión de un CFE que quedó pendiente.
+
+        Con la emisión después del posteo (LocalizacionUy), un fallo de UCFE ya
+        no corta la venta: la factura queda registrada y el CFE pendiente. El
+        recibo es lo primero que el PDV pide después de guardar la venta, así que
+        es el lugar para reintentar una vez y, si no sale, avisarle al cajero.
+
+        No propaga nada: el recibo tiene que salir igual.
+
+        Returns:
+            str: el motivo si no se pudo emitir; vacío si se emitió o no había
+                nada pendiente.
+        """
+        if 'uy_cfe_pendiente' not in invoice._fields or not invoice.uy_cfe_pendiente:
+            return ''
+        try:
+            invoice.with_company(invoice.company_id).action_uy_emitir_cfe()
+        except Exception as error:  # UCFE caído, receptor incompleto, dato fiscal faltante
+            # Un error de base de datos deja la transacción abortada y hay que
+            # descartarla para poder armar el recibo; la localización ya commiteó
+            # antes de mandar a UCFE, así que la venta no se pierde. Un error de
+            # validación (lo normal: UCFE rechaza o no contesta) la deja usable y
+            # no se toca: un rollback ahí rompería además el savepoint de un test.
+            try:
+                self.env.cr.execute('SELECT 1')
+            except psycopg2.errors.InFailedSqlTransaction:
+                self.env.cr.rollback()
+            self.env.invalidate_all()
+            motivo = (getattr(error, 'args', None) or [str(error)])[0]
+            _logger.warning('odoo_pos_no_invoice: el CFE de la factura %s sigue pendiente: %s',
+                            invoice.id, motivo)
+            return str(motivo or _('Error desconocido al emitir el CFE.'))
+        _logger.info('odoo_pos_no_invoice: CFE pendiente emitido desde el recibo | factura=%s',
+                     invoice.id)
+        return ''
 
     def _normalize_payment_name(self, name):
         """Normaliza el nombre del medio de pago.
