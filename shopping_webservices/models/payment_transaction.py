@@ -21,13 +21,16 @@ class PaymentTransaction(models.Model):
         for record in self:
             code = None
 
-
-            if record.issuer_code and record.payment_method_id:
+            # La marca se busca por nombre: los pagos POS Manual traen el sello en
+            # issuer_name o manual_stamp pero nunca issuer_code (solo lo cargan OCA/Fiserv).
+            # manual_stamp lo agrega pos_forum_manual_payment, que no es dependencia.
+            manual_stamp = record.manual_stamp if 'manual_stamp' in record._fields else False
+            if record.payment_method_id and (record.issuer_name or manual_stamp):
                 brand = PaymentMethod.with_context(active_test=False).search([
                     ('primary_payment_method_id', '=', record.payment_method_id.id),
                     '|',
                     ('name', '=', record.issuer_name),
-                    ('name', '=', record.manual_stamp),
+                    ('name', '=', manual_stamp),
                 ], limit=1)
 
                 if brand:
