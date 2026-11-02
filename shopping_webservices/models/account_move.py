@@ -916,9 +916,7 @@ class AccountMove(models.Model):
                 if estado == 1:
                     _logger.info("=== DECLARACIÓN PRE-GRABADA COSTA URBANA ===")
                     _logger.info(f"Identificador: {identificador}")
-                    
-                    self.journal_id.write({'secuencial_ventas': secuencial + 1})
-                    
+
                     self.env['ventas.log'].create({
                         'account_move_id': self.id,
                         'fecha_declaracion': fields.Datetime.now(),
@@ -1626,8 +1624,7 @@ class AccountMove(models.Model):
                 if estado == 1:
                     _logger.info("=== DECLARACIÓN PRE-GRABADA COSTA URBANA ===")
                     _logger.info(f"Identificador: {identificador}")
-                    
-                    self.journal_id.write({'secuencial_ventas': secuencial + 1})
+
                     self.write({
                         'estadoEnvio': 'error'
                     })

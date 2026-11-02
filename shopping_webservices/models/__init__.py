@@ -2,6 +2,7 @@
 
 from . import models
 from . import account_journal
+from . import dgi_sucursal
 from . import loyalty_program
 from . import shopping_payment_methods
 from . import account_move

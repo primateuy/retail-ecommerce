@@ -13,7 +13,12 @@
 
             <xpath expr="//notebook" position="inside" >
                 <page string="Shopping Webservices" invisible="not integracionShopping">
+                    <div class="alert alert-info" role="alert">
+                        Estos datos pertenecen a la Sucursal DGI del diario y se comparten
+                        con todos los diarios de esa sucursal, incluido el secuencial.
+                    </div>
                     <group>
+                        <field name="dgi_sucursal_id" readonly="1"/>
                         <field name="tecnologia"/>
                         <field name="url"/>
                         <field name="usuario" invisible="tecnologia != 'costa_urbana'"/>

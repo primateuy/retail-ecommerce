@@ -12,7 +12,7 @@
     'website': "https://avancesoftware.us/",
 
     'category': 'Accounting',
-    'version': '0.4',
+    'version': '0.5',
 
     
      'depends': ['base', 'web', 'l10n_uy', 'l10n_uy_einvoice_base', 'l10n_uy_einvoice_uruware', 'account', 'account_accountant', 'sale_management', 'loyalty', 'odoo_pos_oca', 'payment'],
@@ -22,6 +22,7 @@
         'views/views.xml',
         'views/templates.xml',
         'views/account_journal.xml',
+        'views/dgi_sucursal.xml',
         'views/loyalty_program.xml',
         'views/shopping_payment_method.xml',
         'views/account_move.xml',
