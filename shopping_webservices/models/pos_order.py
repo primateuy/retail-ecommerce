@@ -11,19 +11,40 @@ class PosOrder(models.Model):
 
     def _create_invoice(self, move_vals):
         new_move = super()._create_invoice(move_vals)
+        self._set_shopping_payment_distribution(new_move)
+        return new_move
 
-        if not new_move.journal_id.integracionShopping:
-            return new_move
+    def _set_shopping_payment_distribution(self, move):
+        """Calcula y guarda en la factura la distribución de pagos del shopping.
 
-        distribution = self._build_shopping_payment_distribution(new_move.journal_id)
+        Args:
+            move (account.move): factura del pedido.
+
+        Side effects:
+            Escribe payment_distribution en la factura si el diario integra shopping.
+        """
+        if not move.journal_id.integracionShopping:
+            return
+
+        distribution = self._build_shopping_payment_distribution(move.journal_id)
         if distribution:
-            new_move.payment_distribution = json.dumps(distribution)
+            move.payment_distribution = json.dumps(distribution)
             _logger.info(
                 'Shopping: payment_distribution generado para factura %s: %s',
-                new_move.name or new_move.id, distribution
+                move.name or move.id, distribution
             )
 
-        return new_move
+    def _refresh_shopping_payment_distribution(self):
+        """Recalcula la distribución de las facturas aún no declaradas al shopping.
+
+        Las transacciones POS Manual se crean después de facturar (al final de
+        _process_order), así que la distribución inicial cae en Contado; al enlazar
+        la transacción al pago se vuelve a armar con el código de la marca.
+        """
+        for order in self:
+            move = order.account_move
+            if move and move.estadoEnvio != 'enviado':
+                order._set_shopping_payment_distribution(move)
 
     def _build_shopping_payment_distribution(self, journal):
         distribution = []
