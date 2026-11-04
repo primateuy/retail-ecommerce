@@ -7,6 +7,7 @@ import pytz
 from dateutil.parser import parse
 from odoo import _, api, fields, models
 from odoo.exceptions import ValidationError
+from odoo.tools.float_utils import float_round
 
 _logger = logging.getLogger(__name__)
 
@@ -22,6 +23,26 @@ class SaleOrder(models.Model):
     fecha_cancelada = fields.Datetime('Fecha Cancelada')
     observaciones = fields.Text('Observaciones')
     estado = fields.Char('Estado')
+
+    def _add_points_for_coupon(self, coupon_points):
+        """Acredita puntos de lealtad sin decimales en las órdenes de Fenicio.
+
+        Las ventas de Fenicio suman 1 punto cada 100 pesos y sólo puntos enteros:
+        una venta de 1989 suma 19 puntos, no 19,89. El resto de las órdenes
+        conserva el cálculo estándar de sale_loyalty.
+
+        Args:
+            coupon_points (dict): loyalty.card -> puntos a acreditar.
+
+        Returns:
+            None. Delega en el método estándar con los puntos ya truncados.
+        """
+        if self.id_order_fenicio:
+            coupon_points = {
+                coupon: float_round(points, precision_digits=0, rounding_method='DOWN')
+                for coupon, points in coupon_points.items()
+            }
+        return super()._add_points_for_coupon(coupon_points)
 
     @api.model
     def convert_datetime(self, datetime_object, str=True):
