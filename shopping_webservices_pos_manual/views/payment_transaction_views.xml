@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+
+	<record id="view_payment_transaction_form_shopping_pos_manual" model="ir.ui.view">
+		<field name="name">payment.transaction.form.shopping.pos.manual</field>
+		<field name="model">payment.transaction</field>
+		<field name="inherit_id" ref="payment.payment_transaction_form"/>
+		<field name="priority">99</field>
+		<field name="arch" type="xml">
+			<!-- En POS Manual el código va junto al Sello; en el resto de los
+			     proveedores (OCA, Fiserv) sigue en los datos generales. -->
+			<xpath expr="//group[@name='transaction_details']/field[@name='shopping_payment_code']"
+				   position="attributes">
+				<attribute name="invisible">is_pos_manual</attribute>
+			</xpath>
+			<xpath expr="//group[@name='pos_manual_info']//field[@name='manual_stamp']"
+				   position="after">
+				<field name="shopping_payment_code"/>
+			</xpath>
+		</field>
+	</record>
+
+</odoo>
