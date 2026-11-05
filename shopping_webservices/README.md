@@ -21,9 +21,44 @@ Módulo de Odoo para la integración con sistemas de gestión de Shoppings de Ur
 
 ### Integración con POS
 - Detecta automáticamente el método de pago Shopping correspondiente a cada pago del PDV.
-- Soporta dos vías de detección:
-  1. Método de pago PDV con flag `POS Shopping` y método Shopping asignado directamente.
-  2. Transacción de pago OCA — lee el `shopping_payment_code` de la transacción para buscar el método Shopping.
+- Soporta dos vías de detección, en este orden:
+  1. Transacción de pago (OCA, Fiserv o POS Manual): se lee el `shopping_payment_code` de la
+     transacción y se busca el método Shopping del diario con ese código.
+  2. Método de pago PDV con flag `POS Shopping` y método Shopping asignado directamente.
+- Si ninguna aplica, el pago se asigna a **Contado**.
+
+### Código Shopping de la transacción (`payment.transaction.shopping_payment_code`)
+Campo calculado y almacenado. Se resuelve con esta prioridad:
+
+1. **Marca**: `payment.method` hija del método de pago de la transacción
+   (`primary_payment_method_id`) cuyo nombre coincide con `issuer_name` (OCA/Fiserv) o con
+   `manual_stamp` (el Sello de POS Manual), y que tenga `Código Shopping` cargado.
+2. **Método de pago PDV**: el `Método de Pago Shopping` configurado en el `pos.payment.method`
+   del pago POS de la transacción (`pos_payment_id`).
+3. **Genérico**: el `Código Shopping` del método de pago de la transacción.
+
+Se recalcula cuando cambian el método de pago, `issuer_code`, `issuer_name`, el pago POS
+vinculado o el método Shopping del método PDV.
+
+> `manual_stamp` viene de `pos_forum_manual_payment`, que **no** es dependencia de este módulo:
+> se lee solo si el campo existe y no figura en `@api.depends` (se escribe en el `create`, así
+> que igual se tiene en cuenta).
+
+En el formulario de la transacción, el campo se muestra en los datos generales, debajo de
+**Método de pago**, para cualquier proveedor. Con `pos_forum_manual_payment` instalado, el
+módulo puente `shopping_webservices_pos_manual` lo muestra en el bloque **POS Manual**, debajo del
+Sello.
+
+### Pagos POS Manual y "Otros Métodos de Pago"
+Odoo genera la factura del pedido dentro de `_process_order` (en `_process_saved_order`).
+`pos_forum_manual_payment` crea la transacción manual **después**, al final de ese mismo
+`_process_order`. Por eso, al facturar, el pago POS todavía no tiene transacción y la
+distribución saldría sin el código de la marca (caía en Contado o quedaba vacía).
+
+Para cubrirlo, `pos.payment.write` detecta cuándo se enlaza `payment_transaction_id` y rehace
+la `payment_distribution` de la factura del pedido. Solo lo hace si la factura **todavía no
+se declaró** (`estadoEnvio != 'enviado'`). La declaración la hace el cron diario, así que la
+distribución corregida llega a tiempo.
 
 ### Promociones Shopping
 - Permite marcar programas de lealtad (`loyalty.program`) como **Promoción Shopping** para incluirlas en la declaración.
@@ -92,8 +127,11 @@ En **Contabilidad > Configuración > Diarios**, editar el diario del punto de ve
 ### 3. Configurar métodos de pago PDV (opcional, para POS)
 En **Punto de Venta > Configuración > Métodos de Pago**, activar el flag **POS Shopping** en los métodos de pago electrónicos y asignarles el método de pago Shopping correspondiente. Esto permite que al cerrar una sesión POS, la distribución de pagos se genere automáticamente.
 
-### 4. Configurar código Shopping en marcas de pago (opcional, para OCA)
-En **Configuración > Pagos > Métodos de Pago**, asignar el `Código Shopping` en las marcas (brands) de pago para que las transacciones OCA se mapeen automáticamente al método Shopping correcto.
+### 4. Configurar código Shopping en marcas de pago (OCA, Fiserv y POS Manual)
+En **Configuración > Pagos > Métodos de Pago**, asignar el `Código Shopping` en las marcas
+(brands) de pago para que las transacciones se mapeen automáticamente al método Shopping
+correcto. En POS Manual la marca es el **Sello** elegido en el popup del PDV (por ejemplo
+"Club del Este" o "Creditos de la Casa"), por lo que cada sello debe tener su código cargado.
 
 
 ## Generación de Factura y posterior distribución
@@ -158,6 +196,29 @@ El módulo incluye una tarea programada `cron_evaluar_ventas_shopping` que se ej
 | `l10n_uy` | Nativo Odoo | Localización Uruguay |
 | `l10n_uy_edi` | Nativo Odoo (Enterprise) | Datos del CFE (tipo, serie, número) |
 | `odoo_pos_oca` | Tercero (PRIMATE) | Integración POS con terminales OCA |
+
+### Módulos relacionados
+
+| Módulo | Relación |
+|--------|----------|
+| `pos_forum_manual_payment` | No es dependencia. Si está instalado, se usa su campo `manual_stamp` (Sello) para resolver el Código Shopping. |
+| `shopping_webservices_pos_manual` | Módulo puente (`auto_install`) entre este módulo y `pos_forum_manual_payment`. Ver su README. |
+
+---
+
+## Migraciones
+
+| Versión | Qué hace |
+|---------|----------|
+| `0.5` | Los datos del shopping (conexión, contrato, secuencial, formas de pago) pasan del diario a la sucursal DGI. Copia los valores existentes. |
+| `0.6` | Recalcula `shopping_payment_code` de las transacciones vinculadas a un pago POS y rehace la `payment_distribution` de las facturas POS aún no declaradas. |
+
+Al actualizar a `0.6` en una base que ya tiene `pos_forum_manual_payment`, actualizar este
+módulo **junto con** la instalación del puente:
+
+```bash
+odoo-bin -c <conf> -u shopping_webservices -i shopping_webservices_pos_manual
+```
 
 ---
 
