@@ -1,5 +1,6 @@
 import json
 import logging
+import re
 from datetime import datetime, timezone
 
 import psycopg2
@@ -11,6 +12,8 @@ _logger = logging.getLogger(__name__)
 
 MP_API_URL = 'https://api.mercadopago.com'
 MP_TIMEOUT = 10
+# Misma regex que usa point_of_sale en pos.order._export_for_ui para obtener el uid.
+POS_UID_PATTERN = re.compile(r'([0-9-]){14,}')
 
 
 class MpPendingOrder(models.Model):
@@ -325,7 +328,7 @@ class MpPendingOrder(models.Model):
 
         vals = {
             'name': self.name,
-            'pos_reference': self.name,
+            'pos_reference': self._get_pos_reference(order_data),
             'session_id': session.id,
             'user_id': order_data.get('user_id'),
             'employee_id': order_data.get('employee_id') or False,
@@ -342,6 +345,27 @@ class MpPendingOrder(models.Model):
         if 'order_salesperson_id' in self.env['pos.order']._fields:
             vals['order_salesperson_id'] = order_data.get('cashier_id') or False
         return vals
+
+    def _get_pos_reference(self, order_data):
+        """Devuelve el pos_reference del pedido con el formato del POS.
+
+        El core extrae el uid del pos_reference con la regex '([0-9-]){14,}' al
+        exportar el pedido a la UI (lista de órdenes, reimpresión, reembolsos),
+        y falla si no la cumple. Por eso no se usa el external_reference de MP.
+
+        Args:
+            order_data (dict): datos guardados al generar el QR.
+
+        Returns:
+            str: el nombre de la orden del POS ("Order 00012-003-0004") o, en
+                órdenes pendientes generadas antes de enviarlo, uno equivalente
+                con login 000 (el POS nunca lo usa, así que no colisiona).
+        """
+        self.ensure_one()
+        pos_reference = order_data.get('pos_reference')
+        if pos_reference and POS_UID_PATTERN.search(pos_reference):
+            return pos_reference
+        return 'Order %05d-000-%04d' % (self.session_id.id, self.id)
 
     def _update_order_amounts(self, order, order_data):
         """Recalcula subtotales de líneas e importes del pedido.

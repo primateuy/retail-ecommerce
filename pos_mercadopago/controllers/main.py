@@ -354,6 +354,7 @@ class MercadoPagoController(http.Controller):
                     "partner_id": kwards.get("partner_id") or False,
                     "cashier_id": kwards.get("cashier_id") or False,
                     "company_id": kwards["company_id"],
+                    "pos_reference": kwards.get("pos_reference") or False,
                     "amount_tax": amount_tax,
                     "amount_total": amount_total,
                     "amount_return": kwards.get("amount_return") or 0,
