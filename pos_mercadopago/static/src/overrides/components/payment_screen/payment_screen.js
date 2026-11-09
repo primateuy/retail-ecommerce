@@ -97,6 +97,8 @@ export class PaymentMercadoPagoQR extends PaymentMercadoPago {
                     this.pos.get_cashier?.()?.id ||
                     false,
                 company_id: this.pos.config.company_id[0],
+                // El core exige un pos_reference con el uid del POS ("Order 00012-003-0004").
+                pos_reference: orderFrontend.name,
                 qr_type: this.pos.qr_type,
                 paymentLines: paymentLines,
                 amount_total: orderFrontend.get_total_with_tax(),
