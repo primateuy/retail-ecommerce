@@ -23,7 +23,7 @@
                     <div class="partner-details-box row row-cols-1 row-cols-sm-2 gy-3 mt-3" t-if="!changes.is_company">
                         <div class="partner-detail col">
                             <label class="form-label label" for="doc_type_person">Tipo de documento</label>
-                            <select class="detail form-select" id="doc_type_person" name="l10n_latam_identification_type_id" t-model="changes.l10n_latam_identification_type_id" t-att="{'disabled': isFieldCommercialAndPartnerIsChild('l10n_latam_identification_type_id')}">
+                            <select class="detail form-select" id="doc_type_person" name="l10n_latam_identification_type_id" t-model="changes.l10n_latam_identification_type_id" t-on-change="onDocTypeChange" t-att="{'disabled': isFieldCommercialAndPartnerIsChild('l10n_latam_identification_type_id')}">
                                 <option value="">Seleccione</option>
                                 <t t-foreach="identificationTypes" t-as="doc" t-key="doc.id">
                                     <option t-att-value="doc.id">

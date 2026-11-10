@@ -114,6 +114,49 @@ patch(PartnerDetailsEdit.prototype, {
         });
     },
 
+    // ------------------------------------------------------------------
+    // Coherencia CI <-> pais Uruguay (misma regla que el backend)
+    // ------------------------------------------------------------------
+    // La CI es un documento uruguayo: si el tipo es CI el pais debe ser Uruguay.
+    // No se bloquea; se autoajusta. Los tipos (con code/check_type/country_id) ya
+    // vienen cargados en el POS, asi que no hace falta RPC extra. El id de Uruguay
+    // se toma del propio country_id del tipo CI.
+
+    get _ciType() {
+        const types = this.pos.identification_types || [];
+        return types.find(
+            (t) =>
+                String(t.check_type ?? "").toLowerCase().trim() === "ci" ||
+                String(t.code ?? "").trim() === "3"
+        );
+    },
+
+    get _otrosType() {
+        const types = this.pos.identification_types || [];
+        return types.find((t) => String(t.code ?? "").trim() === "4");
+    },
+
+    get _uruguayCountryId() {
+        const country = this._ciType?.country_id;
+        return Array.isArray(country) ? country[0] : country || false;
+    },
+
+    /**
+     * Al elegir CI, setea el pais en Uruguay (este o vacio).
+     */
+    onDocTypeChange() {
+        const ci = this._ciType;
+        const uyId = this._uruguayCountryId;
+        if (!ci || !uyId) {
+            return;
+        }
+        const typeId = parseInt(String(this.changes.l10n_latam_identification_type_id), 10);
+        if (typeId === ci.id && this.changes.country_id !== uyId) {
+            this.changes.country_id = uyId;
+            this._previousCountryId = uyId;
+        }
+    },
+
     /**
      * Codigo de pais con + para prefijo telefonico (ej. +598).
      * Se usa al cargar el formulario y al cambiar pais.
@@ -222,6 +265,18 @@ patch(PartnerDetailsEdit.prototype, {
         const newCountryId = rawNew != null ? parseInt(String(rawNew), 10) : null;
         const oldCountryId = this._previousCountryId;
         this._previousCountryId = newCountryId;
+
+        // Coherencia CI <-> pais: si el nuevo pais no es Uruguay y el tipo es CI,
+        // el documento pasa a OTROS (el pais manda).
+        const ci = this._ciType;
+        const otros = this._otrosType;
+        const uyId = this._uruguayCountryId;
+        if (ci && otros && uyId) {
+            const typeId = parseInt(String(this.changes.l10n_latam_identification_type_id), 10);
+            if (typeId === ci.id && newCountryId && newCountryId !== uyId) {
+                this.changes.l10n_latam_identification_type_id = otros.id;
+            }
+        }
 
         const oldCountry = this.pos.countries?.find((c) => c.id === oldCountryId);
         const newCountry = this.pos.countries?.find((c) => c.id === newCountryId);
