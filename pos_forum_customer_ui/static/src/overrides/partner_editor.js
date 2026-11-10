@@ -117,10 +117,12 @@ patch(PartnerDetailsEdit.prototype, {
     // ------------------------------------------------------------------
     // Coherencia CI <-> pais Uruguay (misma regla que el backend)
     // ------------------------------------------------------------------
-    // La CI es un documento uruguayo: si el tipo es CI el pais debe ser Uruguay.
-    // No se bloquea; se autoajusta. Los tipos (con code/check_type/country_id) ya
-    // vienen cargados en el POS, asi que no hace falta RPC extra. El id de Uruguay
-    // se toma del propio country_id del tipo CI.
+    // La CI es un documento uruguayo: NO puede ir con un pais que no sea Uruguay.
+    //  - CI con pais vacio            -> pais = Uruguay.
+    //  - CI con pais != Uruguay       -> se QUITA la CI: OTROS si esta activo
+    //    (el POS solo carga tipos activos, asi que `_otrosType` ya respeta eso);
+    //    si no hay OTROS activo, se deja VACIO.
+    // El id de Uruguay se toma del propio country_id del tipo CI.
 
     get _ciType() {
         const types = this.pos.identification_types || [];
@@ -131,6 +133,8 @@ patch(PartnerDetailsEdit.prototype, {
         );
     },
 
+    // Solo se cargan tipos ACTIVOS en el POS; si OTROS esta archivado no aparece
+    // aca y queda undefined -> el campo se deja vacio.
     get _otrosType() {
         const types = this.pos.identification_types || [];
         return types.find((t) => String(t.code ?? "").trim() === "4");
@@ -141,19 +145,38 @@ patch(PartnerDetailsEdit.prototype, {
         return Array.isArray(country) ? country[0] : country || false;
     },
 
+    // Quita la CI: OTROS si hay uno activo cargado, si no deja el campo vacio.
+    _quitarCi() {
+        this.changes.l10n_latam_identification_type_id = this._otrosType ? this._otrosType.id : false;
+    },
+
     /**
-     * Al elegir CI, setea el pais en Uruguay (este o vacio).
+     * Al elegir CI: si el pais esta vacio lo pone en Uruguay; si el pais tiene
+     * valor y NO es Uruguay, no se permite la CI (se quita).
      */
     onDocTypeChange() {
         const ci = this._ciType;
         const uyId = this._uruguayCountryId;
-        if (!ci || !uyId) {
+        if (!ci) {
             return;
         }
         const typeId = parseInt(String(this.changes.l10n_latam_identification_type_id), 10);
-        if (typeId === ci.id && this.changes.country_id !== uyId) {
-            this.changes.country_id = uyId;
-            this._previousCountryId = uyId;
+        if (typeId !== ci.id) {
+            return;
+        }
+        if (!this.changes.country_id) {
+            if (uyId) {
+                this.changes.country_id = uyId;
+                this._previousCountryId = uyId;
+            }
+        } else if (uyId && this.changes.country_id !== uyId) {
+            this._quitarCi();
+            if (this.popup) {
+                this.popup.add(ErrorPopup, {
+                    title: _t("Tipo de documento"),
+                    body: _t("La CI es un documento de Uruguay; con otro país no se puede usar CI."),
+                });
+            }
         }
     },
 
@@ -266,15 +289,14 @@ patch(PartnerDetailsEdit.prototype, {
         const oldCountryId = this._previousCountryId;
         this._previousCountryId = newCountryId;
 
-        // Coherencia CI <-> pais: si el nuevo pais no es Uruguay y el tipo es CI,
-        // el documento pasa a OTROS (el pais manda).
+        // Coherencia CI <-> país: si el nuevo país no es Uruguay y el tipo es CI,
+        // se quita la CI (OTROS si está activo, si no vacío).
         const ci = this._ciType;
-        const otros = this._otrosType;
         const uyId = this._uruguayCountryId;
-        if (ci && otros && uyId) {
+        if (ci && uyId) {
             const typeId = parseInt(String(this.changes.l10n_latam_identification_type_id), 10);
             if (typeId === ci.id && newCountryId && newCountryId !== uyId) {
-                this.changes.l10n_latam_identification_type_id = otros.id;
+                this._quitarCi();
             }
         }
 
