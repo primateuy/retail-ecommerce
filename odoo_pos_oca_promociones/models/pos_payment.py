@@ -48,6 +48,17 @@ class PosPayment(models.Model):
                     ], order='id desc', limit=1)
                     if tx_by_ref:
                         other = tx_by_ref.pos_payment_id
+                        # Resguardo anti-arrastre: no re-ligar una tx que YA es de otra orden
+                        # (transaction_id heredado de una venta anterior pegada en el PDV).
+                        if (tx_by_ref.pos_order_id and self.pos_order_id
+                                and tx_by_ref.pos_order_id.id != self.pos_order_id.id):
+                            _logger.warning(
+                                'OCA promos: transaction_id=%s ya pertenece a la orden %s; no se '
+                                'liga al pago %s (orden %s). Posible arrastre de estado del PDV.',
+                                payment_tid, tx_by_ref.pos_order_id.name, payment_name,
+                                getattr(self.pos_order_id, 'name', self.pos_order_id.id),
+                            )
+                            return
                         if not other or other.id == self.id:
                             tx_by_ref.pos_payment_id = self.id
                             self.payment_transaction_id = tx_by_ref.id
@@ -78,6 +89,7 @@ class PosPayment(models.Model):
             orphaned_transactions = self.env['payment.transaction'].sudo().search([
                 ('oca_transaction_id', '!=', False),
                 ('pos_payment_id', '=', False),
+                ('pos_order_id', '=', False),
                 ('state', 'in', ['pending', 'done'])
             ], order='create_date desc, id desc')
             
