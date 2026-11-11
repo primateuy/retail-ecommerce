@@ -147,16 +147,35 @@ class PosOrder(models.Model):
         }
 
     def _filter_printable_voucher_transactions(self, order, transactions):
-        """Excluye transacciones cuyo método de pago POS tiene no_print_voucher activo."""
+        """Filtra las transacciones que NO deben imprimirse como voucher de ESTA orden:
+        - método de pago POS con no_print_voucher activo;
+        - transacción que pertenece a OTRA orden (pos_order_id distinto): un arrastre de
+          estado del PDV puede dejar en una línea de pago el transaction_id de una venta
+          anterior y, sin este resguardo, se imprimía el voucher de esa venta vieja
+          (p. ej. una venta en efectivo que sacaba el voucher de tarjeta de días atrás)."""
         excluded_tx_ids = {
             pay.payment_transaction_id.id
             for pay in order.payment_ids
             if pay.payment_transaction_id
             and getattr(pay.payment_method_id, 'no_print_voucher', False)
         }
-        if not excluded_tx_ids:
-            return transactions
-        return transactions.filtered(lambda tx: tx.id not in excluded_tx_ids)
+        printable = transactions.browse()
+        for tx in transactions:
+            if tx.id in excluded_tx_ids:
+                continue
+            # Resguardo: nunca imprimir el voucher de una transacción que ya está ligada
+            # a otra orden. tx.pos_order_id vacío (aún sin asociar) sí se permite.
+            if tx.pos_order_id and tx.pos_order_id.id != order.id:
+                _logger.warning(
+                    "Voucher recibo POS: se descarta la transacción %s (ticket=%s) porque "
+                    "pertenece a otra orden (%s), no a %s (id=%s). Posible arrastre de "
+                    "estado del PDV.",
+                    tx.reference or tx.id, tx.ticket_number,
+                    tx.pos_order_id.name, order.name, order.id,
+                )
+                continue
+            printable |= tx
+        return printable
 
     def _find_all_payment_transactions_for_pos_receipt(self, order):
         """Localiza TODAS las transacciones OCA de la orden para el recibo multi-voucher."""
@@ -241,9 +260,11 @@ class PosOrder(models.Model):
             )
             order = self.sudo().browse()
         if (not order or not order.exists()) and pos_reference:
-            order = self.sudo().search([('pos_reference', '=', pos_reference)], limit=1)
+            # order='id desc': ante pos_reference repetido por caja (la numeración del PDV
+            # se recicla), resolver la orden MÁS RECIENTE, no la más vieja.
+            order = self.sudo().search([('pos_reference', '=', pos_reference)], limit=1, order='id desc')
             if not order:
-                order = self.sudo().search([('name', '=', pos_reference)], limit=1)
+                order = self.sudo().search([('name', '=', pos_reference)], limit=1, order='id desc')
         if not order.exists():
             _logger.warning(
                 "Voucher recibo POS: sin orden resuelta | order_id=%s | pos_reference=%r",
@@ -352,9 +373,11 @@ class PosOrder(models.Model):
         if numeric_id:
             order = self.sudo().browse(numeric_id)
         if (not order or not order.exists()) and pos_reference:
-            order = self.sudo().search([('pos_reference', '=', pos_reference)], limit=1)
+            # order='id desc': ante pos_reference repetido por caja (la numeración del PDV
+            # se recicla), resolver la orden MÁS RECIENTE, no la más vieja.
+            order = self.sudo().search([('pos_reference', '=', pos_reference)], limit=1, order='id desc')
             if not order:
-                order = self.sudo().search([('name', '=', pos_reference)], limit=1)
+                order = self.sudo().search([('name', '=', pos_reference)], limit=1, order='id desc')
         return order
 
     def get_oca_voucher_transaction_id_for_pos_print(self, order_id=False, pos_reference=False):

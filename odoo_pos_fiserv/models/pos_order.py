@@ -149,11 +149,18 @@ class PosOrder(models.Model):
             for pay in order.payment_ids:
                 if pay.payment_transaction_id:
                     t = pay.payment_transaction_id.sudo()
+                    # Resguardo: no reutilizar una tx ya ligada a otra orden (arrastre de
+                    # estado del PDV): imprimiría el voucher de una venta ajena.
+                    if t.pos_order_id and t.pos_order_id.id != order.id:
+                        continue
                     if fiserv_provider and t.provider_id == fiserv_provider:
                         return t
             for pay in order.payment_ids:
                 if pay.payment_transaction_id:
-                    return pay.payment_transaction_id.sudo()
+                    t = pay.payment_transaction_id.sudo()
+                    if t.pos_order_id and t.pos_order_id.id != order.id:
+                        continue
+                    return t
         # Bloque: último recurso — cualquier transacción con pos_order_id.
         return PaymentTransaction.search(
             [('pos_order_id', '=', order.id)],
@@ -184,9 +191,9 @@ class PosOrder(models.Model):
             )
             order = self.sudo().browse()
         if (not order or not order.exists()) and pos_reference:
-            order = self.sudo().search([('pos_reference', '=', pos_reference)], limit=1)
+            order = self.sudo().search([('pos_reference', '=', pos_reference)], limit=1, order='id desc')
             if not order:
-                order = self.sudo().search([('name', '=', pos_reference)], limit=1)
+                order = self.sudo().search([('name', '=', pos_reference)], limit=1, order='id desc')
         if not order.exists():
             _logger.warning(
                 "Voucher recibo POS: sin orden resuelta | order_id=%s | pos_reference=%r",
@@ -271,9 +278,9 @@ class PosOrder(models.Model):
         if order_id and not order.exists():
             order = self.sudo().browse()
         if (not order or not order.exists()) and pos_reference:
-            order = self.sudo().search([('pos_reference', '=', pos_reference)], limit=1)
+            order = self.sudo().search([('pos_reference', '=', pos_reference)], limit=1, order='id desc')
             if not order:
-                order = self.sudo().search([('name', '=', pos_reference)], limit=1)
+                order = self.sudo().search([('name', '=', pos_reference)], limit=1, order='id desc')
         if not order.exists():
             return False
         transaction = self._find_payment_transaction_for_pos_receipt(order)

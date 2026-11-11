@@ -19,7 +19,7 @@ requeridos (solo backend, solo POS o ambos) en lugar de este meta.
     "author": "PRIMATE",
     "website": "https://www.primate.com",
     "category": "Point of Sale",
-    "version": "17.0.2.0.0",
+    "version": "17.0.2.0.1",
     "depends": [
         "odoo_pos_fiserv_core",
         "odoo_pos_fiserv_pos",
