@@ -16,7 +16,7 @@ patch(PosBus.prototype, {
                 const pendingLine = this.pos.getPendingPaymentLine("oca");
                 console.log('BUS OCA_LATEST_RESPONSE', payload);
                 if (pendingLine) {
-                    pendingLine.payment_method.payment_terminal.handleOCAStatusResponse(payload);
+                    pendingLine.payment_method.payment_terminal._procesarResultadoOCA(payload);
                 }
             }
         }

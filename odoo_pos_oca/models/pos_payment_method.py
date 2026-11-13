@@ -1,3 +1,4 @@
+import json
 import threading
 import pprint
 import logging
@@ -1240,3 +1241,82 @@ class PosPaymentMethod(models.Model):
             pos_session_id,
         )
         return self.env['pos.payment'] 
+    # ------------------------------------------------------------------
+    # El PDV no depende sólo del aviso por bus (Forum, 2026-11-13)
+    #
+    # El resultado final del pinpad llegaba a la caja únicamente por el bus. Si el
+    # aviso no llegaba, la caja esperaba para siempre: la cajera recargaba y volvía
+    # a cobrar (Florida, tx 37187). Ahora la caja consulta el resultado guardado y,
+    # antes de cobrar, avisa si en su terminal hay un cobro aprobado sin venta.
+    # ------------------------------------------------------------------
+
+    OCA_CODIGOS_INTERMEDIOS = ('10', '12')
+
+    def oca_consultar_resultado(self, transaction_id):
+        """Resultado final de un cobro, con la misma forma que el aviso del bus.
+
+        Returns:
+            dict: el payload final, o ``{'pending': True}`` si la terminal todavía no contestó.
+        """
+        self.ensure_one()
+        tid = str(transaction_id or '').strip()
+        if not tid:
+            return {'pending': True}
+        tx = self.env['payment.transaction'].sudo().search(
+            [('oca_transaction_id', '=', tid)], order='id desc', limit=1,
+        )
+        if not tx or not tx.oca_complete_response:
+            return {'pending': True}
+        if self.codigo_terminal and tx.pos_id and tx.pos_id != self.codigo_terminal:
+            return {'pending': True}
+        try:
+            payload = json.loads(tx.oca_complete_response)
+        except (TypeError, ValueError):
+            return {'pending': True}
+        if not isinstance(payload, dict):
+            return {'pending': True}
+        if str(payload.get('ResponseCode', '')).strip() in self.OCA_CODIGOS_INTERMEDIOS:
+            return {'pending': True}
+        payload['origin_transaction_id'] = tid
+        return payload
+
+    def oca_cobros_sin_venta(self, minutos=30):
+        """Cobros aprobados en la terminal de este método que no están en ninguna venta.
+
+        Sirve para que la caja avise antes de cobrar de nuevo. Excluye los que ya se
+        anularon y los que tienen un pago del PDV (por ``pos_payment_id`` o por el id de OCA).
+        """
+        self.ensure_one()
+        if not self.codigo_terminal:
+            return []
+        desde = fields.Datetime.subtract(fields.Datetime.now(), minutes=int(minutos or 30))
+        txs = self.env['payment.transaction'].sudo().search([
+            ('provider_id.code', '=', 'oca'),
+            ('state', '=', 'done'),
+            ('pos_id', '=', self.codigo_terminal),
+            ('create_date', '>=', desde),
+            ('pos_payment_id', '=', False),
+            ('oca_reverso_de_id', '=', False),
+        ], order='create_date desc')
+        if not txs:
+            return []
+        con_pago = set(self.env['pos.payment'].sudo().search(
+            [('transaction_id', 'in', [t for t in txs.mapped('oca_transaction_id') if t])]
+        ).mapped('transaction_id'))
+        ahora = fields.Datetime.now()
+        resultado = []
+        for tx in txs:
+            if tx.oca_transaction_id in con_pago:
+                continue
+            if tx._oca_tipo_transaccion() not in ('', 'C'):
+                continue
+            if tx.oca_reverso_ids.filtered(lambda r: r.state == 'done'):
+                continue
+            resultado.append({
+                'id': tx.id,
+                'amount': tx.amount,
+                'ticket': tx.ticket_number or '',
+                'card_last_four': tx.card_last_four or '',
+                'minutos': int((ahora - tx.create_date).total_seconds() // 60),
+            })
+        return resultado

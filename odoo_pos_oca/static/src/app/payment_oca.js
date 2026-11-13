@@ -3,9 +3,16 @@
 import {_t} from "@web/core/l10n/translation";
 import {PaymentInterface} from "@point_of_sale/app/payment/payment_interface";
 import {ErrorPopup} from "@point_of_sale/app/errors/popups/error_popup";
+import {ConfirmPopup} from "@point_of_sale/app/utils/confirm_popup/confirm_popup";
 import {sprintf} from "@web/core/utils/strings";
 
 const {DateTime} = luxon;
+
+// Si el aviso del bus no llega, la caja consulta el resultado guardado (Forum, 2026-11-13).
+const OCA_CONSULTA_PRIMERA_MS = 15000;
+const OCA_CONSULTA_CADA_MS = 5000;
+const OCA_CONSULTA_MAXIMO_MS = 10 * 60 * 1000;
+const OCA_CODIGOS_INTERMEDIOS = ["10", "12"];
 
 export class PaymentOCA extends PaymentInterface {
     setup() {
@@ -171,6 +178,10 @@ export class PaymentOCA extends PaymentInterface {
         var order = self.pos.get_order();
         var pos_session_id = order.pos_session_id;
 
+        if (!has_refunded_line && !(await this._confirmarSinCobrosHuerfanos())) {
+            return {ResponseCode: "oca_cancelado_en_caja"};
+        }
+
         return this.env.services.orm.silent.call(
             "pos.payment.method",
             "enviar_pago",
@@ -180,6 +191,11 @@ export class PaymentOCA extends PaymentInterface {
 
     handle_response_enviar_pago(response) {
         var line = this.pending_oca_line();
+
+        if (response.ResponseCode === "oca_cancelado_en_caja") {
+            // La cajera decidió no cobrar: la línea queda para reintentar, sin error.
+            return Promise.resolve(false);
+        }
 
         if (response.ResponseCode !== '0') {
             console.log('handle_response_enviar_pago', 'ERROR')
@@ -191,7 +207,9 @@ export class PaymentOCA extends PaymentInterface {
             console.log('handle_response_enviar_pago', 'OK')
             line.set_payment_status('waitingCard');
             line.transaction_id = response.TransactionId;
-            return this.waitForPaymentConfirmation();
+            const espera = this.waitForPaymentConfirmation();
+            this._iniciarConsultaResultado(line, response.TransactionId);
+            return espera;
         }
     }
 
@@ -210,6 +228,7 @@ export class PaymentOCA extends PaymentInterface {
 
         var line = order.selected_paymentline;
         line.cancelled = true;
+        this._detenerConsultaResultado(line);
 
         var data = this.get_base_data();
         data.TransactionId = line.transaction_id;
@@ -240,6 +259,124 @@ export class PaymentOCA extends PaymentInterface {
             "cancelFinancialPurchase",
             [[this.payment_method.id], data]
         ).catch(this.handle_odoo_connection_failure.bind(this));
+    }
+
+    // ******************************************
+    // COBROS SIN VENTA
+    // ******************************************
+
+    /**
+     * Antes de cobrar, si en esta terminal hay un cobro aprobado que no quedó en
+     * ninguna venta, se avisa: es casi seguro que el cliente ya pagó y la caja se
+     * trancó. Devuelve true si se puede cobrar.
+     */
+    async _confirmarSinCobrosHuerfanos() {
+        let cobros = [];
+        try {
+            cobros = await this.env.services.orm.silent.call(
+                "pos.payment.method",
+                "oca_cobros_sin_venta",
+                [[this.payment_method.id]]
+            );
+        } catch {
+            // Sin respuesta del servidor no se bloquea el cobro.
+            return true;
+        }
+        if (!cobros || !cobros.length) {
+            return true;
+        }
+        const detalle = cobros
+            .map((c) =>
+                sprintf(
+                    _t("%s (ticket %s, tarjeta ****%s, hace %s min)"),
+                    this.env.utils.formatCurrency(c.amount),
+                    c.ticket,
+                    c.card_last_four,
+                    c.minutos
+                )
+            )
+            .join("; ");
+        const {confirmed} = await this.env.services.popup.add(ConfirmPopup, {
+            title: _t("Hay un cobro aprobado sin venta"),
+            body: sprintf(
+                _t(
+                    "En esta terminal hay cobros aprobados que no quedaron en ninguna venta: %s. " +
+                        "Si es el mismo cliente, NO vuelvas a cobrar: avisá a administración para " +
+                        "registrar o anular ese cobro. ¿Cobrar igual?"
+                ),
+                detalle
+            ),
+            confirmText: _t("Cobrar igual"),
+            cancelText: _t("No cobrar"),
+        });
+        return confirmed;
+    }
+
+    // ******************************************
+    // CONSULTA DEL RESULTADO (respaldo del bus)
+    // ******************************************
+
+    _iniciarConsultaResultado(line, transactionId) {
+        this._detenerConsultaResultado(line);
+        if (!line || !transactionId) {
+            return;
+        }
+        const inicio = Date.now();
+        const consultar = async () => {
+            line._ocaConsultaTimer = null;
+            if (line.cancelled || line._ocaResultadoProcesado || this.pending_oca_line() !== line) {
+                return;
+            }
+            try {
+                const payload = await this.env.services.orm.silent.call(
+                    "pos.payment.method",
+                    "oca_consultar_resultado",
+                    [[this.payment_method.id], transactionId]
+                );
+                if (payload && !payload.pending) {
+                    await this._procesarResultadoOCA(payload);
+                    return;
+                }
+            } catch {
+                // Sin conexión: se vuelve a intentar en la próxima vuelta.
+            }
+            if (Date.now() - inicio < OCA_CONSULTA_MAXIMO_MS) {
+                line._ocaConsultaTimer = setTimeout(consultar, OCA_CONSULTA_CADA_MS);
+            }
+        };
+        line._ocaConsultaTimer = setTimeout(consultar, OCA_CONSULTA_PRIMERA_MS);
+    }
+
+    _detenerConsultaResultado(line) {
+        if (line && line._ocaConsultaTimer) {
+            clearTimeout(line._ocaConsultaTimer);
+            line._ocaConsultaTimer = null;
+        }
+    }
+
+    /**
+     * Entrada única del resultado, venga por el bus o por la consulta: el primero
+     * que llega se procesa y el otro se ignora.
+     */
+    async _procesarResultadoOCA(payload) {
+        const line = this.pending_oca_line();
+        if (!line) {
+            return;
+        }
+        const esFinal = !OCA_CODIGOS_INTERMEDIOS.includes(String(payload.ResponseCode));
+        if (esFinal) {
+            // Un resultado de otro cobro (por ejemplo, uno anterior de esta caja) no cierra esta línea.
+            const tid = String(payload.origin_transaction_id || "");
+            if (line.transaction_id && tid && String(line.transaction_id) !== tid) {
+                return;
+            }
+            if (line._ocaResultadoProcesado) {
+                return;
+            }
+            line._ocaResultadoProcesado = true;
+            this._detenerConsultaResultado(line);
+        }
+        return this.handleOCAStatusResponse(payload);
     }
 
     // ******************************************
