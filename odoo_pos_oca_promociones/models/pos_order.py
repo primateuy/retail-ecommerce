@@ -172,82 +172,46 @@ class PosOrder(models.Model):
         # Crear la orden primero
         order = super(PosOrder, self).create(vals)
         
-        # Buscar transacciones OCA asociadas con promoción en esta sesión
+        # Buscar la transacción OCA con promoción de ESTA orden
         try:
             session_id = order.session_id.id if order.session_id else False
             if session_id:
-                # Buscar transacciones OCA con promoción que no tengan orden asociada
-                # IMPORTANTE: Filtrar por sesión POS si es posible, y ordenar por fecha de creación descendente
-                # para tomar la más reciente. En promociones, el monto de la transacción ($1290) 
-                # NO coincide con el monto del pago ($1720) porque el descuento se aplica en el POS
-                search_domain = [
-                    ('oca_transaction_id', '!=', False),
-                    ('is_promotion', '=', True),
-                    ('pos_order_id', '=', False),
-                    ('state', 'in', ['pending', 'done'])
-                ]
-                
-                # Intentar filtrar por sesión si hay un campo de sesión en payment.transaction
-                # Por ahora, buscar todas las transacciones con promoción y luego filtrar por fecha
-                oca_transactions = self.env['payment.transaction'].sudo().search(
-                    search_domain, 
-                    order='create_date desc, id desc',
-                    limit=10  # Limitar a las 10 más recientes para mejorar rendimiento
-                )
-                
-                # Si hay pagos OCA en esta orden, intentar buscar por TransactionId primero
+                # Bloque: sólo se liga una transacción a la que apunta un pago OCA de esta
+                # misma orden (por payment_transaction_id o por el transaction_id del pinpad).
+                # Antes, sin pago propio, se tomaba "la tx con promo más reciente" de toda la
+                # base, sin filtrar por sesión ni caja: cualquier venta nueva (incluso en
+                # efectivo) se quedaba con la tarjeta de otra caja e imprimía su voucher
+                # (orden 50756 de San Martín con la tx 35299 de Colonia, 12-11-2026). El
+                # emparejamiento por monto se descarta por la misma razón. Si en el create
+                # todavía no hay pagos, la asociación la hace después
+                # pos.order._associate_oca_transactions por referencia.
                 oca_payments = order.payment_ids.filtered(
                     lambda p: p.payment_method_id.use_payment_terminal == 'oca'
                 )
-                
+
                 oca_transaction = None
-                if oca_payments:
-                    # Primero intentar buscar por TransactionId si está disponible en el pago.
-                    # Se usa el helper que siempre retorna en contexto sudo para no requerir
-                    # permisos de administrador al cajero que opera el POS.
-                    for payment in oca_payments:
-                        tx_candidate = order._oca_promo_get_oca_transaction_for_pos_payment(payment)
-                        if tx_candidate and tx_candidate.is_promotion:
-                            oca_transaction = tx_candidate
-                            _logger.info('Transacción OCA encontrada por payment_transaction_id: %s (Monto: %s)',
-                                       oca_transaction.oca_transaction_id, oca_transaction.amount)
-                            break
-                    
-                    # Si no se encontró por payment_transaction_id, buscar por monto
-                    # PERO en promociones, el monto puede no coincidir, así que también considerar
-                    # transacciones recientes con promoción
-                    if not oca_transaction:
-                        for payment in oca_payments:
-                            for trans in oca_transactions:
-                                # Coincidencia exacta de monto (puede no funcionar en promociones)
-                                if abs(trans.amount - payment.amount) < 0.01:
-                                    oca_transaction = trans
-                                    _logger.info('Transacción OCA encontrada por monto: %s (Monto: %s)', 
-                                               trans.oca_transaction_id, trans.amount)
-                                    break
-                            if oca_transaction:
-                                break
-                
-                # Si no se encontró por monto o payment_transaction_id, tomar la más reciente con promoción
-                # Esto es importante porque en promociones el monto no coincide
-                if not oca_transaction and oca_transactions:
-                    # Filtrar transacciones creadas en los últimos 5 minutos para esta sesión
-                    from datetime import datetime, timedelta
-                    five_minutes_ago = datetime.now() - timedelta(minutes=5)
-                    recent_transactions = oca_transactions.filtered(
-                        lambda t: t.create_date and t.create_date >= five_minutes_ago
-                    )
-                    if recent_transactions:
-                        oca_transaction = recent_transactions[0]
-                        _logger.info('Usando transacción OCA más reciente con promoción (últimos 5 min): %s (Monto: %s, Pago: %s)', 
-                                   oca_transaction.oca_transaction_id, oca_transaction.amount, 
-                                   oca_payments[0].amount if oca_payments else 'N/A')
-                    else:
-                        # Si no hay transacciones recientes, usar la más reciente de todas formas
-                        oca_transaction = oca_transactions[0]
-                        _logger.info('Usando transacción OCA más reciente con promoción: %s (Monto: %s)', 
-                                   oca_transaction.oca_transaction_id, oca_transaction.amount)
-                
+                oca_payment = None
+                # Se usa el helper que siempre retorna en contexto sudo para no requerir
+                # permisos de administrador al cajero que opera el POS.
+                for payment in oca_payments:
+                    tx_candidate = order._oca_promo_get_oca_transaction_for_pos_payment(payment)
+                    if not tx_candidate or not tx_candidate.is_promotion:
+                        continue
+                    if tx_candidate.pos_order_id and tx_candidate.pos_order_id != order:
+                        _logger.warning(
+                            'OCA promo create: la transacción %s ya pertenece a la orden %s; '
+                            'no se liga a %s.',
+                            tx_candidate.oca_transaction_id,
+                            tx_candidate.pos_order_id.name,
+                            order.name,
+                        )
+                        continue
+                    oca_transaction = tx_candidate
+                    oca_payment = payment
+                    _logger.info('Transacción OCA encontrada por payment_transaction_id: %s (Monto: %s)',
+                               oca_transaction.oca_transaction_id, oca_transaction.amount)
+                    break
+
                 if oca_transaction:
                     # Obtener información de promoción de la transacción
                     try:
@@ -309,9 +273,8 @@ class PosOrder(models.Model):
                                     try:
                                         if not oca_transaction.pos_order_id:
                                             oca_transaction.pos_order_id = order.id
-                                        if oca_payments and oca_payments[0]:
-                                            oca_transaction.pos_payment_id = oca_payments[0].id
-                                            oca_payments[0].payment_transaction_id = oca_transaction.id
+                                        oca_transaction.pos_payment_id = oca_payment.id
+                                        oca_payment.payment_transaction_id = oca_transaction.id
                                     except Exception as link_err:
                                         _logger.warning(
                                             'OCA promo create: error al enlazar transacción: %s',
