@@ -3,3 +3,4 @@ access_payment_transaction_oca_user,payment.transaction.oca.user,payment.model_p
 access_payment_transaction_oca_manager,payment.transaction.oca.manager,payment.model_payment_transaction,account.group_account_manager,1,1,1,1
 access_oca_envio_user,oca.envio.user,model_oca_envio,base.group_user,1,0,0,0
 access_oca_envio_system,oca.envio.system,model_oca_envio,base.group_system,1,0,0,1
+access_oca_reverso_wizard_manager,oca.reverso.wizard.manager,model_oca_reverso_wizard,account.group_account_manager,1,1,1,1

@@ -545,3 +545,69 @@ def oca_background_worker_account_payment(
                     if p2.exists() and p2.oca_async_terminal_pending:
                         p2.sudo().write({'oca_async_terminal_pending': False})
                     cr2.commit()
+
+
+def oca_background_worker_reverso(
+    pool,
+    provider_id,
+    run_uid,
+    data,
+    transaction_id,
+    base_url_endpoint,
+    source_transaction_id,
+    operacion,
+):
+    """
+    Espera la respuesta final de una anulación/devolución pedida desde la transacción.
+
+    Registra el resultado como transacción ligada al cobro original, suelta el candado
+    y le avisa al usuario que la pidió. Si algo falla, el candado se suelta igual.
+    """
+    tid = str(transaction_id).strip()
+    aprobada = False
+    mensaje = ''
+    try:
+        with pool.cursor() as cr:
+            env = api.Environment(cr, run_uid, {})
+            prov = env['payment.provider'].sudo().browse(provider_id)
+            query_data = {
+                'PosID': data['PosID'],
+                'SystemId': data['SystemId'],
+                'Branch': data['Branch'],
+                'ClientAppId': data['ClientAppId'],
+                'UserId': data['UserId'],
+                'TransactionDateTimeyyyyMMddHHmmssSSS': prov.get_formatted_timestamp(),
+                'TransactionId': transaction_id,
+            }
+            result = env['payment.transaction'].oca_run_purchase_query_loop(
+                prov, query_data, base_url_endpoint, transaction_id, False,
+                original_purchase_data=data,
+            )
+            original = env['payment.transaction'].sudo().browse(source_transaction_id)
+            nueva = original._oca_registrar_reverso(tid, result, data, operacion)
+            aprobada = nueva.state == 'done'
+            mensaje = nueva.state_message or result.get('msg') or ''
+    except Exception:
+        _logger.exception('OCA reverso: falló el seguimiento (tx original %s, id %s)', source_transaction_id, tid)
+        mensaje = _('Error al procesar la respuesta de la terminal. Revisá la transacción.')
+    finally:
+        with pool.cursor() as cr:
+            env = api.Environment(cr, run_uid, {})
+            original = env['payment.transaction'].sudo().browse(source_transaction_id)
+            if original.exists() and original.oca_reverso_en_curso_desde:
+                original.write({'oca_reverso_en_curso_desde': False})
+            user = env['res.users'].sudo().browse(run_uid)
+            if user.exists() and user.partner_id:
+                operacion_txt = _('devolución') if operacion == 'devolucion' else _('anulación')
+                try:
+                    env['bus.bus'].sudo()._sendone(user.partner_id, 'simple_notification', {
+                        'type': 'success' if aprobada else 'danger',
+                        'title': _('OCA: %s del ticket %s') % (operacion_txt, original.ticket_number or ''),
+                        'message': (
+                            _('Aprobada por la terminal.') if aprobada
+                            else _('No quedó aprobada: %s') % mensaje
+                        ),
+                        'sticky': True,
+                    })
+                except Exception:
+                    _logger.exception('OCA reverso: no se pudo avisar al usuario %s', run_uid)

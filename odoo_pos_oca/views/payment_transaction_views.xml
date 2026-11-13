@@ -18,5 +18,18 @@
                 </xpath>
             </field>
         </record>
+
+        <!-- Cobros aprobados que no quedaron en ningún pago del PDV: candidatos a anular. -->
+        <record id="view_payment_transaction_oca_search_pos" model="ir.ui.view">
+            <field name="name">payment.transaction.oca.search.pos</field>
+            <field name="model">payment.transaction</field>
+            <field name="inherit_id" ref="odoo_pos_oca_core.view_payment_transaction_oca_search"/>
+            <field name="arch" type="xml">
+                <xpath expr="//filter[@name='oca_provider']" position="after">
+                    <filter string="Aprobadas sin pago del PDV" name="oca_sin_pago_pos"
+                            domain="[('provider_code', '=', 'oca'), ('state', '=', 'done'), ('pos_payment_id', '=', False), ('account_payment_id', '=', False), ('oca_reverso_de_id', '=', False)]"/>
+                </xpath>
+            </field>
+        </record>
     </data>
 </odoo>

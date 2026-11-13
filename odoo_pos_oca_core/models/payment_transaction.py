@@ -8,7 +8,8 @@ campos adicionales y métodos de creación y actualización.
 """
 
 from odoo import _, fields, models, api
-from odoo.exceptions import ValidationError
+from odoo.exceptions import AccessError, UserError, ValidationError
+from psycopg2 import OperationalError
 from odoo.tools import formatLang
 import logging
 import json
@@ -1531,3 +1532,177 @@ class PaymentTransaction(models.Model):
             _logger.error('OCA: no se pudo persistir Query (sin tx/account.payment/PM OCA)')
         except Exception as err:
             _logger.error('OCA oca_persist_after_query_generic: %s', str(err))
+    # ------------------------------------------------------------------
+    # Anular / devolver un cobro desde la transacción (Forum, 2026-11-14)
+    #
+    # Para cobros aprobados por el pinpad que nunca quedaron en una venta
+    # (la venta se perdió y se cobró de nuevo). La devolución del PDV necesita
+    # la venta, y la de contabilidad un pago contable: estos cobros no tienen
+    # ninguna de las dos. Se anula por ticket; si el lote ya cerró (RC 109/110)
+    # se hace la devolución, igual que el flujo contable.
+    # ------------------------------------------------------------------
+
+    OCA_REVERSO_VENCE_MINUTOS = 15
+
+    oca_reverso_de_id = fields.Many2one(
+        comodel_name='payment.transaction',
+        string='Anula / devuelve a',
+        index=True,
+        copy=False,
+        readonly=True,
+        ondelete='restrict',
+        help='Cobro original que esta transacción anula o devuelve.',
+    )
+    oca_reverso_ids = fields.One2many(
+        comodel_name='payment.transaction',
+        inverse_name='oca_reverso_de_id',
+        string='Anulaciones / devoluciones',
+        readonly=True,
+    )
+    oca_operacion_reverso = fields.Selection(
+        selection=[('anulacion', 'Anulación'), ('devolucion', 'Devolución')],
+        string='Operación',
+        copy=False,
+        readonly=True,
+    )
+    oca_reverso_motivo = fields.Text(
+        string='Motivo de la anulación / devolución',
+        copy=False,
+        readonly=True,
+    )
+    oca_reverso_en_curso_desde = fields.Datetime(
+        string='Anulación enviada a la terminal',
+        copy=False,
+        readonly=True,
+        help='Candado: mientras la terminal no contesta no se puede mandar otra. '
+        'Vence solo a los 15 minutos por si el servidor se reinicia en el medio.',
+    )
+    oca_puede_revertir = fields.Boolean(
+        string='Se puede anular / devolver',
+        compute='_compute_oca_puede_revertir',
+    )
+
+    @api.depends(
+        'state', 'provider_code', 'ticket_number', 'pos_id', 'account_payment_id',
+        'oca_reverso_de_id', 'oca_reverso_ids.state', 'oca_reverso_en_curso_desde',
+    )
+    def _compute_oca_puede_revertir(self):
+        for tx in self:
+            tx.oca_puede_revertir = not tx._oca_motivo_no_revertible()
+
+    def _oca_tipo_transaccion(self):
+        """TransactionType de la respuesta OCA ('C' compra, 'A' anulación...); '' si no viene."""
+        self.ensure_one()
+        return str(self._oca_json(self.oca_complete_response).get('TransactionType') or '').strip()
+
+    def _oca_reverso_en_curso(self):
+        self.ensure_one()
+        desde = self.oca_reverso_en_curso_desde
+        return bool(desde) and (
+            fields.Datetime.now() - desde
+        ).total_seconds() < self.OCA_REVERSO_VENCE_MINUTOS * 60
+
+    def _oca_motivo_no_revertible(self):
+        """Por qué este cobro no se puede anular desde acá; '' si se puede.
+
+        Los módulos que conocen la venta (odoo_pos_oca) agregan sus propias razones.
+        """
+        self.ensure_one()
+        if self.provider_code != 'oca':
+            return _('No es un cobro OCA.')
+        if self.state != 'done':
+            return _('Sólo se anula un cobro aprobado.')
+        if self.oca_reverso_de_id or self._oca_tipo_transaccion() not in ('', 'C'):
+            return _('No es una compra: es una anulación o devolución.')
+        if not (self.ticket_number or '').strip() or not (self.pos_id or '').strip():
+            return _('Falta el ticket o la terminal del cobro.')
+        if self.account_payment_id or self.payment_id:
+            return _('El cobro está en un pago contable: la devolución se hace desde ese pago.')
+        if self.oca_reverso_ids.filtered(lambda r: r.state == 'done'):
+            return _('Este cobro ya fue anulado o devuelto.')
+        if self._oca_reverso_en_curso():
+            return _('Ya se mandó la anulación a la terminal y todavía no contestó.')
+        return ''
+
+    def action_oca_anular_devolver(self):
+        """Botón de la ficha: abre el diálogo para anular o devolver el cobro."""
+        self.ensure_one()
+        self._oca_exigir_permiso_reverso()
+        motivo = self._oca_motivo_no_revertible()
+        if motivo:
+            raise UserError(motivo)
+        return {
+            'type': 'ir.actions.act_window',
+            'name': _('Anular / Devolver en OCA'),
+            'res_model': 'oca.reverso.wizard',
+            'view_mode': 'form',
+            'target': 'new',
+            'context': {'default_transaction_id': self.id},
+        }
+
+    def _oca_exigir_permiso_reverso(self):
+        if not self.env.user.has_group('account.group_account_manager'):
+            raise AccessError(_('Sólo un administrador de contabilidad puede anular o devolver cobros.'))
+
+    def _oca_ejecutar_reverso(self, motivo):
+        """Manda la anulación (o la devolución) a la terminal y deja el candado puesto.
+
+        El resultado llega después: lo registra el hilo de seguimiento.
+        """
+        self.ensure_one()
+        self._oca_exigir_permiso_reverso()
+        try:
+            self.env.cr.execute(
+                'SELECT id FROM payment_transaction WHERE id = %s FOR UPDATE NOWAIT', (self.id,)
+            )
+        except OperationalError:
+            raise UserError(_('Otro usuario está anulando este cobro en este momento.'))
+        self.invalidate_recordset()
+        no_se_puede = self._oca_motivo_no_revertible()
+        if no_se_puede:
+            raise UserError(no_se_puede)
+
+        resultado = self.provider_id.sudo().oca_anular_o_devolver(self)
+        if not resultado.get('ok'):
+            raise UserError(_(
+                'La terminal %(pos)s rechazó la %(op)s: %(rc)s — %(msg)s'
+            ) % {
+                'pos': self.pos_id,
+                'op': _('devolución') if resultado.get('operacion') == 'devolucion' else _('anulación'),
+                'rc': resultado.get('rc'),
+                'msg': resultado.get('msg') or '',
+            })
+        self.sudo().write({
+            'oca_reverso_en_curso_desde': fields.Datetime.now(),
+            'oca_reverso_motivo': motivo,
+        })
+        _logger.info(
+            'OCA reverso: %s enviada para tx %s (ticket %s, terminal %s) por uid %s. Motivo: %s',
+            resultado.get('operacion'), self.id, self.ticket_number, self.pos_id, self.env.uid, motivo,
+        )
+        return resultado
+
+    def _oca_registrar_reverso(self, transaction_id, result, pos_data, operacion):
+        """Guarda la respuesta final de la terminal como transacción ligada al cobro original."""
+        self.ensure_one()
+        Tx = self.sudo()
+        tid = str(transaction_id).strip()
+        datos = dict(pos_data or {})
+        # La respuesta de la anulación puede no traer monto ni moneda.
+        datos.setdefault('Amount', str(int(round(self.amount * 100))))
+        datos.setdefault('Currency', '840' if self.currency_id.name == 'USD' else '858')
+        nueva = Tx.search([('oca_transaction_id', '=', tid)], limit=1)
+        if nueva:
+            nueva.update_oca_transaction(result)
+        else:
+            nueva = Tx.create_oca_transaction_with_complete_data(
+                dict(result), transaction_id=tid, pos_data=datos,
+            )
+        nueva.write({
+            'oca_reverso_de_id': self.id,
+            'oca_operacion_reverso': operacion,
+            'company_id': self.company_id.id,
+            'partner_id': self.partner_id.id,
+        })
+        self.sudo().write({'oca_reverso_en_curso_desde': False})
+        return nueva

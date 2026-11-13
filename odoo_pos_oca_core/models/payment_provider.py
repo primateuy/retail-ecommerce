@@ -644,3 +644,102 @@ class PaymentProvider(models.Model):
             env=self.env,
         )
         return refund_data, response_json
+
+    # ------------------------------------------------------------------
+    # Anular / devolver desde la transacción (sin venta ni pago contable)
+    # ------------------------------------------------------------------
+
+    def _oca_base_payload_reverso(self, source_transaction):
+        """Datos de terminal para anular un cobro: los mismos con que se cobró.
+
+        Se toman del request original (SystemId/Branch/ClientAppId de la caja), no del
+        proveedor: el proveedor puede tener otra sucursal cargada y OCA no encontraría
+        el ticket.
+        """
+        self.ensure_one()
+        original = source_transaction._oca_json(source_transaction.oca_complete_request)
+        branch_prov = (self.branch or '').strip() or (
+            str(self.codigo_sucursal) if self.codigo_sucursal else ''
+        )
+        return {
+            'PosID': (source_transaction.pos_id or original.get('PosID') or '').strip(),
+            'SystemId': str(original.get('SystemId') or self.codigo_sistema or ''),
+            'Branch': str(original.get('Branch') or branch_prov),
+            'ClientAppId': str(original.get('ClientAppId') or self.client_app_id or '1'),
+            'UserId': str(self.env.user.id),
+            'TransactionDateTimeyyyyMMddHHmmssSSS': self.get_formatted_timestamp(),
+        }
+
+    def oca_anular_o_devolver(self, source_transaction):
+        """
+        Anula por ticket el cobro; si OCA contesta 109/110 (el lote ya cerró), lo devuelve.
+
+        Returns:
+            dict: ``ok``, ``operacion`` ('anulacion'|'devolucion'), ``rc``, ``msg`` y,
+            si la terminal aceptó, ``transaction_id`` del seguimiento.
+        """
+        from .oca_utils import OCA_POS_RC_VOID_SHOULD_REFUND, oca_pos_http_post
+
+        self.ensure_one()
+        source_transaction.ensure_one()
+        url = (self.sudo().url_webservice or '').rstrip('/')
+        if not url:
+            raise UserError(_('El proveedor %s no tiene la URL de POSLink cargada.') % self.display_name)
+        base = self._oca_base_payload_reverso(source_transaction)
+
+        operacion = 'anulacion'
+        data = dict(
+            base,
+            TicketNumber=(source_transaction.ticket_number or '').strip(),
+            Acquirer=str(source_transaction.acquirer or '').strip(),
+        )
+        _logger.info('OCA reverso: processFinancialPurchaseVoidByTicket %s', pprint.pformat(data))
+        _base, response = oca_pos_http_post(
+            url, '/processFinancialPurchaseVoidByTicket', data,
+            'processFinancialPurchaseVoidByTicket', env=self.env,
+        )
+        rc = str(response.get('ResponseCode', '999')).strip()
+
+        if rc in OCA_POS_RC_VOID_SHOULD_REFUND:
+            _logger.info('OCA reverso: anulación rechazada RC=%s (lote cerrado), paso a devolución', rc)
+            operacion = 'devolucion'
+            data = self._prepare_oca_pos_refund_payload(
+                source_transaction=source_transaction,
+                pos_id=base['PosID'],
+                amount_cents=int(round(source_transaction.amount * 100)),
+                user_id=self.env.user.id,
+                invoice_number=source_transaction.get_oca_invoice_number_sent(),
+            )
+            data.update({k: base[k] for k in ('SystemId', 'Branch', 'ClientAppId')})
+            # La fecha original es la de la caja (hora local), no la de create_date (UTC).
+            fecha_caja = str(
+                source_transaction._oca_json(source_transaction.oca_complete_request)
+                .get('TransactionDateTimeyyyyMMddHHmmssSSS') or ''
+            )
+            if len(fecha_caja) >= 8:
+                data['OriginalTransactionDateyyMMdd'] = fecha_caja[2:8]
+            _logger.info('OCA reverso: processFinancialPurchaseRefund %s', pprint.pformat(data))
+            _base, response = oca_pos_http_post(
+                url, '/processFinancialPurchaseRefund', data,
+                'processFinancialPurchaseRefund', env=self.env,
+            )
+            rc = str(response.get('ResponseCode', '999')).strip()
+
+        if rc != '0':
+            return {'ok': False, 'operacion': operacion, 'rc': rc, 'msg': response.get('msg') or ''}
+
+        transaction_id = response['TransactionId']
+        self._oca_lanzar_seguimiento_reverso(data, transaction_id, url, source_transaction.id, operacion)
+        return {'ok': True, 'operacion': operacion, 'rc': rc, 'transaction_id': transaction_id}
+
+    def _oca_lanzar_seguimiento_reverso(self, data, transaction_id, url, source_transaction_id, operacion):
+        """Hilo que espera la respuesta final de la terminal (separado para poder simularlo en tests)."""
+        from .oca_utils import oca_background_worker_reverso
+
+        threading.Thread(
+            target=oca_background_worker_reverso,
+            args=(
+                self.pool, self.id, self.env.uid, data, transaction_id, url,
+                source_transaction_id, operacion,
+            ),
+        ).start()

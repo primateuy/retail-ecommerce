@@ -10,7 +10,7 @@ compartido entre POS y backend contable.
 
 import logging
 
-from odoo import fields, models
+from odoo import _, fields, models
 
 _logger = logging.getLogger(__name__)
 
@@ -65,3 +65,31 @@ class PaymentTransaction(models.Model):
                     transaction.pos_payment_id.name,
                     transaction.oca_transaction_id,
                 )
+
+    # --- Anular / devolver desde la transacción: razones que sólo ve el POS ---
+
+    def _oca_pago_pos_del_cobro(self):
+        """Pago del PDV que usó este cobro, aunque ``pos_payment_id`` no se haya completado.
+
+        La asociación de la transacción con el pago a veces no se escribe, pero el
+        ``pos.payment`` guarda igual el id de OCA: buscar por los dos.
+        """
+        self.ensure_one()
+        if self.pos_payment_id:
+            return self.pos_payment_id
+        tid = (self.oca_transaction_id or '').strip()
+        if not tid:
+            return self.env['pos.payment']
+        return self.env['pos.payment'].sudo().search([('transaction_id', '=', tid)], limit=1)
+
+    def _oca_motivo_no_revertible(self):
+        motivo = super()._oca_motivo_no_revertible()
+        if motivo:
+            return motivo
+        pago = self._oca_pago_pos_del_cobro()
+        if pago:
+            return _(
+                'El cobro está en la venta %s: la devolución se hace desde el PDV, '
+                'que emite la nota de crédito.'
+            ) % (pago.pos_order_id.pos_reference or pago.pos_order_id.name or '')
+        return ''

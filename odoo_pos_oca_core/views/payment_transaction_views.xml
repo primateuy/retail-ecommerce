@@ -10,6 +10,37 @@
                  sobre campos OCA (issuer_code). Necesitan verlos al aplicarse. -->
             <field name="priority" eval="5"/>
             <field name="arch" type="xml">
+                <xpath expr="//header" position="inside">
+                    <field name="oca_puede_revertir" invisible="1"/>
+                    <button type="object" name="action_oca_anular_devolver"
+                            string="Anular / Devolver en OCA"
+                            groups="account.group_account_manager"
+                            invisible="not oca_puede_revertir"
+                            confirm="Se va a mandar la anulación de este cobro a la terminal. ¿Seguro?"/>
+                </xpath>
+                <xpath expr="//group[@name='transaction_details']" position="after">
+                    <group string="Anulación / devolución" name="oca_reverso"
+                           invisible="provider_code != 'oca' or (not oca_reverso_ids and not oca_reverso_de_id and not oca_reverso_en_curso_desde)">
+                        <group>
+                            <field name="oca_reverso_de_id" invisible="not oca_reverso_de_id"/>
+                            <field name="oca_operacion_reverso" invisible="not oca_reverso_de_id"/>
+                            <field name="oca_reverso_en_curso_desde" invisible="not oca_reverso_en_curso_desde"/>
+                            <field name="oca_reverso_motivo" invisible="not oca_reverso_motivo"/>
+                        </group>
+                        <field name="oca_reverso_ids" nolabel="1" colspan="2" invisible="not oca_reverso_ids">
+                            <tree>
+                                <field name="create_date" string="Fecha"/>
+                                <field name="oca_operacion_reverso"/>
+                                <field name="reference"/>
+                                <field name="ticket_number"/>
+                                <field name="amount"/>
+                                <field name="currency_id" column_invisible="1"/>
+                                <field name="state"/>
+                                <field name="state_message"/>
+                            </tree>
+                        </field>
+                    </group>
+                </xpath>
                 <xpath expr="//group[@name='transaction_details']" position="after">
                     <group string="Información OCA" name="oca_info" invisible="provider_code != 'oca'">
                         <group string="Información del POS">
