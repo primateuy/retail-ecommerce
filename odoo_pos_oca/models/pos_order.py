@@ -478,16 +478,21 @@ class PosOrder(models.Model):
         ]))
         if not has_oca_tx:
             return super()._generate_pos_order_invoice()
+        # Savepoint: un error de SQL (p. ej. la restricción de la línea de redondeo sin
+        # cuenta) aborta la transacción de PostgreSQL. Sin volver al savepoint, todo lo que
+        # sigue falla con «current transaction is aborted» y se pierde la orden entera, no
+        # sólo la factura (12 órdenes el 12/13-11-2026). El rollback también descarta el
+        # ``account.move`` a medio crear.
         try:
-            return super()._generate_pos_order_invoice()
+            with self.env.cr.savepoint():
+                return super()._generate_pos_order_invoice()
         except Exception as exc:
+            self.env.invalidate_all()
             _logger.error(
                 "POS OCA: fallo generando factura orden %s; orden queda paid "
                 "con to_invoice=False. Error: %s",
                 self.name, exc, exc_info=True,
             )
-            # No se usa savepoint: UserError no aborta la tx PG. Posibles
-            # ``account.move`` en draft parciales quedan para corrección manual.
             try:
                 self.sudo().write({'to_invoice': False})
             except Exception:
