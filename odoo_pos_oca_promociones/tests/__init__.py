@@ -6,3 +6,4 @@ from . import test_impuesto_descuento
 from . import test_cuotas_confirmacion
 from . import test_ley_confirmacion
 from . import test_tx_de_otra_caja
+from . import test_centavo_promocion

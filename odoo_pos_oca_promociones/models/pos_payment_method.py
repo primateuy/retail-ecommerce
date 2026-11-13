@@ -14,6 +14,7 @@ import threading
 from time import monotonic, sleep
 
 from odoo import fields, models, api, SUPERUSER_ID
+from odoo.tools import float_round
 
 from odoo.addons.odoo_pos_oca_core.models.oca_utils import oca_completar_desde_intermedias
 from odoo.addons.odoo_pos_oca_core.models.oca_envio import oca_post
@@ -502,6 +503,23 @@ class PosPaymentMethod(models.Model):
         return response_json
 
     @api.model
+    def _oca_promo_descuento_y_monto(self, original_amount, base_amount, discount_percent):
+        """
+        Descuento de la promoción y monto a cobrar, los dos redondeados a centavos.
+
+        Sin redondear, 2594 - 518,8000000000001 daba 2075,1999…; el ``int()`` de los centavos lo
+        truncaba a 2075,19 mientras la orden sumaba 2075,20. Ese centavo deja una línea de
+        redondeo sin cuenta en la factura y la orden no se guarda (Forum, 12-11-2026).
+        """
+        discount_amount = float_round(base_amount * (discount_percent / 100.0), precision_digits=2)
+        return discount_amount, float_round(original_amount - discount_amount, precision_digits=2)
+
+    @api.model
+    def _oca_promo_centavos(self, amount):
+        """Monto en centavos para el pinpad, redondeado (no truncado)."""
+        return int(float_round(amount * 100, precision_digits=0))
+
+    @api.model
     def _oca_promo_confirm_quotas(self, result, data):
         """
         Cuotas para processConfirmFinancialPurchase.
@@ -771,8 +789,8 @@ class PosPaymentMethod(models.Model):
                                         base_amount = payment_untaxed_share
                                     else:
                                         base_amount = original_amount
-                                    discount_amount = base_amount * (discount_percent / 100.0)
-                                    new_amount = original_amount - discount_amount
+                                    discount_amount, new_amount = payment_method._oca_promo_descuento_y_monto(
+                                        original_amount, base_amount, discount_percent)
                                     _logger.info(
                                         "OCA_PROMOS_RC12: aplicando descuento OCA (compatible con lealtad del carrito) | "
                                         "trans_id=%s | promo_id=%s",
@@ -785,11 +803,11 @@ class PosPaymentMethod(models.Model):
                                     discount_product = promotion.discount_product_id
                                     if discount_product:
                                         # Calcular nuevos montos en centavos
-                                        new_amount_cents = int(new_amount * 100)
+                                        new_amount_cents = payment_method._oca_promo_centavos(new_amount)
                                         # Aproximar el taxable amount proporcionalmente
                                         original_taxable = float(data.get('TaxableAmount', 0)) / 100.0
                                         new_taxable_amount = original_taxable * (new_amount / original_amount) if original_amount > 0 else 0
-                                        new_taxable_cents = int(new_taxable_amount * 100)
+                                        new_taxable_cents = payment_method._oca_promo_centavos(new_taxable_amount)
                                         # Preparar datos para processConfirmFinancialPurchase
                                         # Quotas = valor recibido del POS (result) o request (data)
                                         quota_value = _get_quota_value()
@@ -1182,6 +1200,10 @@ class PosPaymentMethod(models.Model):
                 else:
                     base_amount = pos_order.amount_total
                 discount_amount = base_amount * (promotion.discount_percent / 100.0)
+
+            # Bloque: el mismo redondeo a centavos que la confirmación al pinpad, para que la línea
+            # de descuento y el monto cobrado no difieran en un centavo.
+            discount_amount = float_round(discount_amount, precision_digits=2)
 
             _logger.info(
                 'Promoción aplicable: %s (ID: %s) - %s%% | payment_amount=%s | descuento TTC línea=%s',
