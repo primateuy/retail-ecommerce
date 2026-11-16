@@ -102,3 +102,6 @@ class TestOcaResultadoYHuerfanos(TransactionCase):
         # Anularlo desde la transacción se puede, pero avisa que la venta queda cobrada.
         self.assertEqual(tx._oca_motivo_no_revertible(), '')
         self.assertIn('PDV', '\n'.join(tx._oca_advertencias_reverso()))
+        # Crearle el pago contable también avisa: el ingreso quedaría dos veces.
+        self.assertEqual(tx._oca_motivo_sin_pago_asociado(), '')
+        self.assertIn('dos veces', '\n'.join(tx._oca_advertencias_pago_asociado()))

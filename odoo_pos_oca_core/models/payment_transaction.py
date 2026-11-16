@@ -1658,8 +1658,125 @@ class PaymentTransaction(models.Model):
     def _oca_exigir_permiso_reverso(self):
         if not self.env.user.has_group('odoo_pos_oca_core.group_oca_reverso'):
             raise AccessError(_(
-                'Hace falta el grupo «OCA: anular / devolver cobros» para anular o devolver cobros.'
+                'Hace falta el grupo «OCA: corregir cobros (anular / devolver / crear pago)».'
             ))
+
+    # --- Crear pago asociado (mismo grupo que anular / devolver) ---
+
+    def _oca_motivo_sin_pago_asociado(self):
+        """Por qué a este cobro no se le puede crear el pago contable; '' si se puede."""
+        self.ensure_one()
+        if self.provider_code != 'oca':
+            return _('No es un cobro OCA.')
+        if self.state != 'done':
+            return _('Sólo se crea el pago de un cobro aprobado.')
+        if self.oca_reverso_de_id or self._oca_tipo_transaccion() not in ('', 'C'):
+            return _('No es una compra: es una anulación o devolución.')
+        if self.oca_reverso_ids.filtered(lambda r: r.state == 'done'):
+            return _('Este cobro ya fue anulado o devuelto.')
+        if self.amount <= 0:
+            return _('El cobro no tiene monto.')
+        if self.payment_id or self.account_payment_id:
+            pago = (self.payment_id or self.account_payment_id).sudo()
+            return _('El cobro ya tiene el pago %s.') % (pago.display_name or '')
+        if not self.provider_id.journal_id:
+            return _('El proveedor %s no tiene diario.') % self.provider_id.display_name
+        return ''
+
+    def _oca_advertencias_pago_asociado(self):
+        """Lo que queda duplicado si se crea el pago igual; el diálogo pide confirmarlo.
+
+        Los módulos que conocen la venta (odoo_pos_oca) agregan las suyas.
+        """
+        self.ensure_one()
+        return []
+
+    def _oca_linea_metodo_pago_asociado(self):
+        """Línea de método entrante del diario del proveedor: la del proveedor, o la primera."""
+        self.ensure_one()
+        lineas = self.provider_id.journal_id.inbound_payment_method_line_ids
+        return (lineas.filtered(lambda l: l.payment_provider_id == self.provider_id) or lineas)[:1]
+
+    def action_oca_crear_pago_asociado(self):
+        """Botón de la ficha: abre el diálogo para crear el pago contable del cobro."""
+        self.ensure_one()
+        self._oca_exigir_permiso_reverso()
+        motivo = self._oca_motivo_sin_pago_asociado()
+        if motivo:
+            raise UserError(motivo)
+        return {
+            'type': 'ir.actions.act_window',
+            'name': _('Crear pago asociado'),
+            'res_model': 'oca.pago.asociado.wizard',
+            'view_mode': 'form',
+            'target': 'new',
+            'context': {'default_transaction_id': self.id},
+        }
+
+    def _oca_crear_pago_asociado(self, partner, fecha, aceptar_advertencias=False):
+        """Crea y publica el pago de entrada del cobro y lo deja enlazado a la transacción.
+
+        Diario, método, monto y moneda salen de la transacción, como en el
+        ``_create_payment`` del core; no se usa ése porque en los cobros del PDV
+        está anulado a propósito (ver ``_create_payment`` arriba).
+        """
+        self.ensure_one()
+        self._oca_exigir_permiso_reverso()
+        try:
+            self.env.cr.execute(
+                'SELECT id FROM payment_transaction WHERE id = %s FOR UPDATE NOWAIT', (self.id,)
+            )
+        except OperationalError:
+            raise UserError(_('Otro usuario está trabajando sobre este cobro en este momento.'))
+        self.invalidate_recordset()
+        no_se_puede = self._oca_motivo_sin_pago_asociado()
+        if no_se_puede:
+            raise UserError(no_se_puede)
+        advertencias = self._oca_advertencias_pago_asociado()
+        if advertencias and not aceptar_advertencias:
+            raise UserError('\n'.join(advertencias))
+        linea = self._oca_linea_metodo_pago_asociado()
+        if not linea:
+            raise UserError(_(
+                'El diario %s no tiene ningún método de pago entrante.'
+            ) % self.provider_id.journal_id.display_name)
+
+        # sudo: quien tiene el grupo puede no tener permisos de contabilidad; el grupo es el control.
+        tx = self.sudo()
+        compania = tx.provider_id.company_id or tx.company_id
+        ref = ' - '.join(p for p in (
+            tx.reference, tx.ticket_number and _('ticket %s') % tx.ticket_number,
+            tx.authorization_code and _('aut. %s') % tx.authorization_code,
+        ) if p)
+        pago = self.env['account.payment'].sudo().with_company(compania).create({
+            'payment_type': 'inbound',
+            'partner_type': 'customer',
+            'partner_id': partner.commercial_partner_id.id,
+            'amount': tx.amount,
+            'currency_id': tx.currency_id.id,
+            'date': fecha,
+            'journal_id': tx.provider_id.journal_id.id,
+            'company_id': compania.id,
+            'payment_method_line_id': linea.id,
+            'payment_transaction_id': tx.id,
+            'ref': ref,
+        })
+        pago.action_post()
+        tx.payment_id = pago
+        pago.message_post(body=_(
+            'Creado desde la transacción OCA %(ref)s por %(user)s.%(adv)s'
+        ) % {
+            'ref': tx.reference,
+            'user': self.env.user.name,
+            'adv': (' ' + _('Advertencias aceptadas:') + ' ' + ' / '.join(advertencias))
+            if advertencias else '',
+        })
+        _logger.info(
+            'OCA pago asociado: pago %s creado para tx %s (cliente %s, monto %s) por uid %s%s',
+            pago.id, tx.id, partner.id, tx.amount, self.env.uid,
+            (' | Advertencias aceptadas: %s' % ' / '.join(advertencias)) if advertencias else '',
+        )
+        return pago
 
     def _oca_ejecutar_reverso(self, motivo, aceptar_advertencias=False):
         """Manda la anulación (o la devolución) a la terminal y deja el candado puesto.

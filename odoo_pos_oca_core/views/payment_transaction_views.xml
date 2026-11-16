@@ -16,6 +16,10 @@
                             groups="odoo_pos_oca_core.group_oca_reverso"
                             invisible="provider_code != 'oca'"
                             confirm="Se va a mandar la anulación de este cobro a la terminal. ¿Seguro?"/>
+                    <button type="object" name="action_oca_crear_pago_asociado"
+                            string="Crear pago asociado"
+                            groups="odoo_pos_oca_core.group_oca_reverso"
+                            invisible="provider_code != 'oca'"/>
                 </xpath>
                 <xpath expr="//group[@name='transaction_details']" position="after">
                     <group string="Anulación / devolución" name="oca_reverso"

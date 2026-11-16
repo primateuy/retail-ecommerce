@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_oca_pago_asociado_wizard_form" model="ir.ui.view">
+        <field name="name">oca.pago.asociado.wizard.form</field>
+        <field name="model">oca.pago.asociado.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Crear pago asociado">
+                <div class="alert alert-info" role="alert">
+                    Se crea y se publica un pago de entrada con el diario, el método y el monto
+                    del cobro, a nombre del cliente que elijas, y queda enlazado a esta transacción.
+                    No se manda nada a la terminal.
+                </div>
+                <div class="alert alert-danger" role="alert" invisible="not advertencias">
+                    <field name="advertencias" nolabel="1" readonly="1"/>
+                    <div class="mt-2">
+                        <field name="acepto_advertencias" nolabel="1"/>
+                        <label for="acepto_advertencias" class="ms-1"/>
+                    </div>
+                </div>
+                <group>
+                    <group>
+                        <field name="partner_id" options="{'no_create': True}"/>
+                        <field name="date"/>
+                        <field name="amount"/>
+                        <field name="currency_id" invisible="1"/>
+                        <field name="journal_id"/>
+                    </group>
+                    <group>
+                        <field name="transaction_id"/>
+                        <field name="pos_id"/>
+                        <field name="ticket_number"/>
+                        <field name="authorization_code"/>
+                    </group>
+                </group>
+                <footer>
+                    <button name="action_confirmar" type="object" string="Crear el pago" class="btn-primary"/>
+                    <button string="Cancelar" special="cancel" class="btn-secondary"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+</odoo>

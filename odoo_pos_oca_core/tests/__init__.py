@@ -2,3 +2,4 @@
 from . import test_reverso_sin_issuer
 from . import test_oca_envios
 from . import test_oca_reverso
+from . import test_oca_pago_asociado

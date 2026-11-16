@@ -91,3 +91,14 @@ class PaymentTransaction(models.Model):
                 'crédito y la venta queda como cobrada. Lo normal es devolverlo desde el PDV.'
             ) % (pago.pos_order_id.pos_reference or pago.pos_order_id.name or ''))
         return advertencias
+
+    def _oca_advertencias_pago_asociado(self):
+        advertencias = super()._oca_advertencias_pago_asociado()
+        pago = self._oca_pago_pos_del_cobro()
+        if pago or self.pos_order_id:
+            orden = pago.pos_order_id or self.pos_order_id
+            advertencias.append(_(
+                'El cobro ya está en la venta %s del PDV: su ingreso entra con el cierre de la '
+                'caja, y un pago contable además lo deja dos veces.'
+            ) % (orden.pos_reference or orden.name or ''))
+        return advertencias
