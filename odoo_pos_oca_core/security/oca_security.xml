@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!--
+        Anular o devolver un cobro desde la transacción manda plata de vuelta al
+        cliente sin pasar por la venta: el grupo no se hereda de ningún otro y no
+        lo trae nadie de entrada, ni el administrador. Se asigna a mano a quien
+        corresponda (en Forum, sólo al usuario de soporte).
+    -->
+    <record id="group_oca_reverso" model="res.groups">
+        <field name="name">OCA: anular / devolver cobros</field>
+        <field name="comment">Muestra el botón «Anular / Devolver en OCA» en las transacciones OCA.</field>
+    </record>
+</odoo>

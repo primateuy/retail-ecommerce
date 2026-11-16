@@ -42,9 +42,13 @@ class TestOcaReverso(TransactionCase):
         })
         cls.metodo = metodo
         cls.contador = new_test_user(
-            cls.env, login='contador_reverso', groups='account.group_account_manager',
+            cls.env, login='contador_reverso',
+            groups='base.group_user,odoo_pos_oca_core.group_oca_reverso',
         )
         cls.cajero = new_test_user(cls.env, login='cajero_reverso', groups='base.group_user')
+        cls.admin_contable = new_test_user(
+            cls.env, login='admin_contable_reverso', groups='account.group_account_manager',
+        )
 
     def _cobro(self, **extra):
         vals = {
@@ -116,10 +120,44 @@ class TestOcaReverso(TransactionCase):
             self._ejecutar(tx, [{'ResponseCode': '103', 'msg': 'Pinpad en uso'}])
         self.assertFalse(tx.oca_reverso_en_curso_desde)
 
-    def test_sin_permiso_de_contabilidad(self):
+    def test_sin_el_grupo_no_se_puede(self):
+        """Ni un administrador de contabilidad: el grupo se asigna a mano."""
         tx = self._cobro()
-        with self.assertRaises(AccessError):
-            tx.with_user(self.cajero).action_oca_anular_devolver()
+        for usuario in (self.cajero, self.admin_contable):
+            with self.subTest(usuario.login), self.assertRaises(AccessError):
+                tx.with_user(usuario).action_oca_anular_devolver()
+        self.assertFalse(self.env.ref('base.user_admin').has_group('odoo_pos_oca_core.group_oca_reverso'))
+
+    def test_boton_visible_en_toda_transaccion_oca(self):
+        vista = self.env.ref('odoo_pos_oca_core.view_payment_transaction_oca_form')
+        self.assertIn('invisible="provider_code != \'oca\'"', vista.arch_db)
+        self.assertNotIn('oca_puede_revertir', vista.arch_db)
+
+    def test_en_un_pago_contable_avisa_y_deja_seguir(self):
+        tx = self._cobro()
+        pago = self.env['account.payment'].create({
+            'amount': 2687.35, 'payment_type': 'inbound', 'partner_type': 'customer',
+            'partner_id': self.env.company.partner_id.id,
+        })
+        tx.account_payment_id = pago
+        self.assertEqual(tx._oca_motivo_no_revertible(), '', 'un pago no bloquea')
+        self.assertTrue(tx._oca_advertencias_reverso())
+        # Sin aceptar la advertencia no sale nada a la terminal.
+        with self.assertRaises(UserError):
+            self._ejecutar(tx, [])
+        wizard = self.env['oca.reverso.wizard'].with_user(self.contador).create(
+            {'transaction_id': tx.id, 'motivo': 'helpdesk'})
+        self.assertIn('pago contable', wizard.advertencias)
+        with self.assertRaises(UserError):
+            wizard.action_confirmar()
+        wizard.acepto_advertencias = True
+        Prov = type(self.proveedor)
+        with patch.object(oca_utils, 'oca_pos_http_post',
+                          return_value=('u', {'ResponseCode': '0', 'TransactionId': 'TID-P'})), \
+                patch.object(Prov, '_oca_lanzar_seguimiento_reverso'):
+            wizard.action_confirmar()
+        self.assertTrue(tx.oca_reverso_en_curso_desde)
+        self.assertIn('Advertencias aceptadas', tx.oca_reverso_motivo)
 
     def test_no_se_revierte_lo_que_no_corresponde(self):
         casos = {

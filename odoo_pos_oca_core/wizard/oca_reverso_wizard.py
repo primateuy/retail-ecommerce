@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 """Diálogo «Anular / Devolver en OCA» de la transacción."""
 
-from odoo import _, fields, models
+from odoo import _, api, fields, models
+from odoo.exceptions import UserError
 
 
 class OcaReversoWizard(models.TransientModel):
@@ -23,10 +24,24 @@ class OcaReversoWizard(models.TransientModel):
     card_last_four = fields.Char(related='transaction_id.card_last_four', string='Tarjeta')
     tx_date = fields.Datetime(related='transaction_id.create_date', string='Fecha del cobro')
     motivo = fields.Text(string='Motivo', required=True)
+    advertencias = fields.Text(string='Advertencias', compute='_compute_advertencias')
+    acepto_advertencias = fields.Boolean(
+        string='Entiendo lo que queda descolgado y quiero anularlo igual',
+    )
+
+    @api.depends('transaction_id')
+    def _compute_advertencias(self):
+        for wizard in self:
+            lista = wizard.transaction_id._oca_advertencias_reverso() if wizard.transaction_id else []
+            wizard.advertencias = '\n'.join(lista)
 
     def action_confirmar(self):
         self.ensure_one()
-        resultado = self.transaction_id._oca_ejecutar_reverso(self.motivo)
+        if self.advertencias and not self.acepto_advertencias:
+            raise UserError(_('Marcá que entendés las advertencias para anular igual.'))
+        resultado = self.transaction_id._oca_ejecutar_reverso(
+            self.motivo, aceptar_advertencias=self.acepto_advertencias,
+        )
         operacion = (
             _('la devolución') if resultado.get('operacion') == 'devolucion' else _('la anulación')
         )

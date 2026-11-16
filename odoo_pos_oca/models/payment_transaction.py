@@ -82,14 +82,12 @@ class PaymentTransaction(models.Model):
             return self.env['pos.payment']
         return self.env['pos.payment'].sudo().search([('transaction_id', '=', tid)], limit=1)
 
-    def _oca_motivo_no_revertible(self):
-        motivo = super()._oca_motivo_no_revertible()
-        if motivo:
-            return motivo
+    def _oca_advertencias_reverso(self):
+        advertencias = super()._oca_advertencias_reverso()
         pago = self._oca_pago_pos_del_cobro()
         if pago:
-            return _(
-                'El cobro está en la venta %s: la devolución se hace desde el PDV, '
-                'que emite la nota de crédito.'
-            ) % (pago.pos_order_id.pos_reference or pago.pos_order_id.name or '')
-        return ''
+            advertencias.append(_(
+                'El cobro está en la venta %s: anulándolo desde acá NO se emite la nota de '
+                'crédito y la venta queda como cobrada. Lo normal es devolverlo desde el PDV.'
+            ) % (pago.pos_order_id.pos_reference or pago.pos_order_id.name or ''))
+        return advertencias

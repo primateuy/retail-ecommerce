@@ -8,7 +8,14 @@
                 <div class="alert alert-warning" role="alert">
                     Se anula el cobro completo por número de ticket en la terminal donde se hizo.
                     Si el lote de esa terminal ya cerró, se hace la devolución.
-                    No se crea ningún asiento: este cobro no está en ninguna venta.
+                    No se crea ningún asiento ni nota de crédito.
+                </div>
+                <div class="alert alert-danger" role="alert" invisible="not advertencias">
+                    <field name="advertencias" nolabel="1" readonly="1"/>
+                    <div class="mt-2">
+                        <field name="acepto_advertencias" nolabel="1"/>
+                        <label for="acepto_advertencias" class="ms-1"/>
+                    </div>
                 </div>
                 <group>
                     <group>

@@ -1583,7 +1583,7 @@ class PaymentTransaction(models.Model):
     )
 
     @api.depends(
-        'state', 'provider_code', 'ticket_number', 'pos_id', 'account_payment_id',
+        'state', 'provider_code', 'ticket_number', 'pos_id',
         'oca_reverso_de_id', 'oca_reverso_ids.state', 'oca_reverso_en_curso_desde',
     )
     def _compute_oca_puede_revertir(self):
@@ -1603,9 +1603,10 @@ class PaymentTransaction(models.Model):
         ).total_seconds() < self.OCA_REVERSO_VENCE_MINUTOS * 60
 
     def _oca_motivo_no_revertible(self):
-        """Por qué este cobro no se puede anular desde acá; '' si se puede.
+        """Por qué este cobro no se puede anular de ninguna forma; '' si se puede.
 
-        Los módulos que conocen la venta (odoo_pos_oca) agregan sus propias razones.
+        Sólo lo imposible o lo que duplicaría la devolución. Que el cobro esté en
+        una venta o en un pago no bloquea: es una advertencia (``_oca_advertencias_reverso``).
         """
         self.ensure_one()
         if self.provider_code != 'oca':
@@ -1616,13 +1617,27 @@ class PaymentTransaction(models.Model):
             return _('No es una compra: es una anulación o devolución.')
         if not (self.ticket_number or '').strip() or not (self.pos_id or '').strip():
             return _('Falta el ticket o la terminal del cobro.')
-        if self.account_payment_id or self.payment_id:
-            return _('El cobro está en un pago contable: la devolución se hace desde ese pago.')
         if self.oca_reverso_ids.filtered(lambda r: r.state == 'done'):
             return _('Este cobro ya fue anulado o devuelto.')
         if self._oca_reverso_en_curso():
             return _('Ya se mandó la anulación a la terminal y todavía no contestó.')
         return ''
+
+    def _oca_advertencias_reverso(self):
+        """Lo que queda descolgado si se anula igual; el diálogo pide confirmarlo.
+
+        Los módulos que conocen la venta (odoo_pos_oca) agregan las suyas.
+        """
+        self.ensure_one()
+        advertencias = []
+        if self.account_payment_id or self.payment_id:
+            # sudo: quien tiene el grupo puede no tener permisos de contabilidad.
+            pago = (self.account_payment_id or self.payment_id).sudo()
+            advertencias.append(_(
+                'El cobro está en el pago contable %s: ese pago queda como cobrado. '
+                'Lo normal es devolverlo desde el pago.'
+            ) % (pago.display_name or ''))
+        return advertencias
 
     def action_oca_anular_devolver(self):
         """Botón de la ficha: abre el diálogo para anular o devolver el cobro."""
@@ -1641,13 +1656,16 @@ class PaymentTransaction(models.Model):
         }
 
     def _oca_exigir_permiso_reverso(self):
-        if not self.env.user.has_group('account.group_account_manager'):
-            raise AccessError(_('Sólo un administrador de contabilidad puede anular o devolver cobros.'))
+        if not self.env.user.has_group('odoo_pos_oca_core.group_oca_reverso'):
+            raise AccessError(_(
+                'Hace falta el grupo «OCA: anular / devolver cobros» para anular o devolver cobros.'
+            ))
 
-    def _oca_ejecutar_reverso(self, motivo):
+    def _oca_ejecutar_reverso(self, motivo, aceptar_advertencias=False):
         """Manda la anulación (o la devolución) a la terminal y deja el candado puesto.
 
-        El resultado llega después: lo registra el hilo de seguimiento.
+        El resultado llega después: lo registra el hilo de seguimiento. Si el cobro
+        está en una venta o en un pago, sólo se manda con ``aceptar_advertencias``.
         """
         self.ensure_one()
         self._oca_exigir_permiso_reverso()
@@ -1661,6 +1679,9 @@ class PaymentTransaction(models.Model):
         no_se_puede = self._oca_motivo_no_revertible()
         if no_se_puede:
             raise UserError(no_se_puede)
+        advertencias = self._oca_advertencias_reverso()
+        if advertencias and not aceptar_advertencias:
+            raise UserError('\n'.join(advertencias))
 
         resultado = self.provider_id.sudo().oca_anular_o_devolver(self)
         if not resultado.get('ok'):
@@ -1674,11 +1695,15 @@ class PaymentTransaction(models.Model):
             })
         self.sudo().write({
             'oca_reverso_en_curso_desde': fields.Datetime.now(),
-            'oca_reverso_motivo': motivo,
+            'oca_reverso_motivo': motivo + (
+                '\n' + _('Advertencias aceptadas:') + '\n- ' + '\n- '.join(advertencias)
+                if advertencias else ''
+            ),
         })
         _logger.info(
-            'OCA reverso: %s enviada para tx %s (ticket %s, terminal %s) por uid %s. Motivo: %s',
+            'OCA reverso: %s enviada para tx %s (ticket %s, terminal %s) por uid %s. Motivo: %s%s',
             resultado.get('operacion'), self.id, self.ticket_number, self.pos_id, self.env.uid, motivo,
+            (' | Advertencias aceptadas: %s' % ' / '.join(advertencias)) if advertencias else '',
         )
         return resultado
 

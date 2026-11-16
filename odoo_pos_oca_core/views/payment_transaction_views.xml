@@ -11,11 +11,10 @@
             <field name="priority" eval="5"/>
             <field name="arch" type="xml">
                 <xpath expr="//header" position="inside">
-                    <field name="oca_puede_revertir" invisible="1"/>
                     <button type="object" name="action_oca_anular_devolver"
                             string="Anular / Devolver en OCA"
-                            groups="account.group_account_manager"
-                            invisible="not oca_puede_revertir"
+                            groups="odoo_pos_oca_core.group_oca_reverso"
+                            invisible="provider_code != 'oca'"
                             confirm="Se va a mandar la anulación de este cobro a la terminal. ¿Seguro?"/>
                 </xpath>
                 <xpath expr="//group[@name='transaction_details']" position="after">

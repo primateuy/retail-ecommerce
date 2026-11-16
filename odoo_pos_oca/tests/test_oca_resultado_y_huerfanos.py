@@ -99,5 +99,6 @@ class TestOcaResultadoYHuerfanos(TransactionCase):
             'amount': 558.40, 'transaction_id': 'TID-VENTA',
         })
         self.assertEqual(self.pm.oca_cobros_sin_venta(), [])
-        # Y por la misma razón no se ofrece anularlo desde la transacción.
-        self.assertIn('PDV', tx._oca_motivo_no_revertible())
+        # Anularlo desde la transacción se puede, pero avisa que la venta queda cobrada.
+        self.assertEqual(tx._oca_motivo_no_revertible(), '')
+        self.assertIn('PDV', '\n'.join(tx._oca_advertencias_reverso()))
