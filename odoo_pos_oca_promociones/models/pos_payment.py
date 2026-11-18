@@ -59,6 +59,15 @@ class PosPayment(models.Model):
                                 getattr(self.pos_order_id, 'name', self.pos_order_id.id),
                             )
                             return
+                        respaldo = self._oca_tx_cobrada_por_respaldo(tx_by_ref)
+                        if respaldo:
+                            _logger.warning(
+                                'OCA promos: transaction_id=%s ya se registró por respaldo en la orden %s '
+                                '(aut. %s); no se liga al pago %s. Posible respuesta vieja del pinpad.',
+                                payment_tid, respaldo.pos_payment_id.pos_order_id.name,
+                                tx_by_ref.authorization_code, payment_name,
+                            )
+                            return
                         if not other or other.id == self.id:
                             tx_by_ref.pos_payment_id = self.id
                             self.payment_transaction_id = tx_by_ref.id

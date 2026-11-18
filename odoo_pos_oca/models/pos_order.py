@@ -602,6 +602,13 @@ class PosOrder(models.Model):
                                 tx_by_ref.pos_order_id.name,
                                 order_name,
                             )
+                        # --- Ni una ya registrada por respaldo en otra venta de la sesión ---
+                        elif oca_payment._oca_tx_cobrada_por_respaldo(tx_by_ref):
+                            _logger.warning(
+                                'OCA POS: transacción oca_transaction_id=%s ya registrada por '
+                                'respaldo (aut. %s); no se asigna a %s. Posible respuesta vieja '
+                                'del pinpad.', tid_key, tx_by_ref.authorization_code, order_name,
+                            )
                         else:
                             matching_transaction = tx_by_ref
                             match_by_reference = True

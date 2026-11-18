@@ -139,6 +139,40 @@ class PosPayment(models.Model):
         
         return oca_data
     
+    def _oca_tx_cobrada_por_respaldo(self, tx):
+        """
+        Pago de RESPALDO de otra venta de la misma sesión que ya registró el cobro de ``tx``.
+
+        Cuando el PDV no recibe la respuesta del pinpad, la cajera rehace la venta por «POS
+        Manual» con la autorización del cobro (``manual_auth_code``). La transacción OCA queda
+        sin orden, y si después el PDV manda ese ``TransactionId`` en OTRA venta —una respuesta
+        vieja que el bus vuelve a entregar al reconectarse— el resguardo de arriba no la frena,
+        porque la tx no tiene orden. Producción, 15-11-2026, Atlántico: la tx 39688 (aut.
+        227244, de la 03192-001-0016, registrada por respaldo) quedó en la 03192-001-0017, que
+        se cobró con otra tarjeta (tx 39694), y la venta quedó con el pago y el descuento de la
+        anterior.
+
+        ``manual_auth_code`` lo agrega ``pos_forum_manual_payment``: sin ese módulo no hay
+        respaldo que buscar.
+        """
+        self.ensure_one()
+        Tx = self.env['payment.transaction'].sudo()
+        if not tx.authorization_code or 'manual_auth_code' not in Tx._fields:
+            return Tx
+        dominio = [
+            ('id', '!=', tx.id),
+            ('manual_auth_code', '=', tx.authorization_code),
+            ('pos_payment_id', '!=', False),
+            ('create_date', '>=', tx.create_date),
+        ]
+        orden = self.pos_order_id
+        if orden:
+            dominio.append(('pos_payment_id.pos_order_id', '!=', orden.id))
+        sesion = orden.session_id or self.session_id
+        if sesion:
+            dominio.append(('pos_payment_id.pos_order_id.session_id', '=', sesion.id))
+        return Tx.search(dominio, limit=1)
+
     def _associate_oca_transaction(self):
         """
         Asocia transacciones OCA huérfanas con este pago
@@ -176,6 +210,15 @@ class PosPayment(models.Model):
                                 'al pago %s (orden %s). Posible arrastre de estado del PDV.',
                                 payment_tid, tx_by_ref.pos_order_id.name, payment_name,
                                 getattr(self.pos_order_id, 'name', self.pos_order_id.id),
+                            )
+                            return
+                        respaldo = self._oca_tx_cobrada_por_respaldo(tx_by_ref)
+                        if respaldo:
+                            _logger.warning(
+                                'OCA: transaction_id=%s ya se registró por respaldo en la orden %s '
+                                '(aut. %s); no se liga al pago %s. Posible respuesta vieja del pinpad.',
+                                payment_tid, respaldo.pos_payment_id.pos_order_id.name,
+                                tx_by_ref.authorization_code, payment_name,
                             )
                             return
                         if not other or other.id == self.id:

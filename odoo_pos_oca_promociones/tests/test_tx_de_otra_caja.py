@@ -42,12 +42,15 @@ class TestTxDeOtraCaja(TransactionCase):
             'name': 'OCA (test otra caja)', 'use_payment_terminal': 'oca',
             'payment_provider': cls.proveedor.id,
         })
+        # «POS Manual»: el cobro de respaldo cuando el PDV no recibe la respuesta del pinpad.
+        cls.metodo_manual = cls.env['pos.payment.method'].create({'name': 'POS Manual (test otra caja)'})
         # Caja que cobra en efectivo (San Martín) y caja que cobró con tarjeta (Colonia).
         cls.caja_efectivo = cls.env['pos.config'].create({'name': 'Caja efectivo (test otra caja)'})
+        cls.caja_efectivo.payment_method_ids |= cls.metodo_manual
         cls.caja_efectivo.open_ui()
         cls.sesion_efectivo = cls.caja_efectivo.current_session_id
         cls.caja_tarjeta = cls.env['pos.config'].create({'name': 'Caja tarjeta (test otra caja)'})
-        cls.caja_tarjeta.payment_method_ids |= cls.metodo_oca
+        cls.caja_tarjeta.payment_method_ids |= cls.metodo_oca | cls.metodo_manual
         cls.caja_tarjeta.open_ui()
         cls.sesion_tarjeta = cls.caja_tarjeta.current_session_id
 
@@ -108,3 +111,45 @@ class TestTxDeOtraCaja(TransactionCase):
             'transaction_id': tx.oca_transaction_id,
         }])
         self.assertEqual(tx.pos_order_id, duena)
+
+    def test_no_se_liga_una_tx_ya_registrada_por_respaldo(self):
+        """Atlántico, 15-11-2026: la venta -0016 se cobró en el pinpad (tx 39688, aut. 227244),
+        el PDV no recibió la respuesta y se rehizo por «POS Manual» con esa autorización. La venta
+        -0017 llegó con el TransactionId de la 39688 (respuesta vieja del bus) y se quedó con ella."""
+        Tx = self.env['payment.transaction']
+        if 'manual_auth_code' not in Tx._fields:
+            self.skipTest('Sin pos_forum_manual_payment no hay pagos de respaldo.')
+        tx = self._tx_con_promocion('2631952912169939', monto=2864.0)
+        tx.authorization_code = '227244'
+        anterior = self._orden(self.sesion_tarjeta, pagos=[{
+            'payment_method_id': self.metodo_manual.id, 'amount': 2864.0,
+        }])
+        respaldo = self._tx_con_promocion('RESPALDO-227244', monto=2864.0)
+        respaldo.write({'oca_transaction_id': False, 'manual_auth_code': '227244',
+                        'pos_payment_id': anterior.payment_ids.id})
+        siguiente = self._orden(self.sesion_tarjeta, pagos=[{
+            'payment_method_id': self.metodo_oca.id, 'amount': 4975.0,
+            'transaction_id': tx.oca_transaction_id,
+        }])
+        self.assertFalse(tx.pos_order_id, 'La venta siguiente se quedó con el cobro de la anterior.')
+        self.assertFalse(tx.pos_payment_id)
+        self.assertFalse(siguiente.payment_ids.payment_transaction_id)
+
+    def test_sin_respaldo_la_tx_se_liga_igual(self):
+        """El resguardo no frena el caso normal: misma autorización en otra sesión no cuenta."""
+        Tx = self.env['payment.transaction']
+        if 'manual_auth_code' not in Tx._fields:
+            self.skipTest('Sin pos_forum_manual_payment no hay pagos de respaldo.')
+        tx = self._tx_con_promocion('2631952912169940', monto=2864.0)
+        tx.authorization_code = '111111'
+        otra = self._orden(self.sesion_efectivo, pagos=[{
+            'payment_method_id': self.metodo_manual.id, 'amount': 2864.0,
+        }])
+        ajeno = self._tx_con_promocion('RESPALDO-111111', monto=2864.0)
+        ajeno.write({'oca_transaction_id': False, 'manual_auth_code': '111111',
+                     'pos_payment_id': otra.payment_ids.id})
+        orden = self._orden(self.sesion_tarjeta, pagos=[{
+            'payment_method_id': self.metodo_oca.id, 'amount': 2864.0,
+            'transaction_id': tx.oca_transaction_id,
+        }])
+        self.assertEqual(tx.pos_order_id, orden)

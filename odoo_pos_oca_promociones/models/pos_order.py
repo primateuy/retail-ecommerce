@@ -55,7 +55,7 @@ class PosOrder(models.Model):
         )
         if not oca_provider:
             return self.env['payment.transaction']
-        return self.env['payment.transaction'].sudo().search(
+        tx = self.env['payment.transaction'].sudo().search(
             [
                 ('oca_transaction_id', '=', tid),
                 ('provider_id.code', '=', 'oca'),  # cualquier proveedor OCA: hay uno por RUT
@@ -64,6 +64,11 @@ class PosOrder(models.Model):
             order='id desc',
             limit=1,
         )
+        # Un TransactionId viejo (respuesta atrasada del pinpad) de un cobro que otra venta ya
+        # registró por respaldo no es de este pago (ver pos.payment._oca_tx_cobrada_por_respaldo).
+        if tx and not tx.pos_payment_id and pay._oca_tx_cobrada_por_respaldo(tx):
+            return self.env['payment.transaction']
+        return tx
 
     def _oca_promo_recompute_pos_order_header_amounts(self):
         """
