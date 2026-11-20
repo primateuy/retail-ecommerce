@@ -15,6 +15,7 @@
                 <xpath expr="//group[@name='oca_relations_left']/field[@name='transaction_origin']" position="after">
                     <field name="pos_order_id"/>
                     <field name="pos_payment_id"/>
+                    <field name="oca_respaldo_payment_id" invisible="not oca_respaldo_payment_id"/>
                 </xpath>
             </field>
         </record>
@@ -26,10 +27,39 @@
             <field name="inherit_id" ref="odoo_pos_oca_core.view_payment_transaction_oca_search"/>
             <field name="arch" type="xml">
                 <xpath expr="//filter[@name='oca_provider']" position="after">
+                    <!-- Sin venta: tampoco las registradas por el POS de respaldo ni las ya anuladas. -->
                     <filter string="Aprobadas sin pago del PDV" name="oca_sin_pago_pos"
-                            domain="[('provider_code', '=', 'oca'), ('state', '=', 'done'), ('pos_payment_id', '=', False), ('account_payment_id', '=', False), ('oca_reverso_de_id', '=', False)]"/>
+                            domain="[('provider_code', '=', 'oca'), ('state', '=', 'done'), ('amount', '>', 0), ('pos_payment_id', '=', False), ('account_payment_id', '=', False), ('oca_reverso_de_id', '=', False), ('oca_respaldo_payment_id', '=', False), '!', ('oca_reverso_ids.state', '=', 'done')]"/>
                 </xpath>
             </field>
         </record>
+
+        <!-- Cobros aprobados en el pinpad que no quedaron en ninguna venta: los revisa
+             administración (anular / devolver o crear el pago). Reemplaza el aviso que
+             salía en la caja antes de cobrar (2026-11-20). -->
+        <record id="action_payment_transaction_oca_sin_venta" model="ir.actions.act_window">
+            <field name="name">Cobros OCA sin venta</field>
+            <field name="res_model">payment.transaction</field>
+            <field name="view_mode">tree,form</field>
+            <field name="domain">[('provider_code', '=', 'oca')]</field>
+            <field name="context">{'search_default_oca_sin_pago_pos': 1}</field>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">
+                    No hay cobros aprobados sin venta
+                </p>
+                <p>
+                    Acá aparecen los cobros que el pinpad aprobó y no quedaron en ninguna venta
+                    del PDV ni se registraron por el POS de respaldo. Desde la transacción se
+                    anulan / devuelven o se les crea el pago.
+                </p>
+            </field>
+        </record>
+
+        <menuitem id="menu_payment_transaction_oca_sin_venta"
+                  name="Cobros OCA sin venta"
+                  parent="account.root_payment_menu"
+                  action="action_payment_transaction_oca_sin_venta"
+                  groups="odoo_pos_oca.group_oca_cobros_sin_venta"
+                  sequence="11"/>
     </data>
 </odoo>

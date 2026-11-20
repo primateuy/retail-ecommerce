@@ -105,3 +105,72 @@ class TestOcaResultadoYHuerfanos(TransactionCase):
         # Crearle el pago contable también avisa: el ingreso quedaría dos veces.
         self.assertEqual(tx._oca_motivo_sin_pago_asociado(), '')
         self.assertIn('dos veces', '\n'.join(tx._oca_advertencias_pago_asociado()))
+
+    # --- cobro registrado por el POS de respaldo (2026-11-20) ---
+
+    def _pago_respaldo(self, autorizacion, monto=558.40):
+        """Venta pasada por un método manual con la autorización del cobro del pinpad."""
+        manual = self.env['pos.payment.method'].create({'name': 'POS Manual (test respaldo)'})
+        config = self.env['pos.config'].create({'name': 'Caja (test respaldo)'})
+        config.payment_method_ids = [(4, self.pm.id), (4, manual.id)]
+        config.open_ui()
+        orden = self.env['pos.order'].create({
+            'session_id': config.current_session_id.id,
+            'amount_total': monto, 'amount_tax': 0.0, 'amount_paid': monto, 'amount_return': 0.0,
+        })
+        pago = self.env['pos.payment'].create({
+            'pos_order_id': orden.id, 'payment_method_id': manual.id, 'amount': monto,
+        })
+        proveedor_manual = self.env['payment.provider'].create({
+            'name': 'Manual (test respaldo)', 'code': 'none', 'state': 'test',
+        })
+        tx_manual = self.env['payment.transaction'].sudo().create({
+            'amount': monto, 'currency_id': self.env.company.currency_id.id,
+            'partner_id': self.env.company.partner_id.id,
+            'payment_method_id': self.metodo_oca.id, 'provider_id': proveedor_manual.id,
+            'reference': 'TEST-RESPALDO-%s' % autorizacion, 'state': 'done',
+            'pos_payment_id': pago.id, 'authorization_code': autorizacion,
+        })
+        return pago, tx_manual
+
+    def test_cobro_registrado_por_respaldo_no_es_suelto(self):
+        """Producción 19/20-11: 20 de 28 cobros «sin venta» ya estaban en una venta de respaldo."""
+        tx = self._tx('TID-RESP', authorization_code='227244')
+        pago, _manual = self._pago_respaldo('227244')
+        self.assertEqual(tx.oca_respaldo_payment_id, pago)
+        self.assertEqual(tx._oca_pago_pos_del_cobro(), pago)
+        self.assertEqual(self.pm.oca_cobros_sin_venta(), [])
+
+    def test_otra_autorizacion_no_lo_marca(self):
+        tx = self._tx('TID-OTRA-AUT', authorization_code='111111')
+        self._pago_respaldo('999999')
+        self.assertFalse(tx.oca_respaldo_payment_id)
+        self.assertEqual([c['id'] for c in self.pm.oca_cobros_sin_venta()], [tx.id])
+
+    def test_respaldo_de_otra_terminal_no_lo_marca(self):
+        tx = self._tx('TID-OTRA-TERM', authorization_code='333333', pos_id='OTRA')
+        self._pago_respaldo('333333')
+        self.assertFalse(tx.oca_respaldo_payment_id)
+
+    def test_la_migracion_marca_los_anteriores(self):
+        """Los respaldos que ya existían se marcan desde las transacciones manuales."""
+        pago, manual = self._pago_respaldo('444444')
+        tx = self._tx('TID-ANTERIOR', authorization_code='444444')
+        tx.create_date = manual.create_date
+        self.assertFalse(tx.oca_respaldo_payment_id)
+        self.assertEqual(manual._oca_marcar_cobro_registrado_por_respaldo(), tx)
+        self.assertEqual(tx.oca_respaldo_payment_id, pago)
+
+    def test_dos_tarjetas_la_primera_no_es_suelta(self):
+        """La primera tarjeta de la venta que se está cobrando todavía no tiene pago del PDV."""
+        primera = self._tx('TID-TARJETA-1')
+        self.assertEqual([c['id'] for c in self.pm.oca_cobros_sin_venta()], [primera.id])
+        self.assertEqual(self.pm.oca_cobros_sin_venta(excluir_tids=['TID-TARJETA-1']), [])
+
+    def test_menu_cobros_sin_venta_solo_con_su_grupo(self):
+        """El menú lo ve sólo quien tenga el grupo, que no viene con nadie, ni el administrador."""
+        grupo = self.env.ref('odoo_pos_oca.group_oca_cobros_sin_venta')
+        menu = self.env.ref('odoo_pos_oca.menu_payment_transaction_oca_sin_venta')
+        self.assertEqual(menu.groups_id, grupo)
+        self.assertFalse(grupo.implied_ids)
+        self.assertNotIn(grupo, self.env.ref('base.user_admin').groups_id)

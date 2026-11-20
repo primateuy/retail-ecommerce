@@ -11,13 +11,14 @@ Para el flujo contable (account.payment) instalar 'odoo_pos_oca_backend'.
     'author': 'PRIMATE',
     'website': 'https://www.primate.com',
     'category': 'Point of Sale',
-    'version': '17.0.2.8.3',
+    'version': '17.0.2.8.4',
     'depends': [
         'odoo_pos_oca_core',
         'odoo_pos_oca_multiple',
         'point_of_sale',
     ],
     'data': [
+        'security/odoo_pos_oca_groups.xml',
         'data/oca_installation_data.xml',
         'data/paperformat_pos_thermal.xml',
         'data/thermal_reset_css.xml',

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!--
+        Menú «Cobros OCA sin venta» (2026-11-20). No se hereda de ningún grupo y no lo
+        trae nadie de entrada, ni el administrador: se asigna a mano a quien revise los
+        cobros sueltos.
+    -->
+    <record id="group_oca_cobros_sin_venta" model="res.groups">
+        <field name="name">OCA: ver cobros sin venta</field>
+        <field name="comment">Muestra el menú «Cobros OCA sin venta» (Contabilidad &gt; Configuración &gt; Pagos).</field>
+    </record>
+</odoo>

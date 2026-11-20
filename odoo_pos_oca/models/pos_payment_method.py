@@ -1246,8 +1246,10 @@ class PosPaymentMethod(models.Model):
     #
     # El resultado final del pinpad llegaba a la caja únicamente por el bus. Si el
     # aviso no llegaba, la caja esperaba para siempre: la cajera recargaba y volvía
-    # a cobrar (Florida, tx 37187). Ahora la caja consulta el resultado guardado y,
-    # antes de cobrar, avisa si en su terminal hay un cobro aprobado sin venta.
+    # a cobrar (Florida, tx 37187). Ahora la caja consulta el resultado guardado.
+    # El aviso de «cobro aprobado sin venta» antes de cobrar se sacó el 2026-11-20:
+    # casi siempre era falso (cobros ya registrados por respaldo, o la primera
+    # tarjeta de la misma venta). Los cobros sueltos se ven en Transacciones OCA.
     # ------------------------------------------------------------------
 
     OCA_CODIGOS_INTERMEDIOS = ('10', '12')
@@ -1280,15 +1282,19 @@ class PosPaymentMethod(models.Model):
         payload['origin_transaction_id'] = tid
         return payload
 
-    def oca_cobros_sin_venta(self, minutos=30):
+    def oca_cobros_sin_venta(self, minutos=30, excluir_tids=None):
         """Cobros aprobados en la terminal de este método que no están en ninguna venta.
 
-        Sirve para que la caja avise antes de cobrar de nuevo. Excluye los que ya se
-        anularon y los que tienen un pago del PDV (por ``pos_payment_id`` o por el id de OCA).
+        Excluye los que ya se anularon, los que tienen un pago del PDV (por
+        ``pos_payment_id`` o por el id de OCA), los que se registraron por el POS de
+        respaldo y los de ``excluir_tids``: la caja pasa los cobros que ya tiene en la venta
+        que está cobrando, que todavía no llegó al servidor (pago con dos tarjetas).
+        La caja ya no la llama antes de cobrar (2026-11-20); queda para consultas.
         """
         self.ensure_one()
         if not self.codigo_terminal:
             return []
+        excluir = {str(t) for t in (excluir_tids or []) if t}
         desde = fields.Datetime.subtract(fields.Datetime.now(), minutes=int(minutos or 30))
         txs = self.env['payment.transaction'].sudo().search([
             ('provider_id.code', '=', 'oca'),
@@ -1297,7 +1303,9 @@ class PosPaymentMethod(models.Model):
             ('create_date', '>=', desde),
             ('pos_payment_id', '=', False),
             ('oca_reverso_de_id', '=', False),
+            ('oca_respaldo_payment_id', '=', False),
         ], order='create_date desc')
+        txs = txs.filtered(lambda t: str(t.oca_transaction_id or '') not in excluir)
         if not txs:
             return []
         con_pago = set(self.env['pos.payment'].sudo().search(

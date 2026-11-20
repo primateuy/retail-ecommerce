@@ -7,27 +7,17 @@ import {onMounted} from "@odoo/owl";
 patch(PaymentScreen.prototype, {
     setup() {
         super.setup(...arguments);
-        console.log('-----------------Payment Screen Setup------------------');
 
         onMounted(() => {
-            console.log('-----------------Payment Screen onMounted------------------');
-
-            // const pendingPaymentLine = this.currentOrder.paymentlines.find(
-            //     (paymentLine) => paymentLine.payment_method.use_payment_terminal === "oca" && !paymentLine.is_done() && paymentLine.get_payment_status() !== "pending"
-            // );
-            //
-            // if (pendingPaymentLine) {
-            //     const oca_interface = pendingPaymentLine.payment_method.payment_terminal;
-            //     pendingPaymentLine.set_payment_status('waiting');
-            //     handy_interface.start_get_status_polling().then(isPaymentSuccessful => {
-            //         if (isPaymentSuccessful) {
-            //             pendingPaymentLine.set_payment_status('done');
-            //             pendingPaymentLine.can_be_reversed = handy_interface.supports_reversals;
-            //         } else {
-            //             pendingPaymentLine.set_payment_status('retry');
-            //         }
-            //     });
-            // }
+            // Si la caja se recargó con un cobro OCA en espera, la línea vuelve con su
+            // transacción pero nadie la seguía esperando: quedaba trabada y la cajera
+            // terminaba cobrando por el POS de respaldo. Se retoma la consulta del
+            // resultado (Forum, 2026-11-20).
+            for (const line of this.currentOrder?.paymentlines || []) {
+                if (line.payment_method?.use_payment_terminal === "oca") {
+                    line.payment_method.payment_terminal?.retomarCobroPendiente?.(line);
+                }
+            }
         });
     },
 });

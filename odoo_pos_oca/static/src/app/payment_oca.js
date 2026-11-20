@@ -3,13 +3,13 @@
 import {_t} from "@web/core/l10n/translation";
 import {PaymentInterface} from "@point_of_sale/app/payment/payment_interface";
 import {ErrorPopup} from "@point_of_sale/app/errors/popups/error_popup";
-import {ConfirmPopup} from "@point_of_sale/app/utils/confirm_popup/confirm_popup";
-import {sprintf} from "@web/core/utils/strings";
 
 const {DateTime} = luxon;
 
 // Si el aviso del bus no llega, la caja consulta el resultado guardado (Forum, 2026-11-13).
 const OCA_CONSULTA_PRIMERA_MS = 15000;
+// Al recargar la caja con un cobro en espera se consulta enseguida (Forum, 2026-11-20).
+const OCA_CONSULTA_AL_RETOMAR_MS = 1000;
 const OCA_CONSULTA_CADA_MS = 5000;
 const OCA_CONSULTA_MAXIMO_MS = 10 * 60 * 1000;
 const OCA_CODIGOS_INTERMEDIOS = ["10", "12"];
@@ -178,10 +178,6 @@ export class PaymentOCA extends PaymentInterface {
         var order = self.pos.get_order();
         var pos_session_id = order.pos_session_id;
 
-        if (!has_refunded_line && !(await this._confirmarSinCobrosHuerfanos())) {
-            return {ResponseCode: "oca_cancelado_en_caja"};
-        }
-
         return this.env.services.orm.silent.call(
             "pos.payment.method",
             "enviar_pago",
@@ -192,11 +188,6 @@ export class PaymentOCA extends PaymentInterface {
     handle_response_enviar_pago(response) {
         var line = this.pending_oca_line();
 
-        if (response.ResponseCode === "oca_cancelado_en_caja") {
-            // La cajera decidió no cobrar: la línea queda para reintentar, sin error.
-            return Promise.resolve(false);
-        }
-
         if (response.ResponseCode !== '0') {
             console.log('handle_response_enviar_pago', 'ERROR')
             var msg_error = `Error ${response.ResponseCode}: ${response.msg}`
@@ -206,7 +197,7 @@ export class PaymentOCA extends PaymentInterface {
         } else {
             console.log('handle_response_enviar_pago', 'OK')
             line.set_payment_status('waitingCard');
-            line.transaction_id = response.TransactionId;
+            this._ocaNuevoIntento(line, response.TransactionId);
             const espera = this.waitForPaymentConfirmation();
             this._iniciarConsultaResultado(line, response.TransactionId);
             return espera;
@@ -262,61 +253,49 @@ export class PaymentOCA extends PaymentInterface {
     }
 
     // ******************************************
-    // COBROS SIN VENTA
+    // INTENTOS DE COBRO
     // ******************************************
 
     /**
-     * Antes de cobrar, si en esta terminal hay un cobro aprobado que no quedó en
-     * ninguna venta, se avisa: es casi seguro que el cliente ya pagó y la caja se
-     * trancó. Devuelve true si se puede cobrar.
+     * Deja la línea lista para un cobro nuevo en el pinpad.
+     *
+     * «Reintentar» vuelve a cobrar sobre la MISMA línea. Si quedaba marcada como
+     * cancelada o con el resultado del intento anterior ya procesado, la respuesta del
+     * cobro nuevo se descartaba: el pinpad aprobaba, la caja seguía esperando, la cajera
+     * recargaba y pasaba la venta por el POS de respaldo. Producción, 19 y 20-11-2026:
+     * 26 de 30 cobros aprobados sin venta venían de un intento rechazado o cancelado
+     * segundos antes en la misma terminal.
      */
-    async _confirmarSinCobrosHuerfanos() {
-        let cobros = [];
-        try {
-            cobros = await this.env.services.orm.silent.call(
-                "pos.payment.method",
-                "oca_cobros_sin_venta",
-                [[this.payment_method.id]]
-            );
-        } catch {
-            // Sin respuesta del servidor no se bloquea el cobro.
-            return true;
+    _ocaNuevoIntento(line, transactionId) {
+        line.transaction_id = transactionId;
+        line.cancelled = false;
+        line._ocaResultadoProcesado = null;
+        // Que una recarga de la caja encuentre la línea en espera con su transacción.
+        line.order?.save_to_db?.();
+    }
+
+    /**
+     * Retoma un cobro que quedó en espera cuando se recargó la caja: consulta el
+     * resultado y, si el pinpad lo aprobó, cierra la línea como si hubiera llegado el aviso.
+     */
+    retomarCobroPendiente(line) {
+        if (!line || !line.transaction_id || line._ocaConsultaTimer) {
+            return;
         }
-        if (!cobros || !cobros.length) {
-            return true;
+        if (!["waiting", "waitingCard"].includes(line.get_payment_status())) {
+            return;
         }
-        const detalle = cobros
-            .map((c) =>
-                sprintf(
-                    _t("%s (ticket %s, tarjeta ****%s, hace %s min)"),
-                    this.env.utils.formatCurrency(c.amount),
-                    c.ticket,
-                    c.card_last_four,
-                    c.minutos
-                )
-            )
-            .join("; ");
-        const {confirmed} = await this.env.services.popup.add(ConfirmPopup, {
-            title: _t("Hay un cobro aprobado sin venta"),
-            body: sprintf(
-                _t(
-                    "En esta terminal hay cobros aprobados que no quedaron en ninguna venta: %s. " +
-                        "Si es el mismo cliente, NO vuelvas a cobrar: avisá a administración para " +
-                        "registrar o anular ese cobro. ¿Cobrar igual?"
-                ),
-                detalle
-            ),
-            confirmText: _t("Cobrar igual"),
-            cancelText: _t("No cobrar"),
-        });
-        return confirmed;
+        line.set_payment_status("waitingCard");
+        line.cancelled = false;
+        line._ocaResultadoProcesado = null;
+        this._iniciarConsultaResultado(line, line.transaction_id, OCA_CONSULTA_AL_RETOMAR_MS);
     }
 
     // ******************************************
     // CONSULTA DEL RESULTADO (respaldo del bus)
     // ******************************************
 
-    _iniciarConsultaResultado(line, transactionId) {
+    _iniciarConsultaResultado(line, transactionId, primeraMs = OCA_CONSULTA_PRIMERA_MS) {
         this._detenerConsultaResultado(line);
         if (!line || !transactionId) {
             return;
@@ -324,7 +303,12 @@ export class PaymentOCA extends PaymentInterface {
         const inicio = Date.now();
         const consultar = async () => {
             line._ocaConsultaTimer = null;
-            if (line.cancelled || line._ocaResultadoProcesado || this.pending_oca_line() !== line) {
+            if (
+                line.cancelled ||
+                String(line.transaction_id) !== String(transactionId) ||
+                line._ocaResultadoProcesado === String(transactionId) ||
+                this.pending_oca_line() !== line
+            ) {
                 return;
             }
             try {
@@ -344,7 +328,7 @@ export class PaymentOCA extends PaymentInterface {
                 line._ocaConsultaTimer = setTimeout(consultar, OCA_CONSULTA_CADA_MS);
             }
         };
-        line._ocaConsultaTimer = setTimeout(consultar, OCA_CONSULTA_PRIMERA_MS);
+        line._ocaConsultaTimer = setTimeout(consultar, primeraMs);
     }
 
     _detenerConsultaResultado(line) {
@@ -370,10 +354,13 @@ export class PaymentOCA extends PaymentInterface {
             if (line.transaction_id && tid && String(line.transaction_id) !== tid) {
                 return;
             }
-            if (line._ocaResultadoProcesado) {
+            // La marca es del cobro, no de la línea: un reintento sobre la misma línea
+            // es otro cobro y su resultado se tiene que procesar.
+            const cobro = tid || String(line.transaction_id || "");
+            if (line._ocaResultadoProcesado === cobro) {
                 return;
             }
-            line._ocaResultadoProcesado = true;
+            line._ocaResultadoProcesado = cobro;
             this._detenerConsultaResultado(line);
         }
         return this.handleOCAStatusResponse(payload);

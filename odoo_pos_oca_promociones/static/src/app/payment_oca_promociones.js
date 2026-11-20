@@ -378,6 +378,15 @@ patch(PaymentOCA.prototype, {
     },
 
     /**
+     * Un reintento sobre la misma línea es otro cobro: la promoción se vuelve a evaluar
+     * con la tarjeta nueva (2026-11-20).
+     */
+    _ocaNuevoIntento(line, transactionId) {
+        super._ocaNuevoIntento(...arguments);
+        line.promotion_processed = false;
+    },
+
+    /**
      * Extiende handleOCAStatusResponse para detectar ResponseCode = 12 con datos de tarjeta
      */
     async handleOCAStatusResponse(payload) {
