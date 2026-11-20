@@ -504,9 +504,14 @@ patch(OrderReceipt.prototype, {
             // Los puntos de la venta reimpresa vienen del servidor
             // (pos.order._forum_puntos_del_ticket) y se cuentan igual que en el ticket original.
             let partnerCategoryIds = partner?.category_id || [];
+            //
+            // También cuando la orden viva ES la que se reimprime pero ya está cobrada
+            // (validación, Shop/1417: se vendió y se reimprimió enseguida, sin empezar otra
+            // venta): sus puntos en memoria ya no están y el bloque salía vacío. Con los datos
+            // del servidor, que son lo registrado, sale igual que en el ticket original.
+            const p = this.props.data?.reprint_loyalty || {};
             const esLaOrdenViva = !!(order && this.props.data?.name && this.props.data.name === order.name);
-            if (!esLaOrdenViva) {
-                const p = this.props.data?.reprint_loyalty || {};
+            if (!esLaOrdenViva || (p.card_id && order?.finalized)) {
                 liveLoyaltyStats = [];
                 liveDeductedPoints = [];
                 pointsLost = 0;
