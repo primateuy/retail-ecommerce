@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates id="template" xml:space="preserve">
+    <!-- La pantalla de reimpresión muestra el ticket con los datos del servidor (cliente, IVA,
+         CFE, puntos), los mismos que se imprimen (Forum, 2026-11-20). -->
+    <t t-name="odoo_pos_no_invoice.ReprintReceiptScreen" t-inherit="point_of_sale.ReprintReceiptScreen" t-inherit-mode="extension">
+        <xpath expr="//OrderReceipt" position="attributes">
+            <attribute name="data">datosDelRecibo</attribute>
+        </xpath>
+    </t>
+</templates>

@@ -89,6 +89,14 @@ patch(ReprintReceiptButton.prototype, {
             // Puntos de la venta reimpresa: la orden viva de la caja es otra (Forum, 2026-11-20).
             reprint_loyalty: receiptServerData?.reprint_loyalty || {},
         };
+        // Cliente, cajero y vendedor salen del servidor aunque la venta no tenga factura: si no,
+        // el ticket los tomaba de la orden viva de la caja («Cliente: Consumidor final»). Es lo
+        // que ya hace la reimpresión por QZ (buildReceiptPrintData).
+        for (const clave of ["legal_data", "adenda_data"]) {
+            if (receiptServerData?.[clave] && !receiptData[clave]) {
+                receiptData[clave] = receiptServerData[clave];
+            }
+        }
         if (!receiptServerData?.orderlines?.length) {
             receiptData.orderlines = baseReceiptData.orderlines;
         }
@@ -109,6 +117,16 @@ patch(ReprintReceiptButton.prototype, {
         // cuando ReprintReceiptScreen renderice OrderReceipt sin cfe_data en props.
         this.pos._reprintCfeData = cfeData;
         this.pos._reprintLoyalty = receiptData.reprint_loyalty;
+        // Los datos completos de la venta, para que ReprintReceiptScreen muestre e imprima
+        // el mismo ticket (Forum, 2026-11-20). Sin esto esa pantalla lo armaba sólo con lo que
+        // la caja tiene en memoria: sin puntos, «Cliente: Consumidor final» y sin la tabla de
+        // IVA. Es la pantalla que aparece cuando la impresora (QZ) no responde.
+        // Ya vienen cargados: que OrderReceipt no los vuelva a pedir con la orden viva de la caja
+        // (es otra) y los pise, como hacen las vías de impresión con QZ.
+        this.pos._reprintDatos = {
+            ticket: baseReceiptData.name,
+            data: { ...receiptData, _skipAsyncReload: true },
+        };
 
         (await this.printer.print(OrderReceipt, {
             data: receiptData,

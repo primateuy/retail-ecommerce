@@ -9,7 +9,7 @@
         Requiere el módulo custom_receipts_for_pos para funcionar correctamente.
     """,
     'category': 'Localization',
-    'version': '17.0.0.9',
+    'version': '17.0.0.10',
     'depends': ['base', 'base_setup', 'point_of_sale', 'custom_receipts_for_pos', 'odoo_pos_oca'],
     'data': [
         'views/res_config_settings_views.xml',
@@ -22,6 +22,7 @@
         'point_of_sale._assets_pos': [
             'odoo_pos_no_invoice/static/src/overrides/xml/ticket_screen_buttons.xml',
             'odoo_pos_no_invoice/static/src/overrides/xml/receipt_screen_templates.xml',
+            'odoo_pos_no_invoice/static/src/overrides/xml/reprint_receipt_screen.xml',
             'odoo_pos_no_invoice/static/src/overrides/components/payment_screen/payment_screen.js',
             'odoo_pos_no_invoice/static/src/overrides/components/receipt_screen/receipt_screen.js',
             'odoo_pos_no_invoice/static/src/overrides/printer/pos_printer_service.js',
