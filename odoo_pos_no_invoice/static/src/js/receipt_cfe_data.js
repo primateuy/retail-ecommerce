@@ -499,9 +499,37 @@ patch(OrderReceipt.prototype, {
                     ? (normalLoyalty.points.balance - normalLoyalty.points.spent - pointsLost)
                     : null);
 
+            // Reimpresión (Forum, 2026-11-20): la orden viva de la caja es OTRA —la nueva—,
+            // así que sus puntos no sirven (salían vacíos o, peor, los de la venta en curso).
+            // Los puntos de la venta reimpresa vienen del servidor
+            // (pos.order._forum_puntos_del_ticket) y se cuentan igual que en el ticket original.
+            let partnerCategoryIds = partner?.category_id || [];
+            const esLaOrdenViva = !!(order && this.props.data?.name && this.props.data.name === order.name);
+            if (!esLaOrdenViva) {
+                const p = this.props.data?.reprint_loyalty || {};
+                liveLoyaltyStats = [];
+                liveDeductedPoints = [];
+                pointsLost = 0;
+                loyaltyCurrentBalance = null;
+                isRefundOrMixedOrder = false;
+                partnerCategoryIds = p.partner_category_ids || [];
+                if (p.card_id) {
+                    isRefundOrMixedOrder = !!p.es_devolucion;
+                    if (isRefundOrMixedOrder) {
+                        pointsLost = p.antes - p.despues;
+                        liveDeductedPoints = [{lostPoint: pointsLost, newPoint: p.despues}];
+                        loyaltyCurrentBalance = p.despues;
+                    } else {
+                        liveLoyaltyStats = [{points: {
+                            won: p.generados, spent: p.canjeados, balance: p.despues, total: p.despues,
+                        }}];
+                        loyaltyCurrentBalance = p.despues - p.canjeados;
+                    }
+                }
+            }
+
             // Excluir categorías que no acumulan puntos (ej: Consumidor final, Empleado).
             // partner.category_id en POS es un array de IDs (campo many2many).
-            const partnerCategoryIds = partner?.category_id || [];
             const excludedCategoryIds = [1, 2];
             loyaltyVisible = !!(
                 (liveLoyaltyStats.length || liveDeductedPoints.length) &&

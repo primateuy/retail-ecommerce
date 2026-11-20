@@ -19,10 +19,12 @@ patch(ReprintReceiptScreen.prototype, {
         // estirado que no lee la pistola.
         const barcode = this.pos._reprintBarcode || false;
         const baseData = this.props.order.export_for_printing();
+        // Puntos de la venta reimpresa, que trajo reprint_receipt_button (Forum, 2026-11-20).
+        const reprintLoyalty = this.pos._reprintLoyalty || {};
         this.printer.print(
             OrderReceipt,
             {
-                data: { ...baseData, cfe_data: cfeData, barcode },
+                data: { ...baseData, cfe_data: cfeData, barcode, reprint_loyalty: reprintLoyalty },
                 formatCurrency: this.env.utils.formatCurrency,
             },
             { webPrintFallback: true }

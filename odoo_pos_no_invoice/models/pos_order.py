@@ -495,6 +495,58 @@ class PosOrder(models.Model):
             'is_receptor': is_receptor and bool(partner.vat),
         }
 
+    def _forum_puntos_del_ticket(self):
+        """Puntos de lealtad de la venta, para reimprimir el ticket.
+
+        Al imprimir después de cobrar, el ticket toma los puntos de la orden viva de la caja
+        (`getLoyaltyPoints()`). Al reimprimir, la orden viva es otra —la nueva, vacía— y los
+        puntos no salían (Forum, 2026-11-20). Odoo 17 no guarda los puntos de cada venta, pero
+        `loyalty.card.points` tiene seguimiento: el cambio de saldo queda en un mensaje de la
+        tarjeta creado en la misma transacción que la orden (misma `create_date`, verificado en
+        validación). De ahí salen el saldo antes y después.
+
+        Devuelve {} si no hay cliente, tarjeta de lealtad o registro del cambio (por ejemplo,
+        saldos cargados por SQL): el ticket sale sin el bloque de puntos, como hasta ahora.
+        """
+        self.ensure_one()
+        if 'loyalty.card' not in self.env or not self.partner_id or not self.create_date:
+            return {}
+        tarjetas = self.env['loyalty.card'].sudo().search([
+            ('partner_id', '=', self.partner_id.id),
+            ('program_id.program_type', '=', 'loyalty'),
+        ])
+        campo = self.env['ir.model.fields'].sudo()._get('loyalty.card', 'points')
+        if not tarjetas or not campo:
+            return {}
+        Tracking = self.env['mail.tracking.value'].sudo()
+        dominio = [
+            ('field_id', '=', campo.id),
+            ('mail_message_id.model', '=', 'loyalty.card'),
+            ('mail_message_id.res_id', 'in', tarjetas.ids),
+        ]
+        cambios = Tracking.search(dominio + [('mail_message_id.create_date', '=', self.create_date)],
+                                  order='id')
+        if not cambios:
+            return {}
+        tarjeta_id = cambios[0].mail_message_id.res_id
+        cambios = cambios.filtered(lambda v: v.mail_message_id.res_id == tarjeta_id)
+        antes = cambios[0].old_value_float or 0.0
+        despues = cambios[-1].new_value_float or 0.0
+        canjeados = 0.0
+        if 'points_cost' in self.lines._fields and 'coupon_id' in self.lines._fields:
+            canjeados = sum(self.lines.filtered(lambda l: l.coupon_id.id == tarjeta_id).mapped('points_cost'))
+        es_devolucion = self.amount_total < 0 or bool(
+            'refunded_orderline_id' in self.lines._fields and self.lines.filtered('refunded_orderline_id'))
+        return {
+            'card_id': tarjeta_id,
+            'antes': antes,
+            'despues': despues,
+            'generados': round(despues - antes + canjeados, 2),
+            'canjeados': round(canjeados, 2),
+            'es_devolucion': es_devolucion,
+            'partner_category_ids': self.partner_id.category_id.ids,
+        }
+
     @api.model
     def get_receipt_data_from_invoice_or_order(self, ids, account_move_id, order_reference, order_id=None):
         """
@@ -846,5 +898,15 @@ class PosOrder(models.Model):
                 for group_list in groups_by_subtotal.values():
                     for group in group_list:
                         receipt_data['tax_details'].append(self._receipt_tax_detail_vals(group))
+
+        # Puntos de lealtad de esta venta, para la reimpresión (ver _forum_puntos_del_ticket).
+        # Un error acá no puede dejar el ticket sin datos legales: se imprime sin los puntos.
+        if pos_order:
+            try:
+                receipt_data['reprint_loyalty'] = pos_order._forum_puntos_del_ticket()
+            except Exception:
+                _logger.exception("Ticket %s: no se pudieron leer los puntos para la reimpresión",
+                                  pos_order.name)
+                receipt_data['reprint_loyalty'] = {}
 
         return receipt_data

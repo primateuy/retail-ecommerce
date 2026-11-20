@@ -86,6 +86,8 @@ patch(ReprintReceiptButton.prototype, {
                 ? receiptServerData
                 : {}),
             cfe_data: cfeData,
+            // Puntos de la venta reimpresa: la orden viva de la caja es otra (Forum, 2026-11-20).
+            reprint_loyalty: receiptServerData?.reprint_loyalty || {},
         };
         if (!receiptServerData?.orderlines?.length) {
             receiptData.orderlines = baseReceiptData.orderlines;
@@ -106,6 +108,7 @@ patch(ReprintReceiptButton.prototype, {
         // Guardar CFE data en el store para que _loadReceiptData lo use
         // cuando ReprintReceiptScreen renderice OrderReceipt sin cfe_data en props.
         this.pos._reprintCfeData = cfeData;
+        this.pos._reprintLoyalty = receiptData.reprint_loyalty;
 
         (await this.printer.print(OrderReceipt, {
             data: receiptData,
