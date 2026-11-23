@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="res_config_settings_view_form_inherit_fenicio" model="ir.ui.view">
+        <field name="name">res.config.settings.view.form.inherit.fenicio</field>
+        <field name="model">res.config.settings</field>
+        <field name="inherit_id" ref="base_setup.res_config_settings_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//app[@name='general_settings']" position="inside">
+                <block title="Fenicio - Canje de puntos" name="fenicio_canje_setting_container">
+                    <setting string="Máximo de puntos por canje"
+                             help="Puntos que un cliente puede canjear en una sola solicitud. 0 = sin límite.">
+                        <field name="fenicio_canje_max_points"/>
+                    </setting>
+                    <setting string="Valor del punto"
+                             help="Monto que descuenta cada punto canjeado.">
+                        <field name="fenicio_canje_point_value"/>
+                    </setting>
+                    <setting string="Monto mínimo de compra"
+                             help="Monto mínimo para usar el cupón. 0 = sin mínimo.">
+                        <field name="fenicio_canje_min_amount"/>
+                    </setting>
+                    <setting string="Días de vigencia del cupón">
+                        <field name="fenicio_canje_validity_days"/>
+                    </setting>
+                    <setting>
+                        <field name="fenicio_canje_free_shipping"/>
+                    </setting>
+                    <setting>
+                        <field name="fenicio_canje_acumula_desc_producto"/>
+                    </setting>
+                    <setting>
+                        <field name="fenicio_canje_acumula_dmp"/>
+                    </setting>
+                </block>
+            </xpath>
+        </field>
+    </record>
+</odoo>
