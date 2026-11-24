@@ -4,8 +4,8 @@
     'summary': """INTEGRACION FENICIO""",
     'description': """INTEGRACION FENICIO""",
     'category': 'Localization',
-    'version': '17.0.0.0.5',
-    'depends': ['base', 'sale', 'sale_management', 'account', 'stock', 'delivery', 'product_brand', 'payment', 'website_sale', 'website_sale_stock', 'contacts', 'l10n_uy_einvoice_base', 'partner_contact_gender', 'loyalty', 'sale_loyalty', 'base_setup', 'sale_order_type'],
+    'version': '17.0.0.0.6',
+    'depends': ['base', 'sale', 'sale_management', 'account', 'stock', 'delivery', 'product_brand', 'payment', 'website_sale', 'website_sale_stock', 'contacts', 'l10n_uy_einvoice_base', 'partner_contact_gender', 'loyalty', 'sale_loyalty', 'sale_order_type'],
     'data': [
         'security/ir.model.access.csv',
         'views/product_attribute_views.xml',
@@ -28,7 +28,6 @@
         'views/l10n_latam_identification_type_views.xml',
         'views/fenicio_catalog_line_views.xml',
         'views/fenicio_catalog_export_view.xml',
-        'views/res_config_settings_views.xml',
     ],
     'license': 'LGPL-3',
 }

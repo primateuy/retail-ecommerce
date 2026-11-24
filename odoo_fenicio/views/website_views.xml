@@ -22,6 +22,20 @@
                             <field name="fenicio_stock_location_ids" widget="many2many_tags"/>
                         </group>
                     </group>
+                    <group string="Canje de puntos">
+                        <group>
+                            <field name="fenicio_canje_min_points"/>
+                            <field name="fenicio_canje_max_points"/>
+                            <field name="fenicio_canje_point_value"/>
+                            <field name="fenicio_canje_min_amount"/>
+                            <field name="fenicio_canje_validity_days"/>
+                        </group>
+                        <group>
+                            <field name="fenicio_canje_free_shipping"/>
+                            <field name="fenicio_canje_acumula_desc_producto"/>
+                            <field name="fenicio_canje_acumula_dmp"/>
+                        </group>
+                    </group>
                     <group string="Catálogo" col="1">
                         <div class="d-flex gap-2 flex-wrap mt-1 mb-2">
                             <button name="action_open_catalog_sync"

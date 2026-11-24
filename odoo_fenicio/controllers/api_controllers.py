@@ -189,11 +189,10 @@ class ApiController(http.Controller):
         id_solicitud = ''
         json_data = {}
         try:
-            self._authenticate_and_setup_env()
+            website = self._authenticate_and_setup_env()
             json_data = self.get_json_data()
             id_solicitud = json_data['_idSolicitud']
-            response_data = request.env['api.internal'].canjear_puntos(
-                json_data, self._get_fenicio_company())
+            response_data = request.env['api.internal'].canjear_puntos(json_data, website)
             return self.build_response(
                 id_solicitud, response_data, mensaje='Canje exitoso.',
                 endpoint='/canjepuntos', request_data=json_data, keep_false=True)

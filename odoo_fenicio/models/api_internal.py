@@ -306,24 +306,25 @@ class ApiInternal(models.Model):
     
 
     @api.model
-    def canjear_puntos(self, json_data, company):
+    def canjear_puntos(self, json_data, website):
         """Descuenta puntos de la tarjeta de lealtad y devuelve las condiciones del cupón.
 
         Fenicio crea el cupón de descuento con los datos de la respuesta. El valor,
-        el mínimo, la vigencia y los flags salen de la configuración de canje de la
-        compañía (Ajustes generales > Fenicio - Canje de puntos).
+        el mínimo, la vigencia y los flags salen de la configuración de canje del
+        sitio web (Ajustes > Sitio web > pestaña Fenicio).
 
         Args:
             json_data (dict): body de Fenicio con 'numeroDocumento' y 'puntos'.
-            company (res.company): compañía dueña del token de Fenicio.
+            website (website): sitio web dueño del token de Fenicio.
 
         Returns:
             dict: 'data' de la respuesta exitosa según la documentación de Fenicio.
 
         Raises:
-            UserError: si faltan datos, los puntos no son válidos, superan el máximo
-                configurado o el cliente no tiene saldo suficiente. El controlador
-                lo devuelve como status 'ERROR' con el texto en 'mensaje'.
+            UserError: si faltan datos, los puntos no son válidos, el cliente no
+                llega al mínimo configurado, pide canjear menos del mínimo, más del
+                máximo o más de lo que tiene. El controlador lo devuelve como status 'ERROR' con el
+                texto en 'mensaje'.
         """
         if not json_data.get('numeroDocumento') or json_data.get('puntos') in (None, ''):
             raise UserError(_("Los campos 'numeroDocumento' y 'puntos' son obligatorios."))
@@ -335,10 +336,6 @@ class ApiInternal(models.Model):
         if puntos <= 0:
             raise UserError(_("La cantidad de puntos a canjear debe ser mayor a cero."))
 
-        max_points = company.fenicio_canje_max_points
-        if max_points and puntos > max_points:
-            raise UserError(_("No se pueden canjear más de %s puntos por canje.", max_points))
-
         partner = self.env['res.partner'].search(
             [('vat', '=', json_data['numeroDocumento'])], limit=1)
         if not partner:
@@ -347,29 +344,38 @@ class ApiInternal(models.Model):
         loyalty_card = self.env['loyalty.card'].search([('partner_id', '=', partner.id)], limit=1)
         if not loyalty_card:
             raise UserError(_("El usuario no tiene una tarjeta de lealtad."))
+        # El saldo se controla antes que el pedido: con menos del mínimo no hay canje posible.
+        min_points = website.fenicio_canje_min_points
+        if loyalty_card.points < min_points:
+            raise UserError(_("Debe tener al menos %s puntos para canjear.", min_points))
+        if puntos < min_points:
+            raise UserError(_("No se puede canjear menos de %s puntos.", min_points))
+        max_points = website.fenicio_canje_max_points
+        if max_points and puntos > max_points:
+            raise UserError(_("No se puede canjear más de %s puntos.", max_points))
         if loyalty_card.points < puntos:
-            raise UserError(_("Puntos insuficientes."))
+            raise UserError(_("No tiene puntos suficientes."))
 
         loyalty_card.points -= puntos
 
         # Fenicio espera las fechas en hora local y los montos como texto.
         valido_desde = datetime.now(pytz.timezone('America/Montevideo'))
-        valido_hasta = (valido_desde + timedelta(days=company.fenicio_canje_validity_days)).replace(
+        valido_hasta = (valido_desde + timedelta(days=website.fenicio_canje_validity_days)).replace(
             hour=23, minute=59, second=0)
         return {
             'puntosRestantes': str(int(loyalty_card.points)),
             'tipodescuento': 'montofijo',
-            'valordescuento': self._format_monto_canje(puntos * company.fenicio_canje_point_value),
+            'valordescuento': self._format_monto_canje(puntos * website.fenicio_canje_point_value),
             # M1 es la moneda local del comercio en Fenicio (M2 la secundaria).
             'monedadescuento': 'M1',
-            'montominimo': self._format_monto_canje(company.fenicio_canje_min_amount),
+            'montominimo': self._format_monto_canje(website.fenicio_canje_min_amount),
             'grupos': '',
             'descripcion': _("Canje de %s puntos", puntos),
             'validodesde': valido_desde.strftime('%Y-%m-%d %H:%M:%S'),
             'validohasta': valido_hasta.strftime('%Y-%m-%d %H:%M:%S'),
-            'enviogratis': company.fenicio_canje_free_shipping,
-            'acumuladescproducto': company.fenicio_canje_acumula_desc_producto,
-            'acumuladmp': company.fenicio_canje_acumula_dmp,
+            'enviogratis': website.fenicio_canje_free_shipping,
+            'acumuladescproducto': website.fenicio_canje_acumula_desc_producto,
+            'acumuladmp': website.fenicio_canje_acumula_dmp,
         }
 
     @api.model
