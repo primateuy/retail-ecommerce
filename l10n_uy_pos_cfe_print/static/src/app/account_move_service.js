@@ -7,6 +7,10 @@ import { patch } from "@web/core/utils/patch";
 // el PDF estándar de Odoo.
 patch(AccountMoveService.prototype, {
     async downloadPdf(accountMoveId, target = "download") {
+        // Sin «Descargar factura FE» en la caja, la factura sale como en Odoo estándar.
+        if (!this.env.services.pos?.config?.download_invoice_fe) {
+            return super.downloadPdf(accountMoveId, target);
+        }
         const downloadAction = await this.orm.call(
             "account.move",
             "action_pos_download_cfe_pdf",

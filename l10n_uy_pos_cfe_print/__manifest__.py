@@ -2,22 +2,29 @@
 	'name': "Uruguay - PdV: imprimir CFE de Uruware",
 	'summary': "El PdV descarga el PDF oficial del CFE (Uruware) en lugar del reporte de Odoo",
 	'description': """
-Al validar una venta facturada en el Punto de Venta, o al reimprimir la factura desde la
-lista de pedidos, se descarga la representación impresa del CFE que devuelve Uruware
-(formato A4 o rollo según el punto de emisión). Si el CFE no fue emitido, se mantiene
-el PDF estándar de Odoo.
+Con «Descargar factura FE» activo en la caja (Ajustes del PdV, activo por defecto), el PdV
+usa la representación impresa del CFE que devuelve Uruware (A4 o rollo según el punto de
+emisión) en lugar de la factura y el recibo de Odoo:
+	- Descarga de la factura al validar la venta y botón de factura de la lista de pedidos.
+	- Recibo de la pantalla de pago exitoso.
+	- «Imprimir recibo completo».
+Si el CFE no fue emitido o Uruware falla, se mantiene lo estándar de Odoo. Con el check
+desactivado, el PdV se comporta como Odoo estándar.
 	""",
 	'author': "Primate",
 	'website': "https://primate.uy",
 	'category': 'Sales/Point of Sale',
-	'version': '19.0.1.0.2',
+	'version': '19.0.1.1.0',
 	'depends': [
 		'l10n_uy_einvoice_uruware',
 		'point_of_sale',
 	],
+	'data': [
+		'views/res_config_settings_views.xml',
+	],
 	'assets': {
 		'point_of_sale._assets_pos': [
-			'l10n_uy_pos_cfe_print/static/src/app/account_move_service.js',
+			'l10n_uy_pos_cfe_print/static/src/app/**/*',
 		],
 	},
 	'license': 'LGPL-3',

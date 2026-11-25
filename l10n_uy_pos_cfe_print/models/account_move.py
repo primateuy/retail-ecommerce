@@ -54,6 +54,25 @@ class AccountMove(models.Model):
 			'target': target,
 		}
 
+	def get_pos_cfe_pdf_url(self):
+		"""URL para mostrar o imprimir en el PdV el PDF del CFE de Uruware.
+
+		Se usa en el panel del recibo y en «Imprimir recibo completo»; a diferencia de la
+		descarga, el PDF se sirve en línea para que el navegador lo muestre o lo imprima.
+
+		Returns:
+			str|bool: ``/web/content/<id>`` del adjunto, o False si el CFE no fue emitido
+				o Uruware no devolvió el PDF (el PdV usa entonces el recibo de Odoo).
+
+		Efectos colaterales:
+			La primera vez pide el PDF a Uruware y lo guarda como adjunto de la factura.
+		"""
+		self.ensure_one()
+		if not self.cfe_emitido:
+			return False
+		attachment = self._get_pos_cfe_pdf_attachment()
+		return f'/web/content/{attachment.id}' if attachment else False
+
 	def _get_pos_cfe_pdf_attachment(self):
 		"""Devuelve el adjunto con el PDF del CFE, pidiéndolo a Uruware si no existe.
 
