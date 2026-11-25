@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="res_partner_view_form_pos_fe_max_amount" model="ir.ui.view">
+        <field name="name">res.partner.form.pos.fe.max.amount</field>
+        <field name="model">res.partner</field>
+        <field name="inherit_id" ref="base.view_partner_form" />
+        <field name="arch" type="xml">
+            <xpath expr="//notebook" position="inside">
+                <page name="pos_fe_max_amount" string="Control FE">
+                    <group>
+                        <group>
+                            <field name="pos_fe_amount_limit_control" />
+                        </group>
+                        <group invisible="not pos_fe_amount_limit_control">
+                            <field
+                                name="pos_fe_max_amount_currency_id"
+                                required="pos_fe_amount_limit_control"
+                                options="{'no_create': True}"
+                            />
+                            <field
+                                name="pos_fe_max_amount"
+                                required="pos_fe_amount_limit_control"
+                            />
+                            <field name="pos_fe_company_currency_id" invisible="1" />
+                            <field name="pos_fe_max_amount_company_currency" />
+                            <div colspan="2" class="text-muted">
+                                Los montos son sin IVA: el POS los compara contra el
+                                total de la venta sin impuestos.
+                            </div>
+                        </group>
+                    </group>
+                </page>
+            </xpath>
+        </field>
+    </record>
+</odoo>
