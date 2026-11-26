@@ -4,22 +4,21 @@ import { download } from "@web/core/network/download";
 import { patch } from "@web/core/utils/patch";
 
 // Tanto la descarga automática al validar la venta como el botón de factura de la lista
-// de pedidos pasan por downloadPdf; el servidor decide si devuelve el CFE de Uruware o
-// el PDF estándar de Odoo.
+// de pedidos pasan por downloadPdf.
 patch(AccountMoveService.prototype, {
     async downloadPdf(accountMoveId, target = "download") {
+        const pos = this.env.services.pos;
         // Sin «Descargar factura FE» en la caja, la factura sale como en Odoo estándar.
-        if (!this.env.services.pos?.config?.download_invoice_fe) {
+        if (!pos?.config?.download_invoice_fe) {
             return super.downloadPdf(accountMoveId, target);
         }
-        const downloadAction = await this.orm.call(
-            "account.move",
-            "action_pos_download_cfe_pdf",
-            [accountMoveId, target]
-        );
-        if (!downloadAction) {
-            // Uruware no devolvió el PDF: se avisa y la venta sigue; no se cae a la
-            // descarga estándar porque con FE activa también llama a Uruware y falla.
+        const cfePdf = await pos.getCfePdf(accountMoveId);
+        if (!cfePdf.cfe_emitido) {
+            return super.downloadPdf(accountMoveId, target);
+        }
+        if (!cfePdf.url) {
+            // Uruware no devolvió el PDF: no se cae a la descarga estándar porque con FE
+            // activa también llama a Uruware y termina en error de servidor.
             this.env.services.notification.add(
                 _t(
                     "No se pudo obtener el PDF de la factura desde Uruware. La venta quedó facturada; podés reimprimirla desde Órdenes."
@@ -28,12 +27,12 @@ patch(AccountMoveService.prototype, {
             );
             return;
         }
-        if (target === "download" && downloadAction.url) {
-            // doAction abre la URL con window.open, y tras la espera a Uruware el navegador
-            // ya no lo asocia al clic del cajero y bloquea la ventana emergente.
-            await download({ url: downloadAction.url, data: {} });
+        if (target === "download") {
+            // doAction abriría la URL con window.open y, tras la espera a Uruware, el
+            // navegador la bloquea como ventana emergente.
+            await download({ url: `${cfePdf.url}&download=true`, data: {} });
             return;
         }
-        await this.action.doAction(downloadAction);
+        await this.action.doAction({ type: "ir.actions.act_url", url: cfePdf.url, target });
     },
 });

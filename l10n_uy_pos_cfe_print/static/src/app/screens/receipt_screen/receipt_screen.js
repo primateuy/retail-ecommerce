@@ -5,7 +5,7 @@ import { patch } from "@web/core/utils/patch";
 patch(ReceiptScreen.prototype, {
     setup() {
         super.setup(...arguments);
-        // Mientras llega el PDF de Uruware se muestra el recibo de Odoo.
+        // Mientras llega el PDF de Uruware (o si no llega) se muestra el recibo de Odoo.
         this.cfePdf = useState({ url: false });
         onMounted(async () => {
             this.cfePdf.url = await this.pos.getCfePdfUrl(this.currentOrder);
