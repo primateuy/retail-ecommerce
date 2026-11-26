@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates id="template" xml:space="preserve">
+
+    <t t-name="product_price_on_pos.ProductCard"
+        t-inherit="point_of_sale.ProductCard"
+        t-inherit-mode="extension">
+        <!-- Fuera de los popups de combo: ahí el precio extra ya se muestra aparte. -->
+        <xpath expr="//div[hasclass('product-content')]" position="before">
+            <div t-if="!props.isComboPopup and productCardPrice"
+                class="product-price px-2 pt-1 fw-bolder text-primary text-end lh-1"
+                style="font-size: 0.85rem;"
+                t-esc="productCardPrice"/>
+        </xpath>
+    </t>
+
+</templates>
