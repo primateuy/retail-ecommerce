@@ -1,0 +1,55 @@
+# Translation of Odoo Server.
+# This file contains the translation of the following modules:
+# 	* pos_uy_limite_ui
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: Odoo Server 19.0\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-11-25 12:00+0000\n"
+"PO-Revision-Date: 2026-11-25 12:00+0000\n"
+"Last-Translator: \n"
+"Language-Team: \n"
+"Language: es_UY\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: \n"
+"Plural-Forms: \n"
+
+#. module: pos_uy_limite_ui
+#. odoo-python
+#: code:addons/pos_uy_limite_ui/models/pos_order.py:0
+msgid "PURCHASE OVER %(limit)s"
+msgstr "COMPRA MAYOR A %(limit)s"
+
+#. module: pos_uy_limite_ui
+#. odoo-python
+#: code:addons/pos_uy_limite_ui/models/pos_order.py:0
+msgid ""
+"The sale total without VAT is over %(limit)s. The customer must be "
+"identified: select a customer with a valid document."
+msgstr ""
+"El total de la venta sin IVA es mayor a %(limit)s. Se necesita identificar "
+"al cliente: cargue un cliente con documento válido."
+
+#. module: pos_uy_limite_ui
+#. odoo-javascript
+#: code:addons/pos_uy_limite_ui/static/src/app/services/pos_store.js:0
+msgid "Select customer"
+msgstr "Seleccionar cliente"
+
+#. module: pos_uy_limite_ui
+#. odoo-javascript
+#: code:addons/pos_uy_limite_ui/static/src/app/services/pos_store.js:0
+msgid "Back"
+msgstr "Volver"
+
+#. module: pos_uy_limite_ui
+#: model:ir.model.fields,field_description:pos_uy_limite_ui.field_pos_config__ui_limit_enabled
+msgid "Control monto maximo FE"
+msgstr "Control monto máximo FE"
+
+#. module: pos_uy_limite_ui
+#: model_terms:ir.ui.view,arch_db:pos_uy_limite_ui.res_partner_view_form_pos_fe_max_amount
+msgid "Control FE"
+msgstr "Control FE"
