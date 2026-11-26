@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates id="template" xml:space="preserve">
+    <t t-name="l10n_uy_pos_cfe_print.ReceiptScreen" t-inherit="point_of_sale.ReceiptScreen" t-inherit-mode="extension">
+        <xpath expr="//div[hasclass('pos-receipt-container')]/div" position="attributes">
+            <attribute name="t-if">!cfePdf.url</attribute>
+        </xpath>
+        <xpath expr="//div[hasclass('pos-receipt-container')]/div" position="after">
+            <iframe t-else="" class="pos-cfe-pdf-preview w-100 m-2 m-lg-3 border rounded bg-white"
+                    t-att-src="cfePdf.url" title="Factura CFE"/>
+        </xpath>
+    </t>
+</templates>
