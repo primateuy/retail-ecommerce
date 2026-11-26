@@ -28,13 +28,23 @@
                             <field name="fenicio_canje_max_points"/>
                             <field name="fenicio_canje_point_value"/>
                             <field name="fenicio_canje_min_amount"/>
-                            <field name="fenicio_canje_validity_days"/>
+                            <field name="fenicio_canje_currency"/>
+                            <field name="fenicio_canje_date_start"/>
+                            <field name="fenicio_canje_date_end"/>
                         </group>
                         <group>
                             <field name="fenicio_canje_free_shipping"/>
                             <field name="fenicio_canje_acumula_desc_producto"/>
                             <field name="fenicio_canje_acumula_dmp"/>
                         </group>
+                    </group>
+                    <group string="Cupones" col="1">
+                        <div class="d-flex gap-2 flex-wrap mt-1 mb-2">
+                            <button name="action_open_coupons"
+                                    string="Cupones Fenicio"
+                                    type="object"
+                                    class="btn btn-primary"/>
+                        </div>
                     </group>
                     <group string="Catálogo" col="1">
                         <div class="d-flex gap-2 flex-wrap mt-1 mb-2">

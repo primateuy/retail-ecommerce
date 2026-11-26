@@ -200,6 +200,40 @@ class ApiController(http.Controller):
             request.env.cr.rollback()
             return self.build_response(id_solicitud, None, status='ERROR', mensaje=str(e), endpoint='/canjepuntos', request_data=json_data)
 
+    @http.route('/cupon', type='http', auth='none', cors="*", csrf=False, methods=['GET'])
+    def consumir_cupon(self):
+        """Devuelve a Fenicio las condiciones del cupón externo que ingresó el cliente.
+
+        La documentación de cupones externos no incluye '_idSolicitud' en el request,
+        así que se toma si viene pero no se exige. Los flags booleanos se mandan como
+        false (keep_false) y las fechas sin cargar como null, como pide Fenicio.
+
+        Returns:
+            Response: JSON con status 'OK' y el cupón en 'data', o 'ERROR' con data null.
+        """
+        id_solicitud = ''
+        json_data = {}
+        try:
+            website = self._authenticate_and_setup_env()
+            http_data = request.httprequest.get_data()
+            try:
+                json_data = json.loads(http_data) if http_data else dict(request.params)
+            except ValueError:
+                raise Exception('Invalid JSON data: %r' % (http_data,))
+            id_solicitud = json_data.get('_idSolicitud', '')
+            if not json_data.get('codigocupon'):
+                raise Exception("El campo 'codigocupon' es obligatorio.")
+            coupon = request.env['fenicio.coupon']._get_fenicio_coupon(
+                website, str(json_data['codigocupon']).strip())
+            return self.build_response(
+                id_solicitud, coupon._get_fenicio_data(), mensaje='Cupón procesado con éxito',
+                endpoint='/cupon', request_data=json_data, keep_false=True)
+        except Exception as e:
+            request.env.cr.rollback()
+            return self.build_response(
+                id_solicitud, None, status='ERROR', mensaje=str(e), endpoint='/cupon',
+                request_data=json_data)
+
     @http.route('/usuario', type="http", auth='none', cors="*", csrf=False, methods=['POST'])
     def crear_usuario(self):
         id_solicitud = ''

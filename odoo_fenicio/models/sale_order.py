@@ -23,6 +23,25 @@ class SaleOrder(models.Model):
     fecha_cancelada = fields.Datetime('Fecha Cancelada')
     observaciones = fields.Text('Observaciones')
     estado = fields.Char('Estado')
+    fenicio_coupon_codes = fields.Char(
+        string='Cupones Fenicio',
+        readonly=True,
+        help='Códigos de los cupones que Fenicio informó en los descuentos de la orden '
+             '(origen CUPON), incluidos los cupones del canje de puntos.',
+    )
+    fenicio_coupon_discount = fields.Monetary(
+        string='Descuento por cupón',
+        currency_field='currency_id',
+        readonly=True,
+    )
+    fenicio_coupon_ids = fields.Many2many(
+        'fenicio.coupon',
+        relation='fenicio_coupon_sale_order_rel',
+        column1='sale_order_id',
+        column2='coupon_id',
+        string='Cupones usados',
+        readonly=True,
+    )
 
     def _add_points_for_coupon(self, coupon_points):
         """Acredita puntos de lealtad sin decimales en las órdenes de Fenicio.
@@ -239,6 +258,8 @@ class SaleOrder(models.Model):
             lines = []
             # Precios calculados por índice de línea para aplicar después de crear la orden
             precios_por_linea = []
+            coupon_codes = []
+            coupon_discount = 0.0
 
             if self.id and len(self.order_line) != 0:
                 self.write({'order_line': [(5,)]})
@@ -282,11 +303,24 @@ class SaleOrder(models.Model):
                                     product_id.default_code, str(e)
                                 )
 
+                        # Fenicio informa cada descuento como monto por unidad de la línea.
+                        descuentos_cupon = [d for d in descuentos if d.get('origen') == 'CUPON']
                         if precio_unitario is None:
                             precio_unitario = precio_fenicio
                             if descuentos:
                                 total_descuentos = sum(d.get('monto', 0) for d in descuentos)
                                 precio_unitario = max(0, precio_unitario - total_descuentos)
+                        elif descuentos_cupon:
+                            # FIX [#3899]: con precio de tarifa se descartaban todos los descuentos y el
+                            # pedido quedaba sin el cupón que Fenicio ya había cobrado. Sólo se
+                            # resta el cupón: la tarifa ya refleja los descuentos de producto.
+                            precio_unitario = max(0, precio_unitario - sum(
+                                d.get('monto', 0) for d in descuentos_cupon))
+                        for descuento in descuentos_cupon:
+                            codigo = str(descuento.get('codigo') or '').strip()
+                            if codigo and codigo not in coupon_codes:
+                                coupon_codes.append(codigo)
+                            coupon_discount += descuento.get('monto', 0) * line_data['cantidad']
 
                         # Crear línea solo con producto y cantidad para que Odoo cargue
                         # impuestos y defaults nativamente via onchange
@@ -363,6 +397,13 @@ class SaleOrder(models.Model):
                 'type_id': sale_order_type_id.id if sale_order_type_id else False,
                 'website_id': fenicio_website.id,
                 'carrier_id': carrier.id,
+                'fenicio_coupon_codes': ', '.join(coupon_codes) or False,
+                'fenicio_coupon_discount': coupon_discount,
+                'fenicio_coupon_ids': [(6, 0, self.env['fenicio.coupon'].with_context(
+                    active_test=False).search([
+                        ('website_id', '=', fenicio_website.id),
+                        ('code', 'in', coupon_codes),
+                    ]).ids)],
             }
             if sale_order_type_id and sale_order_type_id.warehouse_id:
                 vals['warehouse_id'] = sale_order_type_id.warehouse_id.id
