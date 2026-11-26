@@ -25,29 +25,30 @@ class AccountMove(models.Model):
 		"""Devuelve la acción para descargar la factura desde el PdV.
 
 		Si el CFE fue emitido, descarga su representación impresa de Uruware
-		(A4 o rollo según el punto de emisión). La primera vez la pide con
-		``obtener_pdf`` y guarda el adjunto; las siguientes reutiliza ese adjunto. Si el
-		CFE no fue emitido, o Uruware falla, devuelve la descarga estándar de Odoo para
-		que el cajero no se quede sin comprobante.
+		(A4 o rollo según el punto de emisión), reutilizando el PDF que la localización
+		ya guardó al firmar. Si el CFE no fue emitido, devuelve la descarga estándar de
+		Odoo.
 
 		Args:
 			target (str): Destino de la acción URL (``download``, ``_blank``, ...).
 
 		Returns:
-			dict: Acción ``ir.actions.act_url``.
+			dict|bool: Acción ``ir.actions.act_url``, o False si el CFE fue emitido pero
+				Uruware no devolvió el PDF.
 
 		Efectos colaterales:
-			La primera descarga crea un ``ir.attachment`` con el PDF en la factura y lo
-			guarda en ``pos_cfe_pdf_attachment_id``.
+			Si la factura todavía no tiene el PDF, lo pide a Uruware y guarda el adjunto en
+			``pos_cfe_pdf_attachment_id``.
 		"""
 		self.ensure_one()
 		if not self.cfe_emitido:
 			return self.action_invoice_download_pdf(target)
-		# Cada llamada a obtener_pdf crea un adjunto nuevo; los duplicados rompen a quien
-		# después busca "el" adjunto de la factura (send_mail_invoice de pos_invoice_auto_check).
 		attachment = self._get_pos_cfe_pdf_attachment()
 		if not attachment:
-			return self.action_invoice_download_pdf(target)
+			# Con FE activa la descarga estándar también pide el PDF a Uruware y, si Uruware
+			# no responde, termina en error de servidor y deja al PdV en la pantalla de pago
+			# con la venta ya facturada. El PdV avisa y la factura se reimprime desde Órdenes.
+			return False
 		return {
 			'type': 'ir.actions.act_url',
 			'url': f'/web/content/{attachment.id}?download=true',
@@ -76,13 +77,19 @@ class AccountMove(models.Model):
 	def _get_pos_cfe_pdf_attachment(self):
 		"""Devuelve el adjunto con el PDF del CFE, pidiéndolo a Uruware si no existe.
 
+		Antes de llamar a Uruware busca el PDF que ``l10n_uy_einvoice_uruware`` ya guarda
+		al firmar el CFE, así no se pide dos veces ni se duplica el adjunto.
+
 		Returns:
 			ir.attachment: El adjunto, o un recordset vacío si Uruware no lo devolvió.
 		"""
 		self.ensure_one()
 		if self.pos_cfe_pdf_attachment_id.exists():
 			return self.pos_cfe_pdf_attachment_id
-		attachment = self.env['ir.attachment']
+		attachment = self._find_uruware_pdf_attachment()
+		if attachment:
+			self.sudo().pos_cfe_pdf_attachment_id = attachment
+			return attachment
 		try:
 			action = self.obtener_pdf()
 		except Exception:
@@ -99,3 +106,26 @@ class AccountMove(models.Model):
 			# ya lo creó obtener_pdf con sudo y sólo se guarda la referencia.
 			self.sudo().pos_cfe_pdf_attachment_id = attachment
 		return attachment
+
+	def _find_uruware_pdf_attachment(self):
+		"""Busca el PDF del CFE que guardó ``obtener_pdf`` de la localización.
+
+		El nombre del adjunto depende del formato del punto de emisión (A4, rollo
+		estándar, rollo o rollo alternativo).
+
+		Returns:
+			ir.attachment: El adjunto más reciente, o un recordset vacío.
+		"""
+		names = [
+			self.name,
+			f'{self.name}_rollo.pdf',
+			f'Rollo_CFE_{self.name}.pdf',
+			f'Rollo_Alt_CFE_{self.name}.pdf',
+		]
+		# sudo: el cajero del PdV puede no ver los adjuntos que la firma creó con sudo.
+		return self.env['ir.attachment'].sudo().search([
+			('res_model', '=', self._name),
+			('res_id', '=', self.id),
+			('mimetype', '=', 'application/pdf'),
+			('name', 'in', names),
+		], order='id desc', limit=1)

@@ -8,13 +8,15 @@ emisión) en lugar de la factura y el recibo de Odoo:
 	- Descarga de la factura al validar la venta y botón de factura de la lista de pedidos.
 	- Recibo de la pantalla de pago exitoso.
 	- «Imprimir recibo completo».
-Si el CFE no fue emitido o Uruware falla, se mantiene lo estándar de Odoo. Con el check
-desactivado, el PdV se comporta como Odoo estándar.
+Se reutiliza el PDF que la localización guarda al firmar el CFE. Si el CFE no fue emitido se
+mantiene lo estándar de Odoo; si Uruware no devuelve el PDF, el PdV avisa al cajero y sigue
+(la factura se reimprime desde Órdenes). Con el check desactivado, el PdV se comporta como
+Odoo estándar.
 	""",
 	'author': "Primate",
 	'website': "https://primate.uy",
 	'category': 'Sales/Point of Sale',
-	'version': '19.0.1.1.0',
+	'version': '19.0.1.2.0',
 	'depends': [
 		'l10n_uy_einvoice_uruware',
 		'point_of_sale',
