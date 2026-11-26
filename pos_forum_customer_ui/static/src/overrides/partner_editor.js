@@ -418,14 +418,17 @@ patch(PartnerDetailsEdit.prototype, {
     },
 
     _validateCi(ciValue) {
-        // Validar CI con digito verificador (Uruguay)
+        // Validar CI con largo y digito verificador (Uruguay). Mismo criterio que
+        // validate_ci del backend (l10n_uy_einvoice_base): sin puntos ni guion,
+        // exactamente 8 digitos y no todos iguales. Sin el control de largo pasaba
+        // cualquier numero cuyo ultimo digito cerrara con los primeros 7
+        // (ej. 418487880), y UCFE lo rechaza al emitir.
         const digits = String(ciValue || "").replace(/\D/g, "");
-        if (!digits || digits.length < 2) {
+        if (digits.length !== 8 || /^(\d)\1*$/.test(digits)) {
             return false;
         }
-        const padded = digits.padStart(7, "0");
-        const body = padded.slice(0, -1);
-        const checkDigit = parseInt(padded.slice(-1), 10);
+        const body = digits.slice(0, -1);
+        const checkDigit = parseInt(digits.slice(-1), 10);
         const weights = "2987634";
         let acc = 0;
         for (let i = 0; i < weights.length; i++) {
