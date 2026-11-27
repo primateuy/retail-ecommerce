@@ -4,6 +4,7 @@ import re
 from odoo import _, api, fields, models
 from odoo.exceptions import UserError, ValidationError
 from odoo.tools import email_re
+from odoo.tools.sql import create_index
 
 
 class _PosRutPreviewRollback(Exception):
@@ -16,6 +17,18 @@ class _PosRutPreviewRollback(Exception):
 
 class ResPartner(models.Model):
     _inherit = "res.partner"
+
+    def init(self):
+        """Índice para buscar clientes por el comienzo del documento desde el PDV.
+
+        El índice de `vat` que trae Odoo no sirve para `LIKE '4184%'`: con la configuración
+        regional de la base (en_US.UTF-8) PostgreSQL sólo lo usa para la búsqueda exacta, y el
+        «empieza con» recorría los ~660.000 clientes (3,3 s por búsqueda en producción, 11-2026).
+        Con `text_pattern_ops` la búsqueda por prefijo usa el índice.
+        """
+        super().init()
+        create_index(self.env.cr, 'res_partner_vat_prefijo_index', self._table,
+                     ['vat text_pattern_ops'], where='vat IS NOT NULL')
 
     pos_fe_amount_limit_control = fields.Boolean(
         string="Control de monto máximo permitido FE",
