@@ -27,7 +27,8 @@ class ApiController(http.Controller):
         return json_data
 
     @api.model
-    def build_response(self, id_solicitud, data, status='OK', mensaje=None, endpoint=None, request_data=None):
+    def build_response(self, id_solicitud, data, status='OK', mensaje=None, endpoint=None,
+                       request_data=None, keep_false=False):
         response_data = {
             'status': status,
             'mensaje': mensaje,
@@ -38,10 +39,11 @@ class ApiController(http.Controller):
         if endpoint:
             self._registrar_log(endpoint, request_data, response_data, status, data, mensaje)
 
-        return request.make_response(
-            json.dumps(response_data).replace('false', 'null'), 
-            headers=[('Content-Type', 'application/json')]
-        )
+        body = json.dumps(response_data)
+        # /canjepuntos manda flags booleanos que Fenicio necesita como false, no null.
+        if not keep_false:
+            body = body.replace('false', 'null')
+        return request.make_response(body, headers=[('Content-Type', 'application/json')])
 
     def _registrar_log(self, endpoint, request_data, response_data, status, data, mensaje):
         """Registra la llamada en fenicio.log sin afectar nunca la respuesta HTTP.
@@ -187,13 +189,50 @@ class ApiController(http.Controller):
         id_solicitud = ''
         json_data = {}
         try:
-            self._authenticate_and_setup_env()
+            website = self._authenticate_and_setup_env()
             json_data = self.get_json_data()
             id_solicitud = json_data['_idSolicitud']
-            response_data = request.env['api.internal'].canjear_puntos(json_data)
-            return self.build_response(id_solicitud, response_data, endpoint='/canjepuntos', request_data=json_data)
+            response_data = request.env['api.internal'].canjear_puntos(json_data, website)
+            return self.build_response(
+                id_solicitud, response_data, mensaje='Canje exitoso.',
+                endpoint='/canjepuntos', request_data=json_data, keep_false=True)
         except Exception as e:
+            request.env.cr.rollback()
             return self.build_response(id_solicitud, None, status='ERROR', mensaje=str(e), endpoint='/canjepuntos', request_data=json_data)
+
+    @http.route('/cupon', type='http', auth='none', cors="*", csrf=False, methods=['GET'])
+    def consumir_cupon(self):
+        """Devuelve a Fenicio las condiciones del cupón externo que ingresó el cliente.
+
+        La documentación de cupones externos no incluye '_idSolicitud' en el request,
+        así que se toma si viene pero no se exige. Los flags booleanos se mandan como
+        false (keep_false) y las fechas sin cargar como null, como pide Fenicio.
+
+        Returns:
+            Response: JSON con status 'OK' y el cupón en 'data', o 'ERROR' con data null.
+        """
+        id_solicitud = ''
+        json_data = {}
+        try:
+            website = self._authenticate_and_setup_env()
+            http_data = request.httprequest.get_data()
+            try:
+                json_data = json.loads(http_data) if http_data else dict(request.params)
+            except ValueError:
+                raise Exception('Invalid JSON data: %r' % (http_data,))
+            id_solicitud = json_data.get('_idSolicitud', '')
+            if not json_data.get('codigocupon'):
+                raise Exception("El campo 'codigocupon' es obligatorio.")
+            coupon = request.env['fenicio.coupon']._get_fenicio_coupon(
+                website, str(json_data['codigocupon']).strip())
+            return self.build_response(
+                id_solicitud, coupon._get_fenicio_data(), mensaje='Cupón procesado con éxito',
+                endpoint='/cupon', request_data=json_data, keep_false=True)
+        except Exception as e:
+            request.env.cr.rollback()
+            return self.build_response(
+                id_solicitud, None, status='ERROR', mensaje=str(e), endpoint='/cupon',
+                request_data=json_data)
 
     @http.route('/usuario', type="http", auth='none', cors="*", csrf=False, methods=['POST'])
     def crear_usuario(self):

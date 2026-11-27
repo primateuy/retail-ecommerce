@@ -21,6 +21,15 @@
                                 <field name="fecha_cancelada"/>
                             </group>
                         </group>
+                        <group string="Cupones" invisible="not fenicio_coupon_codes">
+                            <group>
+                                <field name="fenicio_coupon_codes"/>
+                                <field name="fenicio_coupon_discount"/>
+                            </group>
+                            <group>
+                                <field name="fenicio_coupon_ids" widget="many2many_tags"/>
+                            </group>
+                        </group>
                         <group string="Obeservaciones">
                             <field name="observaciones" nolabel="1" placeholder="Obeservaciones."/>
                         </group>

@@ -1,8 +1,11 @@
 # -*- coding: utf-8 -*-
 
 import logging
+from datetime import datetime, time
 
-from odoo import models, fields, api
+import pytz
+
+from odoo import _, api, fields, models
 from odoo.exceptions import UserError, ValidationError
 from odoo.tools import plaintext2html
 
@@ -303,37 +306,99 @@ class ApiInternal(models.Model):
     
 
     @api.model
-    def canjear_puntos(self, json_data): 
+    def canjear_puntos(self, json_data, website):
+        """Descuenta puntos de la tarjeta de lealtad y devuelve las condiciones del cupón.
+
+        Fenicio crea el cupón de descuento con los datos de la respuesta. El valor,
+        el mínimo, la vigencia, la moneda y los flags salen de la configuración de canje del
+        sitio web (Ajustes > Sitio web > pestaña Fenicio).
+
+        Args:
+            json_data (dict): body de Fenicio con 'numeroDocumento' y 'puntos'.
+            website (website): sitio web dueño del token de Fenicio.
+
+        Returns:
+            dict: 'data' de la respuesta exitosa según la documentación de Fenicio.
+
+        Raises:
+            UserError: si faltan datos, los puntos no son válidos, la vigencia del
+                canje ya venció, el cliente no
+                llega al mínimo configurado, pide canjear menos del mínimo, más del
+                máximo o más de lo que tiene. El controlador lo devuelve como status 'ERROR' con el
+                texto en 'mensaje'.
+        """
+        if not json_data.get('numeroDocumento') or json_data.get('puntos') in (None, ''):
+            raise UserError(_("Los campos 'numeroDocumento' y 'puntos' son obligatorios."))
+
         try:
+            puntos = int(json_data['puntos'])
+        except (TypeError, ValueError):
+            raise UserError(_("El campo 'puntos' debe ser un número entero."))
+        if puntos <= 0:
+            raise UserError(_("La cantidad de puntos a canjear debe ser mayor a cero."))
 
-            if 'numeroDocumento' not in json_data or 'puntos' not in json_data:
-                message = "El campo 'numeroDocumento' y 'puntos' es obligatorio."
-                return False, message;
+        partner = self.env['res.partner'].search(
+            [('vat', '=', json_data['numeroDocumento'])], limit=1)
+        if not partner:
+            raise UserError(_("El usuario no existe."))
 
-            user = self.env['res.partner'].search([('vat', '=', json_data['numeroDocumento'])], limit=1);
-        
-            if not user:
-                message = "El usuario no existe."
-                return False, message;
-    
-            loyaltyCard = self.env['loyalty.card'].search([('partner_id', '=', user.id)], limit=1);
-            if not loyaltyCard:
-                message = "El usuario no tiene una tarjeta de lealtad."
-                return False, message;
-    
-            if loyaltyCard.points < float(json_data['puntos']):
-                message = "El usuario no tiene suficientes puntos para canjear."
-                return False, message;
-    
-            if loyaltyCard.points >= float(json_data['puntos']):
-                loyaltyCard.points -= float(json_data['puntos'])
+        loyalty_card = self.env['loyalty.card'].search([('partner_id', '=', partner.id)], limit=1)
+        if not loyalty_card:
+            raise UserError(_("El usuario no tiene una tarjeta de lealtad."))
+        # Con la vigencia vencida Fenicio crearía un cupón inutilizable y el cliente perdería los puntos.
+        today = datetime.now(pytz.timezone('America/Montevideo')).date()
+        if website.fenicio_canje_date_end and website.fenicio_canje_date_end < today:
+            raise UserError(_("El canje de puntos no está vigente."))
+        # El saldo se controla antes que el pedido: con menos del mínimo no hay canje posible.
+        min_points = website.fenicio_canje_min_points
+        if loyalty_card.points < min_points:
+            raise UserError(_("Debe tener al menos %s puntos para canjear.", min_points))
+        if puntos < min_points:
+            raise UserError(_("No se puede canjear menos de %s puntos.", min_points))
+        max_points = website.fenicio_canje_max_points
+        if max_points and puntos > max_points:
+            raise UserError(_("No se puede canjear más de %s puntos.", max_points))
+        if loyalty_card.points < puntos:
+            raise UserError(_("No tiene puntos suficientes."))
 
-            return {
-                'puntosRestantes': loyaltyCard.points
-            }
+        loyalty_card.points -= puntos
 
-        except Exception as e:
-            return False
+        return {
+            'puntosRestantes': str(int(loyalty_card.points)),
+            'tipodescuento': 'montofijo',
+            'valordescuento': self._format_monto_canje(puntos * website.fenicio_canje_point_value),
+            'monedadescuento': website.fenicio_canje_currency or 'M1',
+            'montominimo': self._format_monto_canje(website.fenicio_canje_min_amount),
+            'grupos': '',
+            'descripcion': _("Canje de %s puntos", puntos),
+            # Una fecha sin cargar se devuelve vacía: Fenicio deja ese extremo abierto.
+            'validodesde': self._format_fecha_fenicio(website.fenicio_canje_date_start, time.min),
+            'validohasta': self._format_fecha_fenicio(website.fenicio_canje_date_end, time(23, 59)),
+            'enviogratis': website.fenicio_canje_free_shipping,
+            'acumuladescproducto': website.fenicio_canje_acumula_desc_producto,
+            'acumuladmp': website.fenicio_canje_acumula_dmp,
+        }
+
+    @api.model
+    def _format_fecha_fenicio(self, date, hour, empty=''):
+        """Formatea una fecha de vigencia como la espera Fenicio, en hora local.
+
+        Args:
+            date (datetime.date|bool): fecha configurada, o False si no se cargó.
+            hour (datetime.time): hora del día que se agrega a la fecha.
+            empty: valor que se devuelve si no hay fecha.
+
+        Returns:
+            str: 'AAAA-MM-DD HH:MM:SS', o `empty` si no hay fecha.
+        """
+        if not date:
+            return empty
+        return datetime.combine(date, hour).strftime('%Y-%m-%d %H:%M:%S')
+
+    @api.model
+    def _format_monto_canje(self, monto):
+        """Formatea un monto como lo manda Fenicio: sin decimales si es entero ('50', '12.5')."""
+        return ('%.2f' % monto).rstrip('0').rstrip('.')
 
 
     @api.model
