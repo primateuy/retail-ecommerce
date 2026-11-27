@@ -24,3 +24,4 @@ from . import fenicio_log
 from . import delivery_carrier
 from . import l10n_latam_identification_type
 from . import fenicio_catalog_line
+from . import fenicio_coupon

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, time
 
 import pytz
 
@@ -310,7 +310,7 @@ class ApiInternal(models.Model):
         """Descuenta puntos de la tarjeta de lealtad y devuelve las condiciones del cupón.
 
         Fenicio crea el cupón de descuento con los datos de la respuesta. El valor,
-        el mínimo, la vigencia y los flags salen de la configuración de canje del
+        el mínimo, la vigencia, la moneda y los flags salen de la configuración de canje del
         sitio web (Ajustes > Sitio web > pestaña Fenicio).
 
         Args:
@@ -321,7 +321,8 @@ class ApiInternal(models.Model):
             dict: 'data' de la respuesta exitosa según la documentación de Fenicio.
 
         Raises:
-            UserError: si faltan datos, los puntos no son válidos, el cliente no
+            UserError: si faltan datos, los puntos no son válidos, la vigencia del
+                canje ya venció, el cliente no
                 llega al mínimo configurado, pide canjear menos del mínimo, más del
                 máximo o más de lo que tiene. El controlador lo devuelve como status 'ERROR' con el
                 texto en 'mensaje'.
@@ -344,6 +345,10 @@ class ApiInternal(models.Model):
         loyalty_card = self.env['loyalty.card'].search([('partner_id', '=', partner.id)], limit=1)
         if not loyalty_card:
             raise UserError(_("El usuario no tiene una tarjeta de lealtad."))
+        # Con la vigencia vencida Fenicio crearía un cupón inutilizable y el cliente perdería los puntos.
+        today = datetime.now(pytz.timezone('America/Montevideo')).date()
+        if website.fenicio_canje_date_end and website.fenicio_canje_date_end < today:
+            raise UserError(_("El canje de puntos no está vigente."))
         # El saldo se controla antes que el pedido: con menos del mínimo no hay canje posible.
         min_points = website.fenicio_canje_min_points
         if loyalty_card.points < min_points:
@@ -358,25 +363,37 @@ class ApiInternal(models.Model):
 
         loyalty_card.points -= puntos
 
-        # Fenicio espera las fechas en hora local y los montos como texto.
-        valido_desde = datetime.now(pytz.timezone('America/Montevideo'))
-        valido_hasta = (valido_desde + timedelta(days=website.fenicio_canje_validity_days)).replace(
-            hour=23, minute=59, second=0)
         return {
             'puntosRestantes': str(int(loyalty_card.points)),
             'tipodescuento': 'montofijo',
             'valordescuento': self._format_monto_canje(puntos * website.fenicio_canje_point_value),
-            # M1 es la moneda local del comercio en Fenicio (M2 la secundaria).
-            'monedadescuento': 'M1',
+            'monedadescuento': website.fenicio_canje_currency or 'M1',
             'montominimo': self._format_monto_canje(website.fenicio_canje_min_amount),
             'grupos': '',
             'descripcion': _("Canje de %s puntos", puntos),
-            'validodesde': valido_desde.strftime('%Y-%m-%d %H:%M:%S'),
-            'validohasta': valido_hasta.strftime('%Y-%m-%d %H:%M:%S'),
+            # Una fecha sin cargar se devuelve vacía: Fenicio deja ese extremo abierto.
+            'validodesde': self._format_fecha_fenicio(website.fenicio_canje_date_start, time.min),
+            'validohasta': self._format_fecha_fenicio(website.fenicio_canje_date_end, time(23, 59)),
             'enviogratis': website.fenicio_canje_free_shipping,
             'acumuladescproducto': website.fenicio_canje_acumula_desc_producto,
             'acumuladmp': website.fenicio_canje_acumula_dmp,
         }
+
+    @api.model
+    def _format_fecha_fenicio(self, date, hour, empty=''):
+        """Formatea una fecha de vigencia como la espera Fenicio, en hora local.
+
+        Args:
+            date (datetime.date|bool): fecha configurada, o False si no se cargó.
+            hour (datetime.time): hora del día que se agrega a la fecha.
+            empty: valor que se devuelve si no hay fecha.
+
+        Returns:
+            str: 'AAAA-MM-DD HH:MM:SS', o `empty` si no hay fecha.
+        """
+        if not date:
+            return empty
+        return datetime.combine(date, hour).strftime('%Y-%m-%d %H:%M:%S')
 
     @api.model
     def _format_monto_canje(self, monto):

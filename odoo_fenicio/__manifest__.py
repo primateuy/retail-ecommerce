@@ -4,7 +4,7 @@
     'summary': """INTEGRACION FENICIO""",
     'description': """INTEGRACION FENICIO""",
     'category': 'Localization',
-    'version': '17.0.0.0.6',
+    'version': '17.0.0.0.7',
     'depends': ['base', 'sale', 'sale_management', 'account', 'stock', 'delivery', 'product_brand', 'payment', 'website_sale', 'website_sale_stock', 'contacts', 'l10n_uy_einvoice_base', 'partner_contact_gender', 'loyalty', 'sale_loyalty', 'sale_order_type'],
     'data': [
         'security/ir.model.access.csv',
@@ -22,6 +22,7 @@
         'data/payments_diaries.xml',
         'views/res_partner_view.xml',
         'views/delivery_carrier_views.xml',
+        'views/fenicio_coupon_views.xml',
         'views/website_views.xml',
         'views/payment_transaction_views.xml',
         'views/fenicio_log_views.xml',

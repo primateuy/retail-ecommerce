@@ -54,9 +54,19 @@ class Website(models.Model):
         string='Monto mínimo de compra',
         help='Monto mínimo de la compra para poder usar el cupón del canje. 0 = sin mínimo.',
     )
-    fenicio_canje_validity_days = fields.Integer(
-        string='Días de vigencia del cupón',
-        default=30,
+    fenicio_canje_date_start = fields.Date(
+        string='Válido desde',
+        help='Inicio de la vigencia del cupón del canje. Vacío = sin fecha de inicio.',
+    )
+    fenicio_canje_date_end = fields.Date(
+        string='Válido hasta',
+        help='Fin de la vigencia del cupón del canje. Vacío = sin vencimiento.',
+    )
+    # Códigos de moneda de Fenicio: M1 es la moneda local del comercio, M2 la secundaria.
+    fenicio_canje_currency = fields.Selection(
+        [('M1', 'M1 - Moneda local'), ('M2', 'M2 - Moneda secundaria')],
+        string='Moneda del descuento',
+        default='M1',
     )
     fenicio_canje_free_shipping = fields.Boolean(string='Cupón con envío gratis')
     fenicio_canje_acumula_desc_producto = fields.Boolean(
@@ -65,6 +75,7 @@ class Website(models.Model):
     fenicio_canje_acumula_dmp = fields.Boolean(
         string='Acumula con descuentos por medio de pago',
     )
+    fenicio_coupon_ids = fields.One2many('fenicio.coupon', 'website_id', string='Cupones Fenicio')
 
     def _fenicio_ctx(self):
         return {'default_website_id': self.id, 'active_id': self.id, 'active_model': 'website'}
@@ -115,6 +126,23 @@ class Website(models.Model):
             'target': 'new',
         }
 
+    def action_open_coupons(self):
+        """Abre los cupones Fenicio de este sitio web.
+
+        Returns:
+            dict: action window sobre fenicio.coupon filtrada por el sitio web.
+        """
+        self.ensure_one()
+        return {
+            'type': 'ir.actions.act_window',
+            'name': 'Cupones Fenicio',
+            'res_model': 'fenicio.coupon',
+            'view_mode': 'tree,form',
+            'target': 'current',
+            'domain': [('website_id', '=', self.id)],
+            'context': {'default_website_id': self.id},
+        }
+
     def action_open_logs(self):
         self.ensure_one()
         return {
@@ -155,13 +183,14 @@ class Website(models.Model):
 
     @api.constrains('fenicio_canje_min_points', 'fenicio_canje_max_points',
                     'fenicio_canje_point_value',
-                    'fenicio_canje_min_amount', 'fenicio_canje_validity_days')
+                    'fenicio_canje_min_amount', 'fenicio_canje_date_start',
+                    'fenicio_canje_date_end')
     def _check_fenicio_canje_config(self):
         """Impide valores negativos en la configuración del canje de puntos.
 
         Raises:
             ValidationError: si algún valor es negativo, el máximo es menor al mínimo
-                o la vigencia es menor a un día.
+                o la vigencia termina antes de empezar.
         """
         for website in self:
             if (website.fenicio_canje_min_points < 0
@@ -173,8 +202,9 @@ class Website(models.Model):
                     and website.fenicio_canje_max_points < website.fenicio_canje_min_points):
                 raise ValidationError(_(
                     "El máximo de puntos por canje no puede ser menor al mínimo."))
-            if website.fenicio_canje_validity_days < 1:
-                raise ValidationError(_("El cupón del canje debe tener al menos un día de vigencia."))
+            if (website.fenicio_canje_date_start and website.fenicio_canje_date_end
+                    and website.fenicio_canje_date_end < website.fenicio_canje_date_start):
+                raise ValidationError(_("La vigencia del canje no puede terminar antes de empezar."))
 
     @api.constrains('fenicio_token')
     def _check_fenicio_token_unique(self):
